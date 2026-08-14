@@ -1,0 +1,1147 @@
+// ignore: unused_import
+import 'package:intl/intl.dart' as intl;
+import 'app_localizations.dart';
+
+// ignore_for_file: type=lint
+
+/// The translations for English (`en`).
+class AppLocalizationsEn extends AppLocalizations {
+  AppLocalizationsEn([String locale = 'en']) : super(locale);
+
+  @override
+  String get appTitle => 'Hermes Agent';
+
+  @override
+  String get cancel => 'Cancel';
+
+  @override
+  String get retry => 'Retry';
+
+  @override
+  String get dismiss => 'Dismiss';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get on => 'On';
+
+  @override
+  String get off => 'Off';
+
+  @override
+  String get unknown => 'unknown';
+
+  @override
+  String get youHeader => '## You';
+
+  @override
+  String get hermesHeader => '## Hermes';
+
+  @override
+  String get chooseImage => 'Choose image';
+
+  @override
+  String get chooseImages => 'Choose images';
+
+  @override
+  String get takePhoto => 'Take photo';
+
+  @override
+  String get chooseFiles => 'Choose files';
+
+  @override
+  String get fileTypeHint => 'Documents, archives, audio, video, or data';
+
+  @override
+  String get unableToPrepareImage =>
+      'Unable to prepare this image. Try another one.';
+
+  @override
+  String get imageSelectionInterrupted =>
+      'Image selection was interrupted. Try again.';
+
+  @override
+  String unableToPrepareImageNamed(String name) {
+    return 'Unable to prepare $name.';
+  }
+
+  @override
+  String get configureDesktopGatewayForFiles =>
+      'Configure a valid Desktop Gateway URL before attaching files.';
+
+  @override
+  String maxAttachmentDrafts(int count) {
+    return 'You can attach up to $count items.';
+  }
+
+  @override
+  String filesSkipped(int count) {
+    return '$count file(s) skipped: limit, size, unreadable, or sensitive filename.';
+  }
+
+  @override
+  String get unableToPrepareFile =>
+      'Unable to prepare this file. Try another one.';
+
+  @override
+  String retryingAttachment(String name) {
+    return 'Retrying $name…';
+  }
+
+  @override
+  String get fileAttachedPendingCatalog =>
+      'File attached; document catalog registration is pending.';
+
+  @override
+  String retryFailed(String name) {
+    return 'Retry failed for $name. The draft and prompt were kept.';
+  }
+
+  @override
+  String get configureDesktopGatewayForModel =>
+      'Configure Desktop Gateway URL and Dashboard credentials to choose a chat model.';
+
+  @override
+  String get modelAndThinkingForChat => 'Model and thinking for this chat';
+
+  @override
+  String get profileDefaultLabel => 'profile default';
+
+  @override
+  String get thisChatLabel => 'this chat';
+
+  @override
+  String profileDefaultWithModel(String model) {
+    return 'Profile default: $model';
+  }
+
+  @override
+  String get thinkingEffort => 'Thinking effort';
+
+  @override
+  String get applyToThisChat => 'Apply to this chat';
+
+  @override
+  String couldNotLoadModels(String error) {
+    return 'Could not load models for this profile: $error';
+  }
+
+  @override
+  String modelAppliesToChat(String model, String effort) {
+    return '$model • $effort now apply only to this chat.';
+  }
+
+  @override
+  String modelNotChanged(String error) {
+    return 'Model was not changed: $error';
+  }
+
+  @override
+  String get responding => 'Responding…';
+
+  @override
+  String get chatActions => 'Chat actions';
+
+  @override
+  String get exportShare => 'Export / share';
+
+  @override
+  String get chooseChatModel => 'Choose chat model';
+
+  @override
+  String get attachmentDrafts => 'Attachment drafts';
+
+  @override
+  String get addAttachment => 'Add attachment';
+
+  @override
+  String get attachImageOrFile => 'Attach image or file';
+
+  @override
+  String get message => 'Message';
+
+  @override
+  String get typeAMessage => 'Type a message…';
+
+  @override
+  String get spokenReplies => 'Spoken replies';
+
+  @override
+  String get spokenRepliesOn => 'Spoken replies on';
+
+  @override
+  String get spokenRepliesOff => 'Spoken replies off';
+
+  @override
+  String get stopResponse => 'Stop response';
+
+  @override
+  String get sendMessage => 'Send message';
+
+  @override
+  String get send => 'Send';
+
+  @override
+  String get failedToLoadMessages => 'Failed to load messages';
+
+  @override
+  String get messageCopied => 'Message copied';
+
+  @override
+  String get copyMessage => 'Copy message';
+
+  @override
+  String get readAloud => 'Read aloud';
+
+  @override
+  String get editAndResend => 'Edit and resend';
+
+  @override
+  String get regenerateResponse => 'Regenerate response';
+
+  @override
+  String get regenerateFromPreceding => 'Regenerate from the preceding prompt';
+
+  @override
+  String voiceSetupFailed(String error) {
+    return 'Voice setup failed: $error';
+  }
+
+  @override
+  String get speechRecognitionUnavailable =>
+      'Speech recognition is unavailable';
+
+  @override
+  String get readingResponseAloud => 'Reading response aloud';
+
+  @override
+  String get readAloudUnavailable => 'Read aloud is unavailable on this device';
+
+  @override
+  String get responseReady => 'Response ready';
+
+  @override
+  String get turnCompleted => 'Turn completed';
+
+  @override
+  String get recoveringHermes => 'Recovering Hermes…';
+
+  @override
+  String hermesRecoveryUnavailable(String error) {
+    return 'Hermes recovery is unavailable: $error';
+  }
+
+  @override
+  String get hermesWaitingInput => 'Hermes is waiting for input…';
+
+  @override
+  String get hermesResponding => 'Hermes is responding…';
+
+  @override
+  String get recoveryStoppedSafely =>
+      'Hermes stopped recovery safely. No prompt was resent.';
+
+  @override
+  String get deliveryUncertainRecovering =>
+      'Delivery is uncertain; recovering without resending…';
+
+  @override
+  String get legacyTransportNotice =>
+      'Background recovery unavailable — legacy transport';
+
+  @override
+  String get startingHermes => 'Starting Hermes…';
+
+  @override
+  String get preparingAttachments => 'Preparing attachments…';
+
+  @override
+  String uploadingAttachment(int index, int total, String name) {
+    return 'Uploading $index/$total: $name';
+  }
+
+  @override
+  String attachedFileLabel(String name) {
+    return '[Attached file: $name]';
+  }
+
+  @override
+  String get desktopGatewayNotConfigured =>
+      'Desktop Gateway is not configured for this connection.';
+
+  @override
+  String couldNotDenyCommand(String error) {
+    return 'Could not deny the command: $error';
+  }
+
+  @override
+  String get couldNotSkipQuestion => 'Could not skip the Hermes question.';
+
+  @override
+  String get responseStopped => 'Response stopped.';
+
+  @override
+  String get responseClosedNoTurn =>
+      'Response closed locally; no active gateway turn was found.';
+
+  @override
+  String responseClosedStopFailed(String error) {
+    return 'Response closed locally; gateway stop failed: $error';
+  }
+
+  @override
+  String sendFailed(String error) {
+    return 'Send failed: $error';
+  }
+
+  @override
+  String get thinkingEffortNone => 'Off (no thinking)';
+
+  @override
+  String get thinkingEffortMinimal => 'Minimal';
+
+  @override
+  String get thinkingEffortLow => 'Low';
+
+  @override
+  String get thinkingEffortMedium => 'Medium';
+
+  @override
+  String get thinkingEffortHigh => 'High';
+
+  @override
+  String get thinkingEffortXhigh => 'Extra High';
+
+  @override
+  String get thinkingEffortMax => 'Max';
+
+  @override
+  String get thinkingEffortUltra => 'Ultra';
+
+  @override
+  String get addConnection => 'Add Connection';
+
+  @override
+  String get editConnection => 'Edit Connection';
+
+  @override
+  String get addGatewayConnection => 'Add Gateway Connection';
+
+  @override
+  String get editGatewayConnection => 'Edit Gateway Connection';
+
+  @override
+  String get noConnections => 'No connections';
+
+  @override
+  String get tapPlusToAdd =>
+      'Tap + to add a remote Hermes Gateway\n(API Server, port 8642)';
+
+  @override
+  String get connectionLabel => 'Label';
+
+  @override
+  String get hostField => 'Host';
+
+  @override
+  String get hostHint =>
+      '192.168.1.50, 100.x.y.z, or hermes-machine.tailnet.ts.net';
+
+  @override
+  String get portField => 'Port';
+
+  @override
+  String get portHint => '8642 (API Server)';
+
+  @override
+  String get apiKeyField => 'API Key';
+
+  @override
+  String get apiKeyHint => 'API_SERVER_KEY from ~/.hermes/.env';
+
+  @override
+  String get serverRequiresApiKey =>
+      'Server requires an API key. Enter your API_SERVER_KEY.';
+
+  @override
+  String get updateApiKey => 'Update API Key';
+
+  @override
+  String get save => 'Save';
+
+  @override
+  String get delete => 'Delete';
+
+  @override
+  String get key => 'Key';
+
+  @override
+  String get dashboardProxySettings => 'Dashboard / Proxy Settings';
+
+  @override
+  String get gatewayPathPrefix => 'Gateway path prefix';
+
+  @override
+  String get dashboardPathPrefix => 'Dashboard path prefix';
+
+  @override
+  String get dashboardBehindProxy => 'Dashboard behind proxy';
+
+  @override
+  String get dashboardPort => 'Dashboard Port';
+
+  @override
+  String get dashboardPortHint => 'Leave blank for default (9119)';
+
+  @override
+  String get customProxyDetails => 'Custom proxy and dashboard details';
+
+  @override
+  String get egGatewayPrefix => 'e.g. /profile/peter';
+
+  @override
+  String get egDashboardPrefix => 'e.g. /dashboard';
+
+  @override
+  String get gatewayPrefixHint =>
+      'e.g. /profile/peter (proxy path before /api/ and /v1/)';
+
+  @override
+  String get dashboardPrefixHint => 'e.g. /dashboard (proxy path before /api/)';
+
+  @override
+  String get proxyInjectsAuth => 'Proxy injects auth; app sends clean requests';
+
+  @override
+  String get nginxInjectsAuth =>
+      'Nginx injects auth — app sends clean requests';
+
+  @override
+  String get usernameOptional => 'Username (optional)';
+
+  @override
+  String get passwordOptional => 'Password (optional)';
+
+  @override
+  String get invalidPortNumber => 'Invalid port number.';
+
+  @override
+  String get invalidApiKey401 => 'Invalid API key. Server returned 401.';
+
+  @override
+  String get apiKeyNotStoredSecurely =>
+      'The API key could not be stored securely.';
+
+  @override
+  String get dashboardCredsNotStoredSecurely =>
+      'The dashboard credentials could not be stored securely.';
+
+  @override
+  String get connectionNotStoredSecurely =>
+      'The connection could not be stored securely.';
+
+  @override
+  String get connectionNotDeletedSafely =>
+      'The connection could not be deleted safely.';
+
+  @override
+  String cannotReachHostPort(String host, int port) {
+    return 'Cannot reach $host:$port.';
+  }
+
+  @override
+  String couldNotReachGatewayAt(String host, int port, String prefix) {
+    return 'Could not reach/authenticate the Gateway API at $host:$port$prefix.';
+  }
+
+  @override
+  String couldNotReachDashboardAt(String host, int port) {
+    return 'Could not reach/authenticate the dashboard at $host:$port. Check the port and credentials.';
+  }
+
+  @override
+  String cannotReachHostPortCheck(String host, int port) {
+    return 'Cannot reach $host:$port. Check the host and port.';
+  }
+
+  @override
+  String get gatewayOkDashboardFailed =>
+      'Gateway connected, but the dashboard could not be reached or authenticated. Check the dashboard details, or clear them to skip.';
+
+  @override
+  String get dashboardDetailsHelp =>
+      'Used for hosted path prefixes and for the Settings, Memory, Skills and Cron tabs. Leave username/password blank for an open dashboard, or enable proxied mode when your reverse proxy injects dashboard auth.';
+
+  @override
+  String get dashboardPortHelp =>
+      'Optional. For the Memory/Cron/Skills/Settings tabs. Leave blank for the default (9119).';
+
+  @override
+  String get rename => 'Rename';
+
+  @override
+  String get newChat => 'New Chat';
+
+  @override
+  String get switchProfile => 'Switch profile';
+
+  @override
+  String get profile => 'Profile';
+
+  @override
+  String get renameChat => 'Rename chat';
+
+  @override
+  String couldNotRenameChat(String error) {
+    return 'Could not rename chat: $error';
+  }
+
+  @override
+  String get branchChat => 'Branch chat';
+
+  @override
+  String sessionTitleBranch(String title) {
+    return '$title branch';
+  }
+
+  @override
+  String get createBranch => 'Create branch';
+
+  @override
+  String get noMessagesInDesktopSession =>
+      'This chat has no messages available in the Desktop session yet.';
+
+  @override
+  String couldNotBranchChat(String error) {
+    return 'Could not branch chat: $error';
+  }
+
+  @override
+  String get branchCreated => 'Branch created in Hermes history.';
+
+  @override
+  String get untitledSession => 'Untitled session';
+
+  @override
+  String get deleteSessionTitle => 'Delete session?';
+
+  @override
+  String deleteSessionConfirm(String title) {
+    return 'Delete \"$title\" from the remote Hermes history? This cannot be undone.';
+  }
+
+  @override
+  String get sessionDeleted => 'Session deleted from remote Hermes.';
+
+  @override
+  String couldNotDeleteSession(String error) {
+    return 'Could not delete session: $error';
+  }
+
+  @override
+  String get memoryTab => 'Memory';
+
+  @override
+  String get cronJobsTab => 'Cron Jobs';
+
+  @override
+  String get skillsTab => 'Skills';
+
+  @override
+  String get settingsTab => 'Settings';
+
+  @override
+  String connectingTo(String url) {
+    return 'Connecting to $url...';
+  }
+
+  @override
+  String get gatewayMustBeRunning =>
+      'Make sure the Gateway API Server is running\n(hermes gateway status)';
+
+  @override
+  String get connectionIssue => 'Connection issue';
+
+  @override
+  String get noSessionsYet => 'No sessions yet';
+
+  @override
+  String get tapPlusNewChat => 'Tap the + button to start a new chat';
+
+  @override
+  String get searchChats => 'Search chats';
+
+  @override
+  String get branch => 'Branch';
+
+  @override
+  String sessionMeta(int count, String model, String time) {
+    return '$count msgs • $model • $time';
+  }
+
+  @override
+  String get voice => 'Voice';
+
+  @override
+  String profileDefaultSetTo(String model) {
+    return 'Profile default set to $model. Chats with their own model keep that override.';
+  }
+
+  @override
+  String get settingsTitle => 'Settings';
+
+  @override
+  String get failedToLoadSettings => 'Failed to load settings';
+
+  @override
+  String get profileDefaultModel => 'Profile default model';
+
+  @override
+  String changesDefaultFor(String label) {
+    return 'Changes the default for $label. Use the selector in a chat to override only that conversation.';
+  }
+
+  @override
+  String get currentProfileDefault => 'Current profile default';
+
+  @override
+  String contextTokens(int tokens) {
+    return 'Context: $tokens tokens';
+  }
+
+  @override
+  String get provider => 'Provider';
+
+  @override
+  String get model => 'Model';
+
+  @override
+  String get setProfileDefault => 'Set profile default';
+
+  @override
+  String get appearance => 'Appearance';
+
+  @override
+  String get sessionSources => 'Session Sources';
+
+  @override
+  String get connection => 'Connection';
+
+  @override
+  String get baseUrl => 'Base URL';
+
+  @override
+  String get about => 'About';
+
+  @override
+  String get hermesAgentForAndroid => 'Hermes Agent for Android';
+
+  @override
+  String versionLabel(String version) {
+    return 'Version $version';
+  }
+
+  @override
+  String get aboutDescription =>
+      'Browse and manage your Hermes Agent sessions from your phone. Connects to a Hermes dashboard running on your local network.';
+
+  @override
+  String get verboseMode => 'Verbose Mode';
+
+  @override
+  String get showToolCalls => 'Show tool calls, thinking, and message metadata';
+
+  @override
+  String get systemTheme => 'System';
+
+  @override
+  String get darkTheme => 'Dark';
+
+  @override
+  String get lightTheme => 'Light';
+
+  @override
+  String get noTtsVoices =>
+      'No TTS voices found.\nInstall Google Text-to-Speech and download voice data.';
+
+  @override
+  String get autoDeviceDefault => 'Auto (device default)';
+
+  @override
+  String get sessionSourceAutonomous => 'Autonomous agents';
+
+  @override
+  String get sessionSourceExternalApi => 'External API clients';
+
+  @override
+  String get sessionSourceCli => 'Command-line chats';
+
+  @override
+  String get sessionSourceScheduled => 'Scheduled tasks';
+
+  @override
+  String get sessionSourceDesktop => 'Desktop app';
+
+  @override
+  String get sessionSourceDiscord => 'Discord chats';
+
+  @override
+  String get sessionSourceGatewayApi => 'Gateway API access';
+
+  @override
+  String get sessionSourcePhone => 'Phone or tablet';
+
+  @override
+  String get sessionSourceSignal => 'Signal messages';
+
+  @override
+  String get sessionSourceSlack => 'Slack chats';
+
+  @override
+  String failed(String error) {
+    return 'Failed: $error';
+  }
+
+  @override
+  String get untitled => 'Untitled';
+
+  @override
+  String get jobResumed => 'Job resumed';
+
+  @override
+  String get jobPaused => 'Job paused';
+
+  @override
+  String get deleteCronJob => 'Delete Cron Job';
+
+  @override
+  String deleteJobConfirm(String name) {
+    return 'Delete \"$name\"?';
+  }
+
+  @override
+  String deletedJob(String name) {
+    return 'Deleted \"$name\"';
+  }
+
+  @override
+  String deleteFailed(String error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String get jobTriggered => 'Job triggered';
+
+  @override
+  String get addCronJob => 'Add Cron Job';
+
+  @override
+  String get add => 'Add';
+
+  @override
+  String get cronJobAdded => 'Cron job added';
+
+  @override
+  String failedToAddJob(String error) {
+    return 'Failed to add job: $error';
+  }
+
+  @override
+  String get editCronJob => 'Edit Cron Job';
+
+  @override
+  String get cronJobUpdated => 'Cron job updated';
+
+  @override
+  String failedToUpdateJob(String error) {
+    return 'Failed to update job: $error';
+  }
+
+  @override
+  String get name => 'Name';
+
+  @override
+  String get egDailyBackup => 'e.g., Daily backup';
+
+  @override
+  String get prompt => 'Prompt';
+
+  @override
+  String get whatShouldAgentDo => 'What should the agent do?';
+
+  @override
+  String get schedule => 'Schedule';
+
+  @override
+  String get egCronSchedule => 'e.g., 0 9 * * * or every 2h';
+
+  @override
+  String get scriptOnly => 'Script only (no agent)';
+
+  @override
+  String get scriptOnlyHelp => 'Use for cron jobs backed by scripts.';
+
+  @override
+  String get requiredFields => 'Name, prompt, and schedule are required';
+
+  @override
+  String get cronJobs => 'Cron Jobs';
+
+  @override
+  String get addNewCronJob => 'Add new cron job';
+
+  @override
+  String get failedToLoadCronJobs => 'Failed to load cron jobs';
+
+  @override
+  String get noCronJobs => 'No cron jobs';
+
+  @override
+  String get triggerNow => 'Trigger now';
+
+  @override
+  String get edit => 'Edit';
+
+  @override
+  String get resume => 'Resume';
+
+  @override
+  String get pause => 'Pause';
+
+  @override
+  String lastRun(String time) {
+    return 'Last: $time';
+  }
+
+  @override
+  String nextRun(String time) {
+    return 'Next: $time';
+  }
+
+  @override
+  String get memory => 'Memory';
+
+  @override
+  String sourceLabel(String source) {
+    return 'Source: $source';
+  }
+
+  @override
+  String get failedToLoadMemory => 'Failed to load memory';
+
+  @override
+  String get noMemoryEntries => 'No memory entries';
+
+  @override
+  String get memoryHelp =>
+      'Memory entries are cross-session facts the agent remembers.\nThey are configured in ~/.hermes/config.yaml';
+
+  @override
+  String skillsCount(int count) {
+    return 'Skills ($count)';
+  }
+
+  @override
+  String get failedToLoadSkills => 'Failed to load skills';
+
+  @override
+  String get noSkillsFound => 'No skills found';
+
+  @override
+  String get telegramMessages => 'Telegram messages';
+
+  @override
+  String get developerToolCalls => 'Developer tool calls';
+
+  @override
+  String get terminalSessions => 'Terminal sessions';
+
+  @override
+  String get whatsappMessages => 'WhatsApp messages';
+
+  @override
+  String attachmentOf(int index, int total) {
+    return 'Attachment $index of $total';
+  }
+
+  @override
+  String get uploadFailedTapRetry => 'Upload failed • tap retry';
+
+  @override
+  String get moveAttachmentPrevious => 'Move attachment previous';
+
+  @override
+  String get moveAttachmentNext => 'Move attachment next';
+
+  @override
+  String get retryUpload => 'Retry upload';
+
+  @override
+  String get removeAttachment => 'Remove attachment';
+
+  @override
+  String get readyToUpload => 'Ready to upload';
+
+  @override
+  String get uploading => 'Uploading';
+
+  @override
+  String get uploaded => 'Uploaded';
+
+  @override
+  String get uploadFailed => 'Upload failed';
+
+  @override
+  String newCount(int count) {
+    return '$count new';
+  }
+
+  @override
+  String get latest => 'Latest';
+
+  @override
+  String get noNewMessages => 'No new messages';
+
+  @override
+  String get oneNewMessage => '1 new message';
+
+  @override
+  String newMessages(int count) {
+    return '$count new messages';
+  }
+
+  @override
+  String get goToEnd => 'Go to end';
+
+  @override
+  String failuresSummary(int failures, int total) {
+    return '$failures failed • $total total';
+  }
+
+  @override
+  String completedCount(int count) {
+    return '$count completed';
+  }
+
+  @override
+  String get hermesActivity => 'Hermes activity';
+
+  @override
+  String couldNotSendApproval(String error) {
+    return 'Could not send the approval: $error';
+  }
+
+  @override
+  String get allowOnce => 'Allow once';
+
+  @override
+  String get allowForSession => 'Allow for this session';
+
+  @override
+  String get confirmAlwaysAllow => 'Confirm always allow';
+
+  @override
+  String get alwaysAllow => 'Always allow';
+
+  @override
+  String get deny => 'Deny';
+
+  @override
+  String get runOnlyThisCommand => 'Run only this command.';
+
+  @override
+  String get allowMatchingCommands =>
+      'Allow matching commands until this Hermes session ends.';
+
+  @override
+  String get savePermanentRule =>
+      'Save a permanent rule in the Hermes configuration.';
+
+  @override
+  String get doNotRunCommand => 'Do not run this command.';
+
+  @override
+  String get approvalNeeded => 'Approval needed';
+
+  @override
+  String get command => 'Command';
+
+  @override
+  String get permanentRuleWarning =>
+      'This creates a permanent rule in Hermes. Review the full command before confirming.';
+
+  @override
+  String get couldNotAcceptAnswer =>
+      'Hermes could not accept the answer. Please try again.';
+
+  @override
+  String get hermesNeedsInput => 'Hermes needs your input';
+
+  @override
+  String get selectOneOrMore => 'Select one or more options, then continue.';
+
+  @override
+  String get selectOneOrEnterOther =>
+      'Select one option, or enter another answer.';
+
+  @override
+  String get otherAnswer => 'Other answer';
+
+  @override
+  String get yourAnswer => 'Your answer';
+
+  @override
+  String get skip => 'Skip';
+
+  @override
+  String get continueLabel => 'Continue';
+
+  @override
+  String get reasoning => 'Reasoning';
+
+  @override
+  String get hermesReasoningDetails => 'Hermes reasoning details';
+
+  @override
+  String delegatedTasksCompleted(int count) {
+    return '$count delegated task(s) completed';
+  }
+
+  @override
+  String delegatedTasksActive(int count) {
+    return '$count delegated task(s) active';
+  }
+
+  @override
+  String get hermesDidNotAcceptResponse =>
+      'Hermes did not accept the response. Please try again.';
+
+  @override
+  String get sensitiveValueNotice =>
+      'The value is sent directly to the active Hermes gateway and is not saved by this Android app.';
+
+  @override
+  String get textSize => 'Text size';
+
+  @override
+  String get textSizeHelp =>
+      'Explicit choices adjust Android accessibility text size; System leaves it unchanged.';
+
+  @override
+  String get textSizePreview => 'Text size preview';
+
+  @override
+  String get preview => 'Preview';
+
+  @override
+  String get textScalingActive =>
+      'Hermes keeps Android accessibility text scaling active.';
+
+  @override
+  String listeningElapsed(String elapsed) {
+    return 'Listening, elapsed $elapsed';
+  }
+
+  @override
+  String get stopVoiceInput => 'Stop voice input';
+
+  @override
+  String get stop => 'Stop';
+
+  @override
+  String get cancelVoiceInput => 'Cancel voice input';
+
+  @override
+  String get startVoiceInput => 'Start voice input';
+
+  @override
+  String get speakToHermes => 'Speak to Hermes';
+
+  @override
+  String get usingOneTool => 'Hermes is using a tool';
+
+  @override
+  String usingTools(int count) {
+    return 'Hermes is using $count tools';
+  }
+
+  @override
+  String get dashboardUsernameOptional => 'Dashboard Username (optional)';
+
+  @override
+  String get dashboardPasswordOptional => 'Dashboard Password (optional)';
+
+  @override
+  String get desktopGatewayUrlOptional => 'Desktop Gateway URL (optional)';
+
+  @override
+  String get desktopGatewayHelper =>
+      'Enables file attachments through the Desktop remote gateway.';
+
+  @override
+  String get toolRunning => 'Running';
+
+  @override
+  String get toolPreparing => 'Preparing';
+
+  @override
+  String get toolWorking => 'Working';
+
+  @override
+  String get toolCompleted => 'Completed';
+
+  @override
+  String toolCompletedIn(String duration) {
+    return 'Completed in $duration';
+  }
+
+  @override
+  String get toolFailed => 'Failed';
+
+  @override
+  String toolFailedAfter(String duration) {
+    return 'Failed after $duration';
+  }
+
+  @override
+  String get backgroundTaskCompleted => 'Background task completed';
+
+  @override
+  String backgroundTaskIdCompleted(String taskId) {
+    return 'Background task $taskId completed';
+  }
+
+  @override
+  String get hermesReview => 'Hermes review';
+
+  @override
+  String get adminPasswordNeeded => 'Administrator password needed';
+
+  @override
+  String get sudoPasswordDescription =>
+      'Hermes needs a sudo password for the pending terminal command.';
+
+  @override
+  String get sudoPasswordField => 'Sudo password';
+
+  @override
+  String get secretNeeded => 'Secret needed';
+
+  @override
+  String get secretDescription =>
+      'Hermes needs a secret for the pending skill.';
+
+  @override
+  String get secretValueField => 'Secret value';
+
+  @override
+  String get dictationReady => 'Dictation ready to edit';
+
+  @override
+  String get approvalFallbackDescription => 'Hermes wants to run a command.';
+
+  @override
+  String get clarifyFallbackDescription =>
+      'Hermes needs more information to continue.';
+}

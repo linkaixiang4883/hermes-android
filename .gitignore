@@ -49,3 +49,6 @@ app.*.map.json
 # Local keystore properties
 /key.properties
 /release.keystore
+
+# Android Studio agentbridge plugin workspace
+.agentbridge/

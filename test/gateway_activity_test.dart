@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_activity.dart';
 import 'package:hermes_android/core/widgets/gateway_activity_card.dart';
+import 'support/l10n_test_utils.dart';
 
 void main() {
   group('GatewayToolActivity', () {
@@ -110,7 +111,9 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayActivityCard(
               activities: [
@@ -137,7 +140,9 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        const MaterialApp(
+        MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayActivityCard(
               verbose: true,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../l10n/l10n.dart';
 import '../services/text_size_preference.dart';
 
 /// App-wide text-size control. It stores only the selected display preference;
@@ -55,14 +56,11 @@ class _TextSizeSettingsCardState extends State<TextSizeSettingsCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Text size',
+                  context.l10n.textSize,
                   style: Theme.of(sheetContext).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Explicit choices adjust Android accessibility text size; '
-                  'System leaves it unchanged.',
-                ),
+                Text(context.l10n.textSizeHelp),
                 const SizedBox(height: 8),
                 RadioGroup<TextSizePreference>(
                   groupValue: _preference,
@@ -100,7 +98,7 @@ class _TextSizeSettingsCardState extends State<TextSizeSettingsCard> {
             child: ExcludeSemantics(
               child: ListTile(
                 leading: const Icon(Icons.format_size),
-                title: const Text('Text size'),
+                title: Text(context.l10n.textSize),
                 subtitle: Text(
                   '${_preference.label} — ${_preference.description}',
                 ),
@@ -113,20 +111,18 @@ class _TextSizeSettingsCardState extends State<TextSizeSettingsCard> {
           Padding(
             padding: EdgeInsets.fromLTRB(16, 12, 16, 4),
             child: Semantics(
-              label: 'Text size preview',
+              label: context.l10n.textSizePreview,
               child: ExcludeSemantics(
                 child: Text(
-                  'Preview',
+                  context.l10n.preview,
                   style: TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ),
           ),
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Text(
-              'Hermes keeps Android accessibility text scaling active.',
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Text(context.l10n.textScalingActive),
           ),
         ],
       ),

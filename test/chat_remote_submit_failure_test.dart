@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'support/l10n_test_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/attachment_draft.dart';
@@ -143,6 +144,8 @@ Future<void> _pumpChat(
   );
   await tester.pumpWidget(
     MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
       home: ChatScreen(
         connection: SavedConnection(
           id: 'failure-fixture',

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../models/gateway_sensitive_prompt.dart';
 
 typedef SensitivePromptResponder = Future<void> Function(String value);
@@ -50,7 +52,7 @@ class _GatewaySensitivePromptDialogState
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = 'Hermes did not accept the response. Please try again.';
+        _error = context.l10n.hermesDidNotAcceptResponse;
       });
     }
   }
@@ -62,14 +64,14 @@ class _GatewaySensitivePromptDialogState
 
     return AlertDialog(
       icon: Icon(isSudo ? Icons.lock_outline : Icons.key_outlined),
-      title: Text(widget.request.title),
+      title: Text(_localizedTitle(widget.request, context.l10n)),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.request.description),
+            Text(_localizedDescription(widget.request, context.l10n)),
             const SizedBox(height: 16),
             TextField(
               key: const Key('sensitive-prompt-field'),
@@ -83,7 +85,7 @@ class _GatewaySensitivePromptDialogState
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                labelText: widget.request.fieldLabel,
+                labelText: _localizedFieldLabel(widget.request, context.l10n),
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (value) {
@@ -102,8 +104,7 @@ class _GatewaySensitivePromptDialogState
             ],
             const SizedBox(height: 10),
             Text(
-              'The value is sent directly to the active Hermes gateway and '
-              'is not saved by this Android app.',
+              context.l10n.sensitiveValueNotice,
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -113,7 +114,7 @@ class _GatewaySensitivePromptDialogState
         TextButton(
           key: const Key('sensitive-prompt-cancel'),
           onPressed: _submitting ? null : () => _respond(''),
-          child: const Text('Cancel'),
+          child: Text(context.l10n.cancel),
         ),
         FilledButton(
           key: const Key('sensitive-prompt-send'),
@@ -125,9 +126,50 @@ class _GatewaySensitivePromptDialogState
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Send'),
+              : Text(context.l10n.send),
         ),
       ],
     );
   }
+}
+
+/// Maps the client-side English defaults (used when the gateway omits these
+/// fields) to the active locale. Gateway-provided values pass through.
+String _localizedTitle(
+  GatewaySensitivePromptRequest request,
+  AppLocalizations l10n,
+) {
+  if (request.kind == GatewaySensitivePromptKind.sudo &&
+      request.title == 'Administrator password needed') {
+    return l10n.adminPasswordNeeded;
+  }
+  if (request.title == 'Secret needed') return l10n.secretNeeded;
+  return request.title;
+}
+
+String _localizedDescription(
+  GatewaySensitivePromptRequest request,
+  AppLocalizations l10n,
+) {
+  if (request.kind == GatewaySensitivePromptKind.sudo &&
+      request.description ==
+          'Hermes needs a sudo password for the pending terminal command.') {
+    return l10n.sudoPasswordDescription;
+  }
+  if (request.description == 'Hermes needs a secret for the pending skill.') {
+    return l10n.secretDescription;
+  }
+  return request.description;
+}
+
+String _localizedFieldLabel(
+  GatewaySensitivePromptRequest request,
+  AppLocalizations l10n,
+) {
+  if (request.kind == GatewaySensitivePromptKind.sudo &&
+      request.fieldLabel == 'Sudo password') {
+    return l10n.sudoPasswordField;
+  }
+  if (request.fieldLabel == 'Secret value') return l10n.secretValueField;
+  return request.fieldLabel;
 }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/gateway_activity.dart';
 
 class GatewayActivityCard extends StatelessWidget {
@@ -17,10 +18,12 @@ class GatewayActivityCard extends StatelessWidget {
     final active = activities.any((activity) => !activity.isTerminal);
     final failures = activities.where((activity) => activity.isFailed).length;
     final subtitle = active
-        ? 'Hermes is using ${activities.length == 1 ? 'a tool' : '${activities.length} tools'}'
+        ? activities.length == 1
+              ? context.l10n.usingOneTool
+              : context.l10n.usingTools(activities.length)
         : failures > 0
-        ? '$failures failed • ${activities.length} total'
-        : '${activities.length} completed';
+        ? context.l10n.failuresSummary(failures, activities.length)
+        : context.l10n.completedCount(activities.length);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -41,7 +44,7 @@ class GatewayActivityCard extends StatelessWidget {
                     ? Theme.of(context).colorScheme.error
                     : Theme.of(context).colorScheme.primary,
               ),
-        title: const Text('Hermes activity'),
+        title: Text(context.l10n.hermesActivity),
         subtitle: Text(subtitle),
         children: [
           const Divider(height: 1),
@@ -67,7 +70,7 @@ class _GatewayActivityRow extends StatelessWidget {
         : Theme.of(context).colorScheme.secondary;
 
     return Semantics(
-      label: '${activity.displayName}: ${activity.statusLabel}',
+      label: '${activity.displayName}: ${activity.statusLabelLocalized(context.l10n)}',
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
         child: Row(
@@ -105,7 +108,7 @@ class _GatewayActivityRow extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    activity.statusLabel,
+                    activity.statusLabelLocalized(context.l10n),
                     style: Theme.of(
                       context,
                     ).textTheme.bodySmall?.copyWith(color: color),

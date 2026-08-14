@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/gateway_clarify.dart';
 
 typedef ClarifyResponder = Future<void> Function(String answer);
@@ -75,7 +76,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = 'Hermes could not accept the answer. Please try again.';
+        _error = context.l10n.couldNotAcceptAnswer;
       });
     }
   }
@@ -88,7 +89,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
 
     return AlertDialog(
       icon: const Icon(Icons.help_outline_rounded),
-      title: const Text('Hermes needs your input'),
+      title: Text(context.l10n.hermesNeedsInput),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
         child: SingleChildScrollView(
@@ -97,7 +98,9 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SelectableText(
-                request.question,
+                request.question == 'Hermes needs more information to continue.'
+                    ? context.l10n.clarifyFallbackDescription
+                    : request.question,
                 key: const Key('clarify-question'),
                 style: theme.textTheme.titleMedium,
               ),
@@ -105,8 +108,8 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                 const SizedBox(height: 12),
                 Text(
                   request.multiSelect
-                      ? 'Select one or more options, then continue.'
-                      : 'Select one option, or enter another answer.',
+                      ? context.l10n.selectOneOrMore
+                      : context.l10n.selectOneOrEnterOther,
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 6),
@@ -148,8 +151,8 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   labelText: request.hasChoices
-                      ? 'Other answer'
-                      : 'Your answer',
+                      ? context.l10n.otherAnswer
+                      : context.l10n.yourAnswer,
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -182,7 +185,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
         TextButton(
           key: const Key('clarify-skip'),
           onPressed: _submitting ? null : () => _respond(''),
-          child: const Text('Skip'),
+          child: Text(context.l10n.skip),
         ),
         FilledButton(
           key: const Key('clarify-continue'),
@@ -194,7 +197,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Continue'),
+              : Text(context.l10n.continueLabel),
         ),
       ],
     );

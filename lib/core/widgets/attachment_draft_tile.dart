@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/attachment_draft.dart';
 
 class AttachmentDraftTile extends StatelessWidget {
@@ -30,8 +31,8 @@ class AttachmentDraftTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       container: true,
-      label: 'Attachment ${index + 1} of $total',
-      value: _statusLabel(),
+      label: context.l10n.attachmentOf(index + 1, total),
+      value: _statusLabel(context),
       child: ListTile(
         minVerticalPadding: 4,
         leading: ExcludeSemantics(child: _leading(context)),
@@ -41,7 +42,7 @@ class AttachmentDraftTile extends StatelessWidget {
         subtitle: ExcludeSemantics(
           child: Text(
             draft.status == AttachmentDraftStatus.failed
-                ? 'Upload failed • tap retry'
+                ? context.l10n.uploadFailedTapRetry
                 : '${_formatFileSize(draft.byteLength)} • ${draft.status.name}',
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -52,24 +53,24 @@ class AttachmentDraftTile extends StatelessWidget {
           children: [
             _semanticIconButton(
               icon: Icons.arrow_upward,
-              label: 'Move attachment previous',
+              label: context.l10n.moveAttachmentPrevious,
               onPressed: busy || index == 0 ? null : onMovePrevious,
             ),
             _semanticIconButton(
               icon: Icons.arrow_downward,
-              label: 'Move attachment next',
+              label: context.l10n.moveAttachmentNext,
               onPressed: busy || index == total - 1 ? null : onMoveNext,
             ),
             if (draft.status == AttachmentDraftStatus.failed)
               _semanticIconButton(
                 icon: Icons.refresh,
-                label: 'Retry upload',
+                label: context.l10n.retryUpload,
                 onPressed: busy ? null : onRetry,
               )
             else
               _semanticIconButton(
                 icon: Icons.close,
-                label: 'Remove attachment',
+                label: context.l10n.removeAttachment,
                 onPressed: busy ? null : onRemove,
               ),
           ],
@@ -78,11 +79,11 @@ class AttachmentDraftTile extends StatelessWidget {
     );
   }
 
-  String _statusLabel() => switch (draft.status) {
-    AttachmentDraftStatus.ready => 'Ready to upload',
-    AttachmentDraftStatus.uploading => 'Uploading',
-    AttachmentDraftStatus.attached => 'Uploaded',
-    AttachmentDraftStatus.failed => 'Upload failed',
+  String _statusLabel(BuildContext context) => switch (draft.status) {
+    AttachmentDraftStatus.ready => context.l10n.readyToUpload,
+    AttachmentDraftStatus.uploading => context.l10n.uploading,
+    AttachmentDraftStatus.attached => context.l10n.uploaded,
+    AttachmentDraftStatus.failed => context.l10n.uploadFailed,
   };
 
   Widget _leading(BuildContext context) {

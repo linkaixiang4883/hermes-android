@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../services/voice_composer_adapter.dart';
 
 /// Owns a single dictation session and edits only its controlled replacement
@@ -23,6 +24,10 @@ class VoiceComposerController extends ChangeNotifier {
   bool _disposed = false;
   Duration _elapsed = Duration.zero;
   String? _status;
+
+  /// Optional localization provider. When set, user-visible status strings
+  /// are localized; tests leave it null and keep English.
+  AppLocalizations? l10n;
 
   VoiceComposerController({
     required this.textController,
@@ -46,10 +51,14 @@ class VoiceComposerController extends ChangeNotifier {
         onStatus: _handleStatus,
         onError: _handleError,
       );
-      _status = _available ? null : 'Speech recognition is unavailable';
+      _status = _available
+          ? null
+          : (l10n?.speechRecognitionUnavailable ??
+              'Speech recognition is unavailable');
     } catch (error) {
       _available = false;
-      _status = 'Voice setup failed: $error';
+      _status = (l10n?.voiceSetupFailed(error.toString()) ??
+          'Voice setup failed: $error');
     }
     _notify();
     return _available;
@@ -158,7 +167,7 @@ class VoiceComposerController extends ChangeNotifier {
         return;
       }
       _acceptResults = false;
-      _finishListening(status: 'Dictation ready to edit');
+      _finishListening(status: l10n?.dictationReady ?? 'Dictation ready to edit');
       _clearSession();
       unawaited(_stopAdapterAfterFinal());
     } else {

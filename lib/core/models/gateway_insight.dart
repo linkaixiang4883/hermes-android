@@ -1,3 +1,5 @@
+import '../../l10n/app_localizations.dart';
+
 enum GatewayReasoningEventMode { append, replace }
 
 class GatewayReasoningUpdate {
@@ -101,6 +103,15 @@ class GatewayNotice {
           ? 'Background task completed'
           : 'Background task $taskId completed',
     GatewayNoticeKind.review => 'Hermes review',
+  };
+
+  /// Localized variant of [title] for UI call sites.
+  String titleLocalized(AppLocalizations l10n) => switch (kind) {
+    GatewayNoticeKind.background =>
+      taskId == null
+          ? l10n.backgroundTaskCompleted
+          : l10n.backgroundTaskIdCompleted(taskId ?? ''),
+    GatewayNoticeKind.review => l10n.hermesReview,
   };
 
   static GatewayNotice? fromGatewayEvent(

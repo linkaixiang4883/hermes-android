@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/gateway_insight.dart';
 
 class GatewayReasoningCard extends StatelessWidget {
@@ -21,8 +22,8 @@ class GatewayReasoningCard extends StatelessWidget {
         key: PageStorageKey<String>('gateway-reasoning-${text.hashCode}'),
         initiallyExpanded: initiallyExpanded,
         leading: const Icon(Icons.psychology_outlined),
-        title: const Text('Reasoning'),
-        subtitle: const Text('Hermes reasoning details'),
+        title: Text(context.l10n.reasoning),
+        subtitle: Text(context.l10n.hermesReasoningDetails),
         children: [
           const Divider(height: 1),
           SelectionArea(
@@ -66,7 +67,7 @@ class GatewayNoticeCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      notice.title,
+                      notice.titleLocalized(context.l10n),
                       style: Theme.of(context).textTheme.labelLarge,
                     ),
                     const SizedBox(height: 4),
@@ -99,8 +100,8 @@ class GatewaySubagentCard extends StatelessWidget {
         ),
         title: Text(
           complete
-              ? '${activities.length} delegated task(s) completed'
-              : '${activities.where((item) => !item.isComplete).length} delegated task(s) active',
+              ? context.l10n.delegatedTasksCompleted(activities.length)
+              : context.l10n.delegatedTasksActive(activities.where((item) => !item.isComplete).length),
         ),
         children: [
           for (final activity in activities)

@@ -1,0 +1,746 @@
+{
+  "@@locale": "en",
+  "appTitle": "Hermes Agent",
+  "cancel": "Cancel",
+  "retry": "Retry",
+  "dismiss": "Dismiss",
+  "refresh": "Refresh",
+  "on": "On",
+  "off": "Off",
+  "unknown": "unknown",
+  "youHeader": "## You",
+  "hermesHeader": "## Hermes",
+  "chooseImage": "Choose image",
+  "chooseImages": "Choose images",
+  "takePhoto": "Take photo",
+  "chooseFiles": "Choose files",
+  "fileTypeHint": "Documents, archives, audio, video, or data",
+  "unableToPrepareImage": "Unable to prepare this image. Try another one.",
+  "imageSelectionInterrupted": "Image selection was interrupted. Try again.",
+  "unableToPrepareImageNamed": "Unable to prepare {name}.",
+  "@unableToPrepareImageNamed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "configureDesktopGatewayForFiles": "Configure a valid Desktop Gateway URL before attaching files.",
+  "maxAttachmentDrafts": "You can attach up to {count} items.",
+  "@maxAttachmentDrafts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filesSkipped": "{count} file(s) skipped: limit, size, unreadable, or sensitive filename.",
+  "@filesSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "unableToPrepareFile": "Unable to prepare this file. Try another one.",
+  "retryingAttachment": "Retrying {name}…",
+  "@retryingAttachment": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "fileAttachedPendingCatalog": "File attached; document catalog registration is pending.",
+  "retryFailed": "Retry failed for {name}. The draft and prompt were kept.",
+  "@retryFailed": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "configureDesktopGatewayForModel": "Configure Desktop Gateway URL and Dashboard credentials to choose a chat model.",
+  "modelAndThinkingForChat": "Model and thinking for this chat",
+  "profileDefaultLabel": "profile default",
+  "thisChatLabel": "this chat",
+  "profileDefaultWithModel": "Profile default: {model}",
+  "@profileDefaultWithModel": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "thinkingEffort": "Thinking effort",
+  "applyToThisChat": "Apply to this chat",
+  "couldNotLoadModels": "Could not load models for this profile: {error}",
+  "@couldNotLoadModels": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "modelAppliesToChat": "{model} • {effort} now apply only to this chat.",
+  "@modelAppliesToChat": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      },
+      "effort": {
+        "type": "String"
+      }
+    }
+  },
+  "modelNotChanged": "Model was not changed: {error}",
+  "@modelNotChanged": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "responding": "Responding…",
+  "chatActions": "Chat actions",
+  "exportShare": "Export / share",
+  "chooseChatModel": "Choose chat model",
+  "attachmentDrafts": "Attachment drafts",
+  "addAttachment": "Add attachment",
+  "attachImageOrFile": "Attach image or file",
+  "message": "Message",
+  "typeAMessage": "Type a message…",
+  "spokenReplies": "Spoken replies",
+  "spokenRepliesOn": "Spoken replies on",
+  "spokenRepliesOff": "Spoken replies off",
+  "stopResponse": "Stop response",
+  "sendMessage": "Send message",
+  "send": "Send",
+  "failedToLoadMessages": "Failed to load messages",
+  "messageCopied": "Message copied",
+  "copyMessage": "Copy message",
+  "readAloud": "Read aloud",
+  "editAndResend": "Edit and resend",
+  "regenerateResponse": "Regenerate response",
+  "regenerateFromPreceding": "Regenerate from the preceding prompt",
+  "voiceSetupFailed": "Voice setup failed: {error}",
+  "@voiceSetupFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "speechRecognitionUnavailable": "Speech recognition is unavailable",
+  "readingResponseAloud": "Reading response aloud",
+  "readAloudUnavailable": "Read aloud is unavailable on this device",
+  "responseReady": "Response ready",
+  "turnCompleted": "Turn completed",
+  "recoveringHermes": "Recovering Hermes…",
+  "hermesRecoveryUnavailable": "Hermes recovery is unavailable: {error}",
+  "@hermesRecoveryUnavailable": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "hermesWaitingInput": "Hermes is waiting for input…",
+  "hermesResponding": "Hermes is responding…",
+  "recoveryStoppedSafely": "Hermes stopped recovery safely. No prompt was resent.",
+  "deliveryUncertainRecovering": "Delivery is uncertain; recovering without resending…",
+  "legacyTransportNotice": "Background recovery unavailable — legacy transport",
+  "startingHermes": "Starting Hermes…",
+  "preparingAttachments": "Preparing attachments…",
+  "uploadingAttachment": "Uploading {index}/{total}: {name}",
+  "@uploadingAttachment": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "attachedFileLabel": "[Attached file: {name}]",
+  "@attachedFileLabel": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopGatewayNotConfigured": "Desktop Gateway is not configured for this connection.",
+  "couldNotDenyCommand": "Could not deny the command: {error}",
+  "@couldNotDenyCommand": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotSkipQuestion": "Could not skip the Hermes question.",
+  "responseStopped": "Response stopped.",
+  "responseClosedNoTurn": "Response closed locally; no active gateway turn was found.",
+  "responseClosedStopFailed": "Response closed locally; gateway stop failed: {error}",
+  "@responseClosedStopFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "sendFailed": "Send failed: {error}",
+  "@sendFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "thinkingEffortNone": "Off (no thinking)",
+  "thinkingEffortMinimal": "Minimal",
+  "thinkingEffortLow": "Low",
+  "thinkingEffortMedium": "Medium",
+  "thinkingEffortHigh": "High",
+  "thinkingEffortXhigh": "Extra High",
+  "thinkingEffortMax": "Max",
+  "thinkingEffortUltra": "Ultra",
+  "addConnection": "Add Connection",
+  "editConnection": "Edit Connection",
+  "addGatewayConnection": "Add Gateway Connection",
+  "editGatewayConnection": "Edit Gateway Connection",
+  "noConnections": "No connections",
+  "tapPlusToAdd": "Tap + to add a remote Hermes Gateway\n(API Server, port 8642)",
+  "connectionLabel": "Label",
+  "hostField": "Host",
+  "hostHint": "192.168.1.50, 100.x.y.z, or hermes-machine.tailnet.ts.net",
+  "portField": "Port",
+  "portHint": "8642 (API Server)",
+  "apiKeyField": "API Key",
+  "apiKeyHint": "API_SERVER_KEY from ~/.hermes/.env",
+  "serverRequiresApiKey": "Server requires an API key. Enter your API_SERVER_KEY.",
+  "updateApiKey": "Update API Key",
+  "save": "Save",
+  "delete": "Delete",
+  "key": "Key",
+  "dashboardProxySettings": "Dashboard / Proxy Settings",
+  "gatewayPathPrefix": "Gateway path prefix",
+  "dashboardPathPrefix": "Dashboard path prefix",
+  "dashboardBehindProxy": "Dashboard behind proxy",
+  "dashboardPort": "Dashboard Port",
+  "dashboardPortHint": "Leave blank for default (9119)",
+  "customProxyDetails": "Custom proxy and dashboard details",
+  "egGatewayPrefix": "e.g. /profile/peter",
+  "egDashboardPrefix": "e.g. /dashboard",
+  "gatewayPrefixHint": "e.g. /profile/peter (proxy path before /api/ and /v1/)",
+  "dashboardPrefixHint": "e.g. /dashboard (proxy path before /api/)",
+  "proxyInjectsAuth": "Proxy injects auth; app sends clean requests",
+  "nginxInjectsAuth": "Nginx injects auth — app sends clean requests",
+  "usernameOptional": "Username (optional)",
+  "passwordOptional": "Password (optional)",
+  "invalidPortNumber": "Invalid port number.",
+  "invalidApiKey401": "Invalid API key. Server returned 401.",
+  "apiKeyNotStoredSecurely": "The API key could not be stored securely.",
+  "dashboardCredsNotStoredSecurely": "The dashboard credentials could not be stored securely.",
+  "connectionNotStoredSecurely": "The connection could not be stored securely.",
+  "connectionNotDeletedSafely": "The connection could not be deleted safely.",
+  "cannotReachHostPort": "Cannot reach {host}:{port}.",
+  "@cannotReachHostPort": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "couldNotReachGatewayAt": "Could not reach/authenticate the Gateway API at {host}:{port}{prefix}.",
+  "@couldNotReachGatewayAt": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      },
+      "prefix": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotReachDashboardAt": "Could not reach/authenticate the dashboard at {host}:{port}. Check the port and credentials.",
+  "@couldNotReachDashboardAt": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "cannotReachHostPortCheck": "Cannot reach {host}:{port}. Check the host and port.",
+  "@cannotReachHostPortCheck": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      },
+      "port": {
+        "type": "int"
+      }
+    }
+  },
+  "gatewayOkDashboardFailed": "Gateway connected, but the dashboard could not be reached or authenticated. Check the dashboard details, or clear them to skip.",
+  "dashboardDetailsHelp": "Used for hosted path prefixes and for the Settings, Memory, Skills and Cron tabs. Leave username/password blank for an open dashboard, or enable proxied mode when your reverse proxy injects dashboard auth.",
+  "dashboardPortHelp": "Optional. For the Memory/Cron/Skills/Settings tabs. Leave blank for the default (9119).",
+  "rename": "Rename",
+  "newChat": "New Chat",
+  "switchProfile": "Switch profile",
+  "profile": "Profile",
+  "renameChat": "Rename chat",
+  "couldNotRenameChat": "Could not rename chat: {error}",
+  "@couldNotRenameChat": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "branchChat": "Branch chat",
+  "sessionTitleBranch": "{title} branch",
+  "@sessionTitleBranch": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "createBranch": "Create branch",
+  "noMessagesInDesktopSession": "This chat has no messages available in the Desktop session yet.",
+  "couldNotBranchChat": "Could not branch chat: {error}",
+  "@couldNotBranchChat": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "branchCreated": "Branch created in Hermes history.",
+  "untitledSession": "Untitled session",
+  "deleteSessionTitle": "Delete session?",
+  "deleteSessionConfirm": "Delete \"{title}\" from the remote Hermes history? This cannot be undone.",
+  "@deleteSessionConfirm": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "sessionDeleted": "Session deleted from remote Hermes.",
+  "couldNotDeleteSession": "Could not delete session: {error}",
+  "@couldNotDeleteSession": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "memoryTab": "Memory",
+  "cronJobsTab": "Cron Jobs",
+  "skillsTab": "Skills",
+  "settingsTab": "Settings",
+  "connectingTo": "Connecting to {url}...",
+  "@connectingTo": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "gatewayMustBeRunning": "Make sure the Gateway API Server is running\n(hermes gateway status)",
+  "connectionIssue": "Connection issue",
+  "noSessionsYet": "No sessions yet",
+  "tapPlusNewChat": "Tap the + button to start a new chat",
+  "searchChats": "Search chats",
+  "branch": "Branch",
+  "sessionMeta": "{count} msgs • {model} • {time}",
+  "@sessionMeta": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "model": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "voice": "Voice",
+  "profileDefaultSetTo": "Profile default set to {model}. Chats with their own model keep that override.",
+  "@profileDefaultSetTo": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "settingsTitle": "Settings",
+  "failedToLoadSettings": "Failed to load settings",
+  "profileDefaultModel": "Profile default model",
+  "changesDefaultFor": "Changes the default for {label}. Use the selector in a chat to override only that conversation.",
+  "@changesDefaultFor": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "currentProfileDefault": "Current profile default",
+  "contextTokens": "Context: {tokens} tokens",
+  "@contextTokens": {
+    "placeholders": {
+      "tokens": {
+        "type": "int"
+      }
+    }
+  },
+  "provider": "Provider",
+  "model": "Model",
+  "setProfileDefault": "Set profile default",
+  "appearance": "Appearance",
+  "sessionSources": "Session Sources",
+  "connection": "Connection",
+  "baseUrl": "Base URL",
+  "about": "About",
+  "hermesAgentForAndroid": "Hermes Agent for Android",
+  "versionLabel": "Version {version}",
+  "@versionLabel": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "aboutDescription": "Browse and manage your Hermes Agent sessions from your phone. Connects to a Hermes dashboard running on your local network.",
+  "verboseMode": "Verbose Mode",
+  "showToolCalls": "Show tool calls, thinking, and message metadata",
+  "systemTheme": "System",
+  "darkTheme": "Dark",
+  "lightTheme": "Light",
+  "noTtsVoices": "No TTS voices found.\nInstall Google Text-to-Speech and download voice data.",
+  "autoDeviceDefault": "Auto (device default)",
+  "sessionSourceAutonomous": "Autonomous agents",
+  "sessionSourceExternalApi": "External API clients",
+  "sessionSourceCli": "Command-line chats",
+  "sessionSourceScheduled": "Scheduled tasks",
+  "sessionSourceDesktop": "Desktop app",
+  "sessionSourceDiscord": "Discord chats",
+  "sessionSourceGatewayApi": "Gateway API access",
+  "sessionSourcePhone": "Phone or tablet",
+  "sessionSourceSignal": "Signal messages",
+  "sessionSourceSlack": "Slack chats",
+  "failed": "Failed: {error}",
+  "@failed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "untitled": "Untitled",
+  "jobResumed": "Job resumed",
+  "jobPaused": "Job paused",
+  "deleteCronJob": "Delete Cron Job",
+  "deleteJobConfirm": "Delete \"{name}\"?",
+  "@deleteJobConfirm": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deletedJob": "Deleted \"{name}\"",
+  "@deletedJob": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteFailed": "Delete failed: {error}",
+  "@deleteFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "jobTriggered": "Job triggered",
+  "addCronJob": "Add Cron Job",
+  "add": "Add",
+  "cronJobAdded": "Cron job added",
+  "failedToAddJob": "Failed to add job: {error}",
+  "@failedToAddJob": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "editCronJob": "Edit Cron Job",
+  "cronJobUpdated": "Cron job updated",
+  "failedToUpdateJob": "Failed to update job: {error}",
+  "@failedToUpdateJob": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "name": "Name",
+  "egDailyBackup": "e.g., Daily backup",
+  "prompt": "Prompt",
+  "whatShouldAgentDo": "What should the agent do?",
+  "schedule": "Schedule",
+  "egCronSchedule": "e.g., 0 9 * * * or every 2h",
+  "scriptOnly": "Script only (no agent)",
+  "scriptOnlyHelp": "Use for cron jobs backed by scripts.",
+  "requiredFields": "Name, prompt, and schedule are required",
+  "cronJobs": "Cron Jobs",
+  "addNewCronJob": "Add new cron job",
+  "failedToLoadCronJobs": "Failed to load cron jobs",
+  "noCronJobs": "No cron jobs",
+  "triggerNow": "Trigger now",
+  "edit": "Edit",
+  "resume": "Resume",
+  "pause": "Pause",
+  "lastRun": "Last: {time}",
+  "@lastRun": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "nextRun": "Next: {time}",
+  "@nextRun": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "memory": "Memory",
+  "sourceLabel": "Source: {source}",
+  "@sourceLabel": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "failedToLoadMemory": "Failed to load memory",
+  "noMemoryEntries": "No memory entries",
+  "memoryHelp": "Memory entries are cross-session facts the agent remembers.\nThey are configured in ~/.hermes/config.yaml",
+  "skillsCount": "Skills ({count})",
+  "@skillsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "failedToLoadSkills": "Failed to load skills",
+  "noSkillsFound": "No skills found",
+  "telegramMessages": "Telegram messages",
+  "developerToolCalls": "Developer tool calls",
+  "terminalSessions": "Terminal sessions",
+  "whatsappMessages": "WhatsApp messages",
+  "attachmentOf": "Attachment {index} of {total}",
+  "@attachmentOf": {
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "uploadFailedTapRetry": "Upload failed • tap retry",
+  "moveAttachmentPrevious": "Move attachment previous",
+  "moveAttachmentNext": "Move attachment next",
+  "retryUpload": "Retry upload",
+  "removeAttachment": "Remove attachment",
+  "readyToUpload": "Ready to upload",
+  "uploading": "Uploading",
+  "uploaded": "Uploaded",
+  "uploadFailed": "Upload failed",
+  "newCount": "{count} new",
+  "@newCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "latest": "Latest",
+  "noNewMessages": "No new messages",
+  "oneNewMessage": "1 new message",
+  "newMessages": "{count} new messages",
+  "@newMessages": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "goToEnd": "Go to end",
+  "failuresSummary": "{failures} failed • {total} total",
+  "@failuresSummary": {
+    "placeholders": {
+      "failures": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "completedCount": "{count} completed",
+  "@completedCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hermesActivity": "Hermes activity",
+  "couldNotSendApproval": "Could not send the approval: {error}",
+  "@couldNotSendApproval": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "allowOnce": "Allow once",
+  "allowForSession": "Allow for this session",
+  "confirmAlwaysAllow": "Confirm always allow",
+  "alwaysAllow": "Always allow",
+  "deny": "Deny",
+  "runOnlyThisCommand": "Run only this command.",
+  "allowMatchingCommands": "Allow matching commands until this Hermes session ends.",
+  "savePermanentRule": "Save a permanent rule in the Hermes configuration.",
+  "doNotRunCommand": "Do not run this command.",
+  "approvalNeeded": "Approval needed",
+  "command": "Command",
+  "permanentRuleWarning": "This creates a permanent rule in Hermes. Review the full command before confirming.",
+  "couldNotAcceptAnswer": "Hermes could not accept the answer. Please try again.",
+  "hermesNeedsInput": "Hermes needs your input",
+  "selectOneOrMore": "Select one or more options, then continue.",
+  "selectOneOrEnterOther": "Select one option, or enter another answer.",
+  "otherAnswer": "Other answer",
+  "yourAnswer": "Your answer",
+  "skip": "Skip",
+  "continueLabel": "Continue",
+  "reasoning": "Reasoning",
+  "hermesReasoningDetails": "Hermes reasoning details",
+  "delegatedTasksCompleted": "{count} delegated task(s) completed",
+  "@delegatedTasksCompleted": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "delegatedTasksActive": "{count} delegated task(s) active",
+  "@delegatedTasksActive": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "hermesDidNotAcceptResponse": "Hermes did not accept the response. Please try again.",
+  "sensitiveValueNotice": "The value is sent directly to the active Hermes gateway and is not saved by this Android app.",
+  "textSize": "Text size",
+  "textSizeHelp": "Explicit choices adjust Android accessibility text size; System leaves it unchanged.",
+  "textSizePreview": "Text size preview",
+  "preview": "Preview",
+  "textScalingActive": "Hermes keeps Android accessibility text scaling active.",
+  "listeningElapsed": "Listening, elapsed {elapsed}",
+  "@listeningElapsed": {
+    "placeholders": {
+      "elapsed": {
+        "type": "String"
+      }
+    }
+  },
+  "stopVoiceInput": "Stop voice input",
+  "stop": "Stop",
+  "cancelVoiceInput": "Cancel voice input",
+  "startVoiceInput": "Start voice input",
+  "speakToHermes": "Speak to Hermes",
+  "usingOneTool": "Hermes is using a tool",
+  "usingTools": "Hermes is using {count} tools",
+  "@usingTools": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardUsernameOptional": "Dashboard Username (optional)",
+  "dashboardPasswordOptional": "Dashboard Password (optional)",
+  "desktopGatewayUrlOptional": "Desktop Gateway URL (optional)",
+  "desktopGatewayHelper": "Enables file attachments through the Desktop remote gateway.",
+  "toolRunning": "Running",
+  "toolPreparing": "Preparing",
+  "toolWorking": "Working",
+  "toolCompleted": "Completed",
+  "toolCompletedIn": "Completed in {duration}",
+  "@toolCompletedIn": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "toolFailed": "Failed",
+  "toolFailedAfter": "Failed after {duration}",
+  "@toolFailedAfter": {
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "backgroundTaskCompleted": "Background task completed",
+  "backgroundTaskIdCompleted": "Background task {taskId} completed",
+  "@backgroundTaskIdCompleted": {
+    "placeholders": {
+      "taskId": {
+        "type": "String"
+      }
+    }
+  },
+  "hermesReview": "Hermes review",
+  "adminPasswordNeeded": "Administrator password needed",
+  "sudoPasswordDescription": "Hermes needs a sudo password for the pending terminal command.",
+  "sudoPasswordField": "Sudo password",
+  "secretNeeded": "Secret needed",
+  "secretDescription": "Hermes needs a secret for the pending skill.",
+  "secretValueField": "Secret value",
+  "dictationReady": "Dictation ready to edit",
+  "approvalFallbackDescription": "Hermes wants to run a command.",
+  "clarifyFallbackDescription": "Hermes needs more information to continue."
+}

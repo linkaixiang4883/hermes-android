@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../services/connection_manager.dart';
 import '../widgets/text_size_settings_card.dart';
 import '../../main.dart';
@@ -127,7 +129,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await _client.setModel('main', _selectedProvider, _selectedModel);
       setState(() {
         _successMsg =
-            'Profile default set to $_selectedModel. Chats with their own model keep that override.';
+            context.l10n.profileDefaultSetTo(_selectedModel);
       });
     } catch (e) {
       setState(() {
@@ -140,12 +142,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        title: Text(context.l10n.settingsTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loading ? null : _loadData,
-            tooltip: 'Refresh',
+            tooltip: context.l10n.refresh,
           ),
         ],
       ),
@@ -168,7 +170,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               const Icon(Icons.error_outline, size: 48, color: Colors.orange),
               const SizedBox(height: 16),
               Text(
-                'Failed to load settings',
+                context.l10n.failedToLoadSettings,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -178,7 +180,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              ElevatedButton(onPressed: _loadData, child: const Text('Retry')),
+              ElevatedButton(onPressed: _loadData, child: Text(context.l10n.retry)),
             ],
           ),
         ),
@@ -189,9 +191,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       padding: const EdgeInsets.all(16),
       children: [
         // ---- Section: Model ----
-        _buildSectionHeader('Profile default model'),
+        _buildSectionHeader(context.l10n.profileDefaultModel),
         Text(
-          'Changes the default for ${widget.connection.label}. Use the selector in a chat to override only that conversation.',
+          context.l10n.changesDefaultFor(widget.connection.label),
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),
@@ -210,7 +212,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        'Current profile default',
+                        context.l10n.currentProfileDefault,
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                     ],
@@ -225,7 +227,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
                       child: Text(
-                        'Context: ${_modelInfo!['effective_context_length']} tokens',
+                        context.l10n.contextTokens(_modelInfo!['effective_context_length'] as int),
                         style: Theme.of(
                           context,
                         ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -240,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         // Provider picker
         if (_providers.isNotEmpty) ...[
           _buildDropdown<String>(
-            label: 'Provider',
+            label: context.l10n.provider,
             value:
                 _selectedProvider.isNotEmpty &&
                     _providers.contains(_selectedProvider)
@@ -269,7 +271,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (_selectedProvider.isNotEmpty &&
             _providerModels.containsKey(_selectedProvider)) ...[
           _buildDropdown<String>(
-            label: 'Model',
+            label: context.l10n.model,
             value: _selectedModel,
             items: _providerModels[_selectedProvider]!.map((m) {
               final id = m['id'] as String? ?? '';
@@ -286,7 +288,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: FilledButton.icon(
               onPressed: _applyModel,
               icon: const Icon(Icons.check),
-              label: const Text('Set profile default'),
+              label: Text(context.l10n.setProfileDefault),
             ),
           ),
         ],
@@ -316,8 +318,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // ---- Section: Theme ----
-        _buildSectionHeader('Appearance'),
+        _buildSectionHeader(context.l10n.appearance),
         _ThemeToggle(),
+        const SizedBox(height: 8),
+        _LanguageSelector(
+          onChanged: (locale) => context
+              .findAncestorStateOfType<HermesAppState>()!
+              .setLocale(locale),
+        ),
         const SizedBox(height: 8),
         TextSizeSettingsCard(
           preferences: context
@@ -336,17 +344,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // ---- Section: Voice ----
-        _buildSectionHeader('Voice'),
+        _buildSectionHeader(context.l10n.voice),
         _VoicePicker(),
         const SizedBox(height: 16),
 
         // ---- Section: Session Sources ----
-        _buildSectionHeader('Session Sources'),
+        _buildSectionHeader(context.l10n.sessionSources),
         _SessionSourcesFilter(connectionId: widget.connection.id),
         const SizedBox(height: 16),
 
         // ---- Section: Connection ----
-        _buildSectionHeader('Connection'),
+        _buildSectionHeader(context.l10n.connection),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -355,11 +363,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _infoRow('Label', widget.connection.label),
                 const SizedBox(height: 4),
-                _infoRow('Host', widget.connection.host),
+                _infoRow(context.l10n.hostField, widget.connection.host),
                 const SizedBox(height: 4),
-                _infoRow('Port', '${widget.connection.port}'),
+                _infoRow(context.l10n.portField, '${widget.connection.port}'),
                 const SizedBox(height: 4),
-                _infoRow('Base URL', widget.connection.baseUrl),
+                _infoRow(context.l10n.baseUrl, widget.connection.baseUrl),
               ],
             ),
           ),
@@ -367,7 +375,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(height: 16),
 
         // ---- Section: About ----
-        _buildSectionHeader('About'),
+        _buildSectionHeader(context.l10n.about),
         _AboutCard(),
       ],
     );
@@ -412,7 +420,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return DropdownButtonFormField<T>(
       initialValue: value,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: context.l10n.connectionLabel,
         border: const OutlineInputBorder(),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 12,
@@ -457,17 +465,16 @@ class _AboutCardState extends State<_AboutCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Hermes Agent for Android',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Text(
+              context.l10n.hermesAgentForAndroid,
+              style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
-            Text('Version ${_version.isNotEmpty ? _version : '…'}'),
+            Text(context.l10n.versionLabel(_version.isNotEmpty ? _version : '???')),
             const SizedBox(height: 8),
-            const Text(
-              'Browse and manage your Hermes Agent sessions from your phone. '
-              'Connects to a Hermes dashboard running on your local network.',
-              style: TextStyle(color: Colors.grey),
+            Text(
+              context.l10n.aboutDescription,
+              style: const TextStyle(color: Colors.grey),
             ),
           ],
         ),
@@ -506,8 +513,8 @@ class _VerboseToggleState extends State<_VerboseToggle> {
   Widget build(BuildContext context) {
     return Card(
       child: SwitchListTile(
-        title: const Text('Verbose Mode'),
-        subtitle: const Text('Show tool calls, thinking, and message metadata'),
+        title: Text(context.l10n.verboseMode),
+        subtitle: Text(context.l10n.showToolCalls),
         secondary: const Icon(Icons.terminal),
         value: _verbose,
         onChanged: _set,
@@ -549,25 +556,87 @@ class _ThemeToggleState extends State<_ThemeToggle> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: SegmentedButton<String>(
-        segments: const [
+        segments: [
           ButtonSegment(
             value: 'system',
-            label: Text('System'),
+            label: Text(context.l10n.systemTheme),
             icon: Icon(Icons.brightness_auto, size: 18),
           ),
           ButtonSegment(
             value: 'dark',
-            label: Text('Dark'),
+            label: Text(context.l10n.darkTheme),
             icon: Icon(Icons.dark_mode, size: 18),
           ),
           ButtonSegment(
             value: 'light',
-            label: Text('Light'),
+            label: Text(context.l10n.lightTheme),
             icon: Icon(Icons.light_mode, size: 18),
           ),
         ],
         selected: {_mode},
         onSelectionChanged: (s) => _setMode(s.first),
+        style: ButtonStyle(visualDensity: VisualDensity.compact),
+      ),
+    );
+  }
+}
+
+/// Language selector — mirrors [_ThemeToggle]: persisted via `app_locale`
+/// in SharedPreferences, default follows the system locale. [onChanged]
+/// lets the app shell rebuild MaterialApp with the new locale.
+class _LanguageSelector extends StatefulWidget {
+  final ValueChanged<String> onChanged;
+  const _LanguageSelector({required this.onChanged});
+
+  @override
+  State<_LanguageSelector> createState() => _LanguageSelectorState();
+}
+
+class _LanguageSelectorState extends State<_LanguageSelector> {
+  String _locale = 'system';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() => _locale = prefs.getString('app_locale') ?? 'system');
+  }
+
+  Future<void> _setLocale(String locale) async {
+    final prefs = await SharedPreferences.getInstance();
+    await HermesApp.setLocale(prefs, locale);
+    if (!mounted) return;
+    setState(() => _locale = locale);
+    widget.onChanged(locale);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: SegmentedButton<String>(
+        segments: [
+          ButtonSegment(
+            value: 'system',
+            label: Text(context.l10n.systemTheme),
+            icon: const Icon(Icons.language, size: 18),
+          ),
+          const ButtonSegment(
+            value: 'en',
+            label: Text('English'),
+          ),
+          const ButtonSegment(
+            value: 'zh',
+            label: Text('中文'),
+          ),
+        ],
+        selected: {_locale},
+        onSelectionChanged: (s) => _setLocale(s.first),
         style: ButtonStyle(visualDensity: VisualDensity.compact),
       ),
     );
@@ -669,20 +738,19 @@ class _VoicePickerState extends State<_VoicePicker> {
     }
 
     if (_voices.isEmpty) {
-      return const Card(
+      return Card(
         child: Padding(
-          padding: EdgeInsets.all(16),
+          padding: const EdgeInsets.all(16),
           child: Text(
-            'No TTS voices found.\\n'
-            'Install Google Text-to-Speech and download voice data.',
-            style: TextStyle(color: Colors.grey),
+            context.l10n.noTtsVoices,
+            style: const TextStyle(color: Colors.grey),
           ),
         ),
       );
     }
 
     final items = <DropdownMenuItem<Map<String, String>?>>[
-      const DropdownMenuItem(value: null, child: Text('Auto (device default)')),
+      DropdownMenuItem(value: null, child: Text(context.l10n.autoDeviceDefault)),
       ..._voices.map(
         (v) => DropdownMenuItem(
           value: v,
@@ -701,10 +769,10 @@ class _VoicePickerState extends State<_VoicePicker> {
 
     return DropdownButtonFormField<Map<String, String>?>(
       initialValue: current,
-      decoration: const InputDecoration(
-        labelText: 'Voice',
-        border: OutlineInputBorder(),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: InputDecoration(
+        labelText: context.l10n.voice,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       ),
       items: items,
       onChanged: _set,
@@ -725,22 +793,22 @@ class _SessionSourcesFilter extends StatefulWidget {
 class _SessionSourcesFilterState extends State<_SessionSourcesFilter> {
   /// Known session source types. Hermes Gateway persists `session.source` for
   /// every session. Sources not in this list are always shown (whitelisted).
-  static const Map<String, String> _knownSources = {
-    'acp': 'Autonomous agents',
-    'api_server': 'External API clients',
-    'cli': 'Command-line chats',
-    'cron': 'Scheduled tasks',
-    'desktop': 'Desktop app',
-    'discord': 'Discord chats',
-    'gateway': 'Gateway API access',
-    'mobile': 'Phone or tablet',
-    'signal': 'Signal messages',
-    'slack': 'Slack chats',
-    'telegram': 'Telegram messages',
-    'tool': 'Developer tool calls',
-    'tui': 'Terminal sessions',
-    'whatsapp': 'WhatsApp messages',
-  };
+  static Map<String, String> _knownSources(AppLocalizations l10n) => {
+        'acp': l10n.sessionSourceAutonomous,
+        'api_server': l10n.sessionSourceExternalApi,
+        'cli': l10n.sessionSourceCli,
+        'cron': l10n.sessionSourceScheduled,
+        'desktop': l10n.sessionSourceDesktop,
+        'discord': l10n.sessionSourceDiscord,
+        'gateway': l10n.sessionSourceGatewayApi,
+        'mobile': l10n.sessionSourcePhone,
+        'signal': l10n.sessionSourceSignal,
+        'slack': l10n.sessionSourceSlack,
+        'telegram': l10n.telegramMessages,
+        'tool': l10n.developerToolCalls,
+        'tui': l10n.terminalSessions,
+        'whatsapp': l10n.whatsappMessages,
+      };
 
   Set<String> _excluded = {};
 
@@ -775,7 +843,7 @@ class _SessionSourcesFilterState extends State<_SessionSourcesFilter> {
   Widget build(BuildContext context) {
     return Card(
       child: Column(
-        children: _knownSources.entries.map((entry) {
+        children: _knownSources(context.l10n).entries.map((entry) {
           final source = entry.key;
           final label = entry.value;
           final isVisible = !_excluded.contains(source);

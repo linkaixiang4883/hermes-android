@@ -3,6 +3,8 @@
 // GET /api/sessions/{id}/messages.
 import 'dart:async';
 
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -62,16 +64,18 @@ class _ModelSelection {
   const _ModelSelection({required this.choice, required this.reasoningEffort});
 }
 
-const _reasoningEffortLabels = <String, String>{
-  'none': 'Off (no thinking)',
-  'minimal': 'Minimal',
-  'low': 'Low',
-  'medium': 'Medium',
-  'high': 'High',
-  'xhigh': 'Extra High',
-  'max': 'Max',
-  'ultra': 'Ultra',
-};
+/// Localized labels for the reasoning-effort selector. Built from [l10n] so
+/// the values follow the active app locale.
+Map<String, String> _reasoningEffortLabels(AppLocalizations l10n) => {
+      'none': l10n.thinkingEffortNone,
+      'minimal': l10n.thinkingEffortMinimal,
+      'low': l10n.thinkingEffortLow,
+      'medium': l10n.thinkingEffortMedium,
+      'high': l10n.thinkingEffortHigh,
+      'xhigh': l10n.thinkingEffortXhigh,
+      'max': l10n.thinkingEffortMax,
+      'ultra': l10n.thinkingEffortUltra,
+    };
 
 class _GatewayReasoningDisplay {
   final String text;
@@ -81,9 +85,6 @@ class _GatewayReasoningDisplay {
 }
 
 enum _ResponseTransport { none, rest, desktop }
-
-const _legacyTransportNotice =
-    'Background recovery unavailable — legacy transport';
 
 @visibleForTesting
 typedef TestRemotePromptSubmit =
@@ -402,7 +403,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ).trim();
       if (content.isEmpty) continue;
       buffer
-        ..writeln(role == 'user' ? '## You' : '## Hermes')
+        ..writeln(
+          role == 'user'
+              ? context.l10n.youHeader
+              : context.l10n.hermesHeader,
+        )
         ..writeln()
         ..writeln(content)
         ..writeln();
@@ -447,7 +452,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _voiceStatus = 'Voice setup failed: $e');
+      setState(() => _voiceStatus = context.l10n.voiceSetupFailed(e.toString()));
     }
   }
 
@@ -464,7 +469,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           content: Text(
             _voiceComposer.status ??
                 _voiceStatus ??
-                'Speech recognition is unavailable',
+                context.l10n.speechRecognitionUnavailable,
           ),
         ),
       );
@@ -488,9 +493,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Reading response aloud'),
-            duration: Duration(seconds: 2),
+          SnackBar(
+            content: Text(context.l10n.readingResponseAloud),
+            duration: const Duration(seconds: 2),
           ),
         );
     }
@@ -503,9 +508,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       messenger
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Read aloud is unavailable on this device'),
-            duration: Duration(seconds: 3),
+          SnackBar(
+            content: Text(context.l10n.readAloudUnavailable),
+            duration: const Duration(seconds: 3),
           ),
         );
     }
@@ -515,8 +520,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted || !_appInBackground) return;
     final turnId = state.turnId ?? state.clientTurnId;
     final summary = state.isTerminal && !state.isFailClosed
-        ? 'Response ready'
-        : 'Turn completed';
+        ? context.l10n.responseReady
+        : context.l10n.turnCompleted;
     unawaited(
       _turnNotifications.showTurnCompleted(
         turnSummary: '${widget.session.title}: $summary',
@@ -693,9 +698,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted && !_streaming) {
       setState(() {
         _sending = true;
-        _gatewayTurnStatus = const GatewayTurnStatus(
+        _gatewayTurnStatus = GatewayTurnStatus(
           kind: 'recovery',
-          text: 'Recovering Hermes…',
+          text: context.l10n.recoveringHermes,
         );
       });
     }
@@ -732,7 +737,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         _gatewayTurnStatus = GatewayTurnStatus(
           kind: 'recovery',
-          text: 'Hermes recovery is unavailable: $error',
+          text: context.l10n.hermesRecoveryUnavailable(error.toString()),
         );
       });
     } finally {
@@ -784,7 +789,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _streaming = true;
         _gatewayTurnStatus = GatewayTurnStatus(
           kind: 'recovery',
-          text: _gatewayRecoveryStatusText(projection.status),
+          text: _gatewayRecoveryStatusText(projection.status, context.l10n),
         );
       } else if (_activeClientTurnId == null ||
           _activeClientTurnId == projection.clientTurnId) {
@@ -794,9 +799,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _streaming = false;
         _awaitingVoiceReply = false;
         _gatewayTurnStatus = projection.isFailClosed
-            ? const GatewayTurnStatus(
+            ? GatewayTurnStatus(
                 kind: 'recovery_failed',
-                text: 'Hermes stopped recovery safely. No prompt was resent.',
+                text: context.l10n.recoveryStoppedSafely,
               )
             : null;
       }
@@ -844,11 +849,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return null;
   }
 
-  String _gatewayRecoveryStatusText(GatewayRecoveryTurnStatus? status) {
+  String _gatewayRecoveryStatusText(
+    GatewayRecoveryTurnStatus? status,
+    AppLocalizations l10n,
+  ) {
     return switch (status) {
-      GatewayRecoveryTurnStatus.waitingInput => 'Hermes is waiting for input…',
-      GatewayRecoveryTurnStatus.running => 'Hermes is responding…',
-      _ => 'Recovering Hermes…',
+      GatewayRecoveryTurnStatus.waitingInput => l10n.hermesWaitingInput,
+      GatewayRecoveryTurnStatus.running => l10n.hermesResponding,
+      _ => l10n.recoveringHermes,
     };
   }
 
@@ -894,7 +902,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ListTile(
               leading: const Icon(Icons.photo_library_outlined),
               title: Text(
-                _desktopGateway == null ? 'Choose image' : 'Choose images',
+                _desktopGateway == null
+                    ? sheetContext.l10n.chooseImage
+                    : sheetContext.l10n.chooseImages,
               ),
               onTap: () {
                 Navigator.pop(sheetContext);
@@ -903,7 +913,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             ListTile(
               leading: const Icon(Icons.photo_camera_outlined),
-              title: const Text('Take photo'),
+              title: Text(sheetContext.l10n.takePhoto),
               onTap: () {
                 Navigator.pop(sheetContext);
                 _pickCameraImage();
@@ -912,10 +922,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (_desktopGateway != null)
               ListTile(
                 leading: const Icon(Icons.description_outlined),
-                title: const Text('Choose files'),
-                subtitle: const Text(
-                  'Documents, archives, audio, video, or data',
-                ),
+                title: Text(sheetContext.l10n.chooseFiles),
+                subtitle: Text(sheetContext.l10n.fileTypeHint),
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _pickFiles();
@@ -928,6 +936,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _pickGalleryImages() async {
+    final l10n = context.l10n;
     try {
       final mode = _desktopGateway == null
           ? AttachmentDraftMode.rest
@@ -949,11 +958,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       if (images.isNotEmpty) await _preparePickedImages(images);
     } catch (_) {
-      _showAttachmentError('Unable to prepare this image. Try another one.');
+      _showAttachmentError(l10n.unableToPrepareImage);
     }
   }
 
   Future<void> _pickCameraImage() async {
+    final l10n = context.l10n;
     try {
       final image = await _imagePicker.pickImage(
         source: ImageSource.camera,
@@ -963,7 +973,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       if (image != null) await _preparePickedImages([image]);
     } catch (_) {
-      _showAttachmentError('Unable to prepare this image. Try another one.');
+      _showAttachmentError(l10n.unableToPrepareImage);
     }
   }
 
@@ -973,7 +983,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     final files = response.files;
     if (files == null || files.isEmpty) {
-      _showAttachmentError('Image selection was interrupted. Try again.');
+      if (!mounted) return;
+      _showAttachmentError(context.l10n.imageSelectionInterrupted);
       return;
     }
 
@@ -981,6 +992,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _preparePickedImages(List<XFile> images) async {
+    final l10n = context.l10n;
     final isRemote = _desktopGateway != null;
     final prepared = <AttachmentDraft>[];
     final errors = <String>[];
@@ -1001,7 +1013,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       } on AttachmentDraftException catch (error) {
         errors.add(error.message);
       } catch (_) {
-        errors.add('Unable to prepare ${image.name}.');
+        errors.add(l10n.unableToPrepareImageNamed(image.name));
       }
     }
     if (!mounted) {
@@ -1027,10 +1039,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _pickFiles() async {
+    final l10n = context.l10n;
     if (_desktopGateway == null) {
-      _showAttachmentError(
-        'Configure a valid Desktop Gateway URL before attaching files.',
-      );
+      _showAttachmentError(l10n.configureDesktopGatewayForFiles);
       return;
     }
     try {
@@ -1044,7 +1055,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final available = maxRemoteAttachmentDrafts - _attachmentDrafts.length;
       if (available <= 0) {
         _showAttachmentError(
-          'You can attach up to $maxRemoteAttachmentDrafts items.',
+          l10n.maxAttachmentDrafts(maxRemoteAttachmentDrafts),
         );
         return;
       }
@@ -1074,12 +1085,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
       setState(() => _attachmentDrafts.addAll(prepared));
       if (files.length > available || rejected > 0) {
-        _showAttachmentError(
-          '${files.length - prepared.length} file(s) skipped: limit, size, unreadable, or sensitive filename.',
-        );
+        _showAttachmentError(l10n.filesSkipped(files.length - prepared.length));
       }
     } catch (_) {
-      _showAttachmentError('Unable to prepare this file. Try another one.');
+      _showAttachmentError(l10n.unableToPrepareFile);
     }
   }
 
@@ -1132,7 +1141,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _sending = true;
       _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'upload',
-        text: 'Retrying ${draft.name}…',
+        text: context.l10n.retryingAttachment(draft.name),
       );
     });
     try {
@@ -1147,17 +1156,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       if (receipt.atlasIntakeAccepted == false) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'File attached; document catalog registration is pending.',
-            ),
+          SnackBar(
+            content: Text(context.l10n.fileAttachedPendingCatalog),
           ),
         );
       }
     } catch (error) {
-      _showAttachmentError(
-        'Retry failed for ${draft.name}. The draft and prompt were kept.',
-      );
+      _showAttachmentError(context.l10n.retryFailed(draft.name));
     } finally {
       if (mounted) {
         setState(() {
@@ -1172,10 +1177,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final desktopGateway = _desktopGateway;
     if (desktopGateway == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Configure Desktop Gateway URL and Dashboard credentials to choose a chat model.',
-          ),
+        SnackBar(
+          content: Text(context.l10n.configureDesktopGatewayForModel),
         ),
       );
       return;
@@ -1228,24 +1231,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 children: [
                   ListTile(
                     leading: const Icon(Icons.tune),
-                    title: const Text('Model and thinking for this chat'),
+                    title: Text(context.l10n.modelAndThinkingForChat),
                     subtitle: Text(
-                      'Profile default: ${modelInfo['model'] ?? 'unknown'}'
-                      '${modelInfo['provider'] == null ? '' : ' • ${modelInfo['provider']}'}',
+                      context.l10n.profileDefaultWithModel(
+                            modelInfo['model']?.toString() ??
+                                context.l10n.unknown,
+                          ) +
+                          (modelInfo['provider'] == null
+                              ? ''
+                              : ' • ${modelInfo['provider']}'),
                     ),
                   ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
                     child: InputDecorator(
-                      decoration: const InputDecoration(
-                        labelText: 'Thinking effort',
-                        border: OutlineInputBorder(),
+                      decoration: InputDecoration(
+                        labelText: context.l10n.thinkingEffort,
+                        border: const OutlineInputBorder(),
                       ),
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
                           isExpanded: true,
                           value: selectedEffort,
-                          items: _reasoningEffortLabels.entries
+                          items: _reasoningEffortLabels(context.l10n).entries
                               .map(
                                 (entry) => DropdownMenuItem(
                                   value: entry.key,
@@ -1295,7 +1303,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       children: [
                         TextButton(
                           onPressed: () => Navigator.pop(sheetContext),
-                          child: const Text('Cancel'),
+                          child: Text(context.l10n.cancel),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
@@ -1306,7 +1314,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               reasoningEffort: selectedEffort,
                             ),
                           ),
-                          child: const Text('Apply to this chat'),
+                          child: Text(context.l10n.applyToThisChat),
                         ),
                       ],
                     ),
@@ -1324,7 +1332,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Could not load models for this profile: $error'),
+          content: Text(context.l10n.couldNotLoadModels(error.toString())),
         ),
       );
     } finally {
@@ -1392,8 +1400,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            '${choice.model} • ${_reasoningEffortLabels[selection.reasoningEffort]} '
-            'now apply only to this chat.',
+            context.l10n.modelAppliesToChat(
+              choice.model,
+              _reasoningEffortLabels(context.l10n)[selection.reasoningEffort] ??
+                  '',
+            ),
           ),
         ),
       );
@@ -1401,7 +1412,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Model was not changed: $error')));
+      ).showSnackBar(
+          SnackBar(content: Text(context.l10n.modelNotChanged(error.toString()))),
+        );
     } finally {
       if (mounted) setState(() => _changingModel = false);
     }
@@ -1481,9 +1494,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() {
       _sending = true;
       _streaming = true;
-      _gatewayTurnStatus = const GatewayTurnStatus(
+      _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'starting',
-        text: 'Starting Hermes…',
+        text: context.l10n.startingHermes,
       );
       _messages.add({'role': 'user', 'content': localContent});
       // Insert a placeholder streaming message
@@ -1583,9 +1596,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final desktopGateway = _desktopGateway;
     final testRemotePromptSubmit = widget.testRemotePromptSubmit;
     if (desktopGateway == null && testRemotePromptSubmit == null) {
-      _showAttachmentError(
-        'Desktop Gateway is not configured for this connection.',
-      );
+      _showAttachmentError(context.l10n.desktopGatewayNotConfigured);
       return;
     }
     try {
@@ -1602,9 +1613,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     setState(() {
       _sending = true;
-      _gatewayTurnStatus = const GatewayTurnStatus(
+      _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'upload',
-        text: 'Preparing attachments…',
+        text: context.l10n.preparingAttachments,
       );
     });
 
@@ -1632,8 +1643,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               final index = attachments.indexOf(draft);
               _gatewayTurnStatus = GatewayTurnStatus(
                 kind: 'upload',
-                text:
-                    'Uploading ${index + 1}/${attachments.length}: ${draft.name}',
+                text: context.l10n.uploadingAttachment(
+                  index + 1,
+                  attachments.length,
+                  draft.name,
+                ),
               );
             }
           });
@@ -1642,10 +1656,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (!mounted || responseGeneration != _responseGeneration) return;
           if (attachments.any((draft) => draft.atlasIntakeAccepted == false)) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'File attached; document catalog registration is pending.',
-                ),
+              SnackBar(
+                content: Text(context.l10n.fileAttachedPendingCatalog),
               ),
             );
           }
@@ -1654,7 +1666,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             refTexts.join('\n'),
           ].where((part) => part.trim().isNotEmpty).join('\n\n');
           final attachmentLabels = attachments
-              .map((attachment) => '[Attached file: ${attachment.name}]')
+              .map(
+                  (attachment) =>
+                      context.l10n.attachedFileLabel(attachment.name),
+                )
               .join('\n');
           final localContent = [
             text,
@@ -1664,9 +1679,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
           setState(() {
             _streaming = true;
-            _gatewayTurnStatus = const GatewayTurnStatus(
+            _gatewayTurnStatus = GatewayTurnStatus(
               kind: 'starting',
-              text: 'Starting Hermes…',
+              text: context.l10n.startingHermes,
             );
             _attachmentDrafts.clear();
             _messages.add({'role': 'user', 'content': localContent});
@@ -1771,9 +1786,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     setState(() {
       _sending = true;
-      _gatewayTurnStatus = const GatewayTurnStatus(
+      _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'upload',
-        text: 'Preparing attachments…',
+        text: context.l10n.preparingAttachments,
       );
     });
 
@@ -1786,7 +1801,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ..error = null;
           _gatewayTurnStatus = GatewayTurnStatus(
             kind: 'upload',
-            text: 'Uploading ${index + 1}/${attachments.length}: ${draft.name}',
+            text: context.l10n.uploadingAttachment(
+              index + 1,
+              attachments.length,
+              draft.name,
+            ),
           );
         });
         final dataUrl = await _attachmentDraftService.readDataUrl(draft);
@@ -1827,7 +1846,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
 
     final attachmentLabels = attachments
-        .map((attachment) => '[Attached file: ${attachment.name}]')
+        .map(
+          (attachment) => context.l10n.attachedFileLabel(attachment.name),
+        )
         .join('\n');
     final localContent = [
       text,
@@ -1837,9 +1858,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
     setState(() {
       _streaming = true;
-      _gatewayTurnStatus = const GatewayTurnStatus(
+      _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'starting',
-        text: 'Starting Hermes…',
+        text: context.l10n.startingHermes,
       );
       _attachmentDrafts.clear();
       _messages.add({'role': 'user', 'content': localContent});
@@ -1887,9 +1908,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         return;
       }
       setState(() {
-        _gatewayTurnStatus = const GatewayTurnStatus(
+        _gatewayTurnStatus = GatewayTurnStatus(
           kind: 'recovery',
-          text: 'Delivery is uncertain; recovering without resending…',
+          text: context.l10n.deliveryUncertainRecovering,
         );
       });
       await _recoverPendingTurn();
@@ -2132,7 +2153,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Could not deny the command: $error'),
+              content: Text(context.l10n.couldNotDenyCommand(error.toString())),
               backgroundColor: Colors.orange,
             ),
           );
@@ -2338,8 +2359,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         } catch (_) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not skip the Hermes question.'),
+            SnackBar(
+              content: Text(context.l10n.couldNotSkipQuestion),
               backgroundColor: Colors.orange,
             ),
           );
@@ -2392,8 +2413,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         SnackBar(
           content: Text(
             interrupted
-                ? 'Response stopped.'
-                : 'Response closed locally; no active gateway turn was found.',
+                ? context.l10n.responseStopped
+                : context.l10n.responseClosedNoTurn,
           ),
         ),
       );
@@ -2401,7 +2422,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Response closed locally; gateway stop failed: $error'),
+          content: Text(context.l10n.responseClosedStopFailed(error.toString())),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 6),
         ),
@@ -2427,7 +2448,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Send failed: $e'),
+          content: Text(context.l10n.sendFailed(e.toString())),
           backgroundColor: Colors.orange,
           duration: const Duration(seconds: 6),
         ),
@@ -2462,7 +2483,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'tool',
         text: update.isTerminal
-            ? '${update.displayName}: ${update.statusLabel.toLowerCase()}'
+            ? '${update.displayName}: ${update.statusLabelLocalized(context.l10n).toLowerCase()}'
             : 'Using ${update.displayName}…',
       );
     });
@@ -2472,6 +2493,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    _voiceComposer.l10n = context.l10n;
     return Scaffold(
       appBar: AppBar(
         centerTitle: true,
@@ -2529,40 +2551,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         ),
         actions: [
           if (_streaming)
-            const Padding(
-              padding: EdgeInsets.only(right: 8),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
               child: Row(
                 children: [
-                  SizedBox(
+                  const SizedBox(
                     width: 20,
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   ),
-                  SizedBox(width: 8),
-                  Text('Responding…', style: TextStyle(fontSize: 13)),
+                  const SizedBox(width: 8),
+                  Text(context.l10n.responding, style: TextStyle(fontSize: 13)),
                 ],
               ),
             )
           else
             PopupMenuButton<String>(
-              tooltip: 'Chat actions',
+              tooltip: context.l10n.chatActions,
               onSelected: (action) {
                 if (action == 'refresh') _fetchMessages();
                 if (action == 'export') _exportConversation();
               },
-              itemBuilder: (_) => const [
+              itemBuilder: (_) => [
                 PopupMenuItem(
                   value: 'refresh',
                   child: ListTile(
-                    leading: Icon(Icons.refresh),
-                    title: Text('Refresh'),
+                    leading: const Icon(Icons.refresh),
+                    title: Text(context.l10n.refresh),
                   ),
                 ),
                 PopupMenuItem(
                   value: 'export',
                   child: ListTile(
-                    leading: Icon(Icons.ios_share_outlined),
-                    title: Text('Export / share'),
+                    leading: const Icon(Icons.ios_share_outlined),
+                    title: Text(context.l10n.exportShare),
                   ),
                 ),
               ],
@@ -2588,7 +2610,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     vertical: 10,
                   ),
                   child: Text(
-                    _legacyTransportNotice,
+                    context.l10n.legacyTransportNotice,
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onTertiaryContainer,
@@ -2639,7 +2661,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             _notificationTimers.remove(notification.key)?.cancel();
             setState(() => _gatewayNotifications.remove(notification.key));
           },
-          child: const Text('Dismiss'),
+          child: Text(context.l10n.dismiss),
         ),
       ],
     );
@@ -2696,7 +2718,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
                 child: Semantics(
-                  label: 'Choose chat model',
+                  label: context.l10n.chooseChatModel,
                   value: _sessionModel ?? widget.session.model,
                   button: true,
                   enabled:
@@ -2743,7 +2765,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Semantics(
-                  label: 'Attachment drafts',
+                  label: context.l10n.attachmentDrafts,
                   child: ConstrainedBox(
                     constraints: BoxConstraints(
                       maxHeight: MediaQuery.sizeOf(context).height * 0.32,
@@ -2778,7 +2800,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             Row(
               children: [
                 Semantics(
-                  label: 'Add attachment',
+                  label: context.l10n.addAttachment,
                   button: true,
                   enabled: !_loading && !_streaming && !_sending,
                   excludeSemantics: true,
@@ -2787,7 +2809,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     onPressed: (!_loading && !_streaming && !_sending)
                         ? _showAttachmentPicker
                         : null,
-                    tooltip: 'Attach image or file',
+                    tooltip: context.l10n.attachImageOrFile,
                     constraints: const BoxConstraints.tightFor(
                       width: 48,
                       height: 48,
@@ -2796,12 +2818,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
                 Expanded(
                   child: Semantics(
-                    label: 'Message',
+                    label: context.l10n.message,
                     textField: true,
                     child: TextField(
                       controller: _textController,
                       decoration: InputDecoration(
-                        hintText: 'Type a message…',
+                        hintText: context.l10n.typeAMessage,
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -2828,8 +2850,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     onPressed: _startVoiceInput,
                   ),
                 Semantics(
-                  label: 'Spoken replies',
-                  value: _voiceReplyEnabled ? 'On' : 'Off',
+                  label: context.l10n.spokenReplies,
+                  value: _voiceReplyEnabled ? context.l10n.on : context.l10n.off,
                   toggled: _voiceReplyEnabled,
                   button: true,
                   excludeSemantics: true,
@@ -2844,8 +2866,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       }
                     },
                     tooltip: _voiceReplyEnabled
-                        ? 'Spoken replies on'
-                        : 'Spoken replies off',
+                        ? context.l10n.spokenRepliesOn
+                        : context.l10n.spokenRepliesOff,
                     constraints: const BoxConstraints.tightFor(
                       width: 48,
                       height: 48,
@@ -2854,7 +2876,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
                 const SizedBox(width: 4),
                 Semantics(
-                  label: _streaming ? 'Stop response' : 'Send message',
+                  label: _streaming
+                      ? context.l10n.stopResponse
+                      : context.l10n.sendMessage,
                   button: true,
                   enabled:
                       _streaming ||
@@ -2871,7 +2895,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ? IconButton(
                               icon: const Icon(Icons.stop_rounded, size: 20),
                               onPressed: _stopResponse,
-                              tooltip: 'Stop response',
+                              tooltip: context.l10n.stopResponse,
                               constraints: const BoxConstraints.tightFor(
                                 width: 48,
                                 height: 48,
@@ -2885,7 +2909,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       _voiceComposer.listening
                                   ? null
                                   : _sendMessage,
-                              tooltip: 'Send',
+                              tooltip: context.l10n.send,
                               constraints: const BoxConstraints.tightFor(
                                 width: 48,
                                 height: 48,
@@ -2917,7 +2941,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               const Icon(Icons.warning_amber, size: 48, color: Colors.orange),
               const SizedBox(height: 16),
               Text(
-                'Failed to load messages',
+                context.l10n.failedToLoadMessages,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -2929,7 +2953,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _fetchMessages,
-                child: const Text('Retry'),
+                child: Text(context.l10n.retry),
               ),
             ],
           ),
@@ -3103,9 +3127,9 @@ class MessageBubble extends StatelessWidget {
     messenger
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('Message copied'),
-          duration: Duration(seconds: 2),
+        SnackBar(
+          content: Text(context.l10n.messageCopied),
+          duration: const Duration(seconds: 2),
         ),
       );
   }
@@ -3262,12 +3286,12 @@ class MessageBubble extends StatelessWidget {
               runSpacing: 0,
               children: [
                 Semantics(
-                  label: 'Copy message',
+                  label: context.l10n.copyMessage,
                   button: true,
                   excludeSemantics: true,
                   child: IconButton(
                     icon: const Icon(Icons.copy_outlined, size: 19),
-                    tooltip: 'Copy message',
+                    tooltip: context.l10n.copyMessage,
                     onPressed: () => _copyMessage(context),
                     constraints: const BoxConstraints.tightFor(
                       width: 48,
@@ -3277,12 +3301,12 @@ class MessageBubble extends StatelessWidget {
                 ),
                 if (onReadAloud != null)
                   Semantics(
-                    label: 'Read aloud',
+                    label: context.l10n.readAloud,
                     button: true,
                     excludeSemantics: true,
                     child: IconButton(
                       icon: const Icon(Icons.volume_up_outlined, size: 20),
-                      tooltip: 'Read aloud',
+                      tooltip: context.l10n.readAloud,
                       onPressed: onReadAloud,
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
@@ -3292,12 +3316,12 @@ class MessageBubble extends StatelessWidget {
                   ),
                 if (onEdit != null)
                   Semantics(
-                    label: 'Edit and resend',
+                    label: context.l10n.editAndResend,
                     button: true,
                     excludeSemantics: true,
                     child: IconButton(
                       icon: const Icon(Icons.edit_outlined, size: 20),
-                      tooltip: 'Edit and resend',
+                      tooltip: context.l10n.editAndResend,
                       onPressed: onEdit,
                       constraints: const BoxConstraints.tightFor(
                         width: 48,
@@ -3307,12 +3331,12 @@ class MessageBubble extends StatelessWidget {
                   ),
                 if (onRetry != null)
                   Semantics(
-                    label: 'Regenerate response',
+                    label: context.l10n.regenerateResponse,
                     button: true,
                     excludeSemantics: true,
                     child: IconButton(
                       icon: const Icon(Icons.refresh, size: 20),
-                      tooltip: 'Regenerate from the preceding prompt',
+                      tooltip: context.l10n.regenerateFromPreceding,
                       onPressed: onRetry,
                       constraints: const BoxConstraints.tightFor(
                         width: 48,

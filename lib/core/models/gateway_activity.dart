@@ -1,3 +1,5 @@
+import '../../l10n/app_localizations.dart';
+
 enum GatewayToolActivityPhase {
   running,
   generating,
@@ -54,6 +56,26 @@ class GatewayToolActivity {
         return durationSeconds == null
             ? 'Failed'
             : 'Failed after ${_formatDuration(durationSeconds!)}';
+    }
+  }
+
+  /// Localized variant of [statusLabel] for UI call sites.
+  String statusLabelLocalized(AppLocalizations l10n) {
+    switch (phase) {
+      case GatewayToolActivityPhase.running:
+        return l10n.toolRunning;
+      case GatewayToolActivityPhase.generating:
+        return l10n.toolPreparing;
+      case GatewayToolActivityPhase.progress:
+        return l10n.toolWorking;
+      case GatewayToolActivityPhase.completed:
+        return durationSeconds == null
+            ? l10n.toolCompleted
+            : l10n.toolCompletedIn(_formatDuration(durationSeconds!));
+      case GatewayToolActivityPhase.failed:
+        return durationSeconds == null
+            ? l10n.toolFailed
+            : l10n.toolFailedAfter(_formatDuration(durationSeconds!));
     }
   }
 

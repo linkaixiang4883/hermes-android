@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/screens/chat_screen.dart';
 
+import 'support/l10n_test_utils.dart';
 void main() {
   test('user bubble foreground passes WCAG AA in light and dark themes', () {
     final ratio = _contrastRatio(
@@ -42,7 +43,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(body: MessageBubble(content: message, isUser: false)),
       ),
     );
@@ -65,6 +68,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: MessageBubble(
             content: 'Răspuns Hermes.',
@@ -87,7 +92,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: MessageBubble(content: 'Mesaj utilizator.', isUser: true),
         ),
@@ -110,6 +117,8 @@ void main() {
       tester.view.physicalSize = Size(width, 640);
       await tester.pumpWidget(
         MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(
               context,

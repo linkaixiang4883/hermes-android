@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_clarify.dart';
 import 'package:hermes_android/core/widgets/gateway_clarify_dialog.dart';
+import 'support/l10n_test_utils.dart';
 
 void main() {
   group('GatewayClarifyRequest', () {
@@ -63,6 +64,8 @@ void main() {
       String? sentAnswer;
       await tester.pumpWidget(
         MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayClarifyDialog(
               request: GatewayClarifyRequest.fromEventData({
@@ -97,6 +100,8 @@ void main() {
       String? sentAnswer;
       await tester.pumpWidget(
         MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayClarifyDialog(
               request: GatewayClarifyRequest.fromEventData({
@@ -128,6 +133,8 @@ void main() {
       String? sentAnswer;
       await tester.pumpWidget(
         MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayClarifyDialog(
               request: GatewayClarifyRequest.fromEventData({
@@ -150,6 +157,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: GatewayClarifyDialog(
               request: GatewayClarifyRequest.fromEventData({

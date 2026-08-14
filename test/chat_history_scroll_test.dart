@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'support/l10n_test_utils.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -457,6 +458,8 @@ Future<void> _pumpChat(
   );
   await tester.pumpWidget(
     MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
       builder: (context, child) => MediaQuery(
         data: MediaQuery.of(context).copyWith(
           textScaler: TextScaler.linear(textScale),

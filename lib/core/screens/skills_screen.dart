@@ -1,5 +1,6 @@
 // Skills browser — list installed skills with enabled/disabled status.
 import 'package:flutter/material.dart';
+import '../../l10n/l10n.dart';
 import '../services/connection_manager.dart';
 
 class SkillsScreen extends StatefulWidget {
@@ -62,7 +63,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Skills (${_skills.length})'),
+        title: Text(context.l10n.skillsCount(_skills.length)),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -86,7 +87,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
               const Icon(Icons.error_outline, size: 48, color: Colors.orange),
               const SizedBox(height: 16),
               Text(
-                'Failed to load skills',
+                context.l10n.failedToLoadSkills,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -96,7 +97,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              ElevatedButton(onPressed: _load, child: const Text('Retry')),
+              ElevatedButton(onPressed: _load, child: Text(context.l10n.retry)),
             ],
           ),
         ),
@@ -110,7 +111,7 @@ class _SkillsScreenState extends State<SkillsScreen> {
             Icon(Icons.extension_off, size: 48, color: Colors.grey[600]),
             const SizedBox(height: 16),
             Text(
-              'No skills found',
+              context.l10n.noSkillsFound,
               style: Theme.of(context).textTheme.titleLarge,
             ),
           ],
