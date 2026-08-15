@@ -488,6 +488,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _readAssistantText(String text, {bool announce = false}) async {
     final spokenText = text.trim();
     if (spokenText.isEmpty) return;
+    final languageCode = Localizations.localeOf(context).languageCode;
     if (announce && mounted) {
       final messenger = ScaffoldMessenger.of(context);
       messenger
@@ -501,6 +502,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     try {
       await _flutterTts.stop();
+      final prefs = await SharedPreferences.getInstance();
+      final voiceName = prefs.getString('voice_name');
+      if (voiceName == null || voiceName.isEmpty) {
+        // Device-default engine: keep the system's engine choice but match
+        // the app language so Chinese messages are read with a Chinese voice
+        // when the engine provides one. Failure keeps the device default.
+        try {
+          await _flutterTts.setLanguage(
+            languageCode == 'zh' ? 'zh-CN' : 'en-US',
+          );
+        } catch (_) {
+          // Keep the engine's default voice.
+        }
+      }
       await _flutterTts.speak(spokenText);
     } catch (_) {
       if (!announce || !mounted) return;
