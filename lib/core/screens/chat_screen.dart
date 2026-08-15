@@ -23,6 +23,7 @@ import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_coordinator.dart';
 import '../services/gateway_turn_recovery.dart';
 import '../services/gateway_turn_ui_projection.dart';
+import '../services/tts_voice_config.dart';
 import '../services/turn_notification_service.dart';
 import '../services/voice_composer_adapter.dart';
 import '../services/ws_client.dart';
@@ -423,23 +424,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _initVoice({bool requestSpeechPermission = false}) async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final voiceName = prefs.getString('voice_name');
       final voiceLocale = prefs.getString('voice_locale');
 
       if (widget.testVoiceComposerAdapter == null) {
-        if (voiceName != null && voiceName.isNotEmpty) {
-          if (voiceName == voiceLocale) {
-            await _flutterTts.setLanguage(voiceName);
-          } else {
-            await _flutterTts.setVoice({
-              'name': voiceName,
-              'locale': voiceLocale ?? '',
-            });
-          }
-          _sttLocaleId = voiceLocale?.replaceAll('-', '_');
-        } else {
-          _sttLocaleId = null;
-        }
+        await TtsVoiceConfig.apply(_flutterTts, prefs);
+        _sttLocaleId = voiceLocale?.replaceAll('-', '_');
         await _flutterTts.setSpeechRate(0.48);
         await _flutterTts.setVolume(1.0);
         await _flutterTts.setPitch(1.0);
@@ -503,19 +492,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       await _flutterTts.stop();
       final prefs = await SharedPreferences.getInstance();
-      final voiceName = prefs.getString('voice_name');
-      if (voiceName == null || voiceName.isEmpty) {
-        // Device-default engine: keep the system's engine choice but match
-        // the app language so Chinese messages are read with a Chinese voice
-        // when the engine provides one. Failure keeps the device default.
-        try {
-          await _flutterTts.setLanguage(
-            languageCode == 'zh' ? 'zh-CN' : 'en-US',
-          );
-        } catch (_) {
-          // Keep the engine's default voice.
-        }
-      }
+      await TtsVoiceConfig.apply(
+        _flutterTts,
+        prefs,
+        appLanguageCode: languageCode,
+      );
       await _flutterTts.speak(spokenText);
     } catch (_) {
       if (!announce || !mounted) return;
