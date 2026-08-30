@@ -640,22 +640,25 @@ void main() {
       );
     });
 
-    test('ignores a redundant same-host override and derives dashboard port', () {
-      final connection = SavedConnection(
-        id: 'miniserver',
-        label: 'Miniserver',
-        host: 'carlos-miniserver.taild544f6.ts.net',
-        port: 8642,
-        apiKey: 'test-key',
-        dashboardPortOverride: 9119,
-        desktopGatewayUrl: 'https://carlos-miniserver.taild544f6.ts.net',
-      );
+    test(
+      'ignores a redundant same-host override and derives dashboard port',
+      () {
+        final connection = SavedConnection(
+          id: 'miniserver',
+          label: 'Miniserver',
+          host: 'carlos-miniserver.taild544f6.ts.net',
+          port: 8642,
+          apiKey: 'test-key',
+          dashboardPortOverride: 9119,
+          desktopGatewayUrl: 'https://carlos-miniserver.taild544f6.ts.net',
+        );
 
-      expect(
-        DesktopGatewayClient.normalizedGatewayBaseUrl(connection),
-        'http://carlos-miniserver.taild544f6.ts.net:9119',
-      );
-    });
+        expect(
+          DesktopGatewayClient.normalizedGatewayBaseUrl(connection),
+          'http://carlos-miniserver.taild544f6.ts.net:9119',
+        );
+      },
+    );
 
     test('preserves an explicit Desktop gateway override', () {
       final connection = SavedConnection(
