@@ -200,8 +200,15 @@ class VoiceComposerController extends ChangeNotifier {
     }
     if (normalized == 'done' || normalized == 'notlistening') {
       if (_stopping || !_listening) return;
+      // On devices without a system RecognitionService (e.g. Xiaomi MIUI 11
+      // where AsrService is `not found`), the plugin never calls onError —
+      // it just flips to done/notListening after ~2s with no transcript.
+      // Treat any result-less termination as a no-service failure so
+      // the user gets the keyboard hint instead of silent disappearance.
       _acceptResults = false;
-      _finishListening(status: null);
+      _finishListening(
+        status: _localizeRecognitionError('bind to recognition service failed'),
+      );
       _clearSession();
     }
   }
