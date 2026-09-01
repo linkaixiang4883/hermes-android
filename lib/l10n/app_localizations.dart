@@ -452,6 +452,12 @@ abstract class AppLocalizations {
   /// **'Speech recognition is unavailable'**
   String get speechRecognitionUnavailable;
 
+  /// No description provided for @speechRecognitionNoService.
+  ///
+  /// In en, this message translates to:
+  /// **'Speech recognition service unavailable — use the keyboard\'s voice input instead'**
+  String get speechRecognitionNoService;
+
   /// No description provided for @readingResponseAloud.
   ///
   /// In en, this message translates to:

@@ -213,6 +213,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Speech recognition is unavailable';
 
   @override
+  String get speechRecognitionNoService =>
+      'Speech recognition service unavailable — use the keyboard\'s voice input instead';
+
+  @override
   String get readingResponseAloud => 'Reading response aloud';
 
   @override

@@ -53,7 +53,8 @@ class VoiceComposerController extends ChangeNotifier {
       );
       _status = _available
           ? null
-          : (l10n?.speechRecognitionUnavailable ??
+          : (l10n?.speechRecognitionNoService ??
+              l10n?.speechRecognitionUnavailable ??
               'Speech recognition is unavailable');
     } catch (error) {
       _available = false;
@@ -209,8 +210,23 @@ class VoiceComposerController extends ChangeNotifier {
     if (_disposed) return;
     _acceptResults = false;
     _stopping = false;
-    _finishListening(status: message);
+    _finishListening(status: _localizeRecognitionError(message));
     _clearSession();
+  }
+
+  String _localizeRecognitionError(String raw) {
+    final lower = raw.toLowerCase();
+    final isNoService =
+        lower.contains('bind to recognition service failed') ||
+        lower.contains('recognitionservice') ||
+        lower.contains('not found') && lower.contains('recognition') ||
+        lower.contains('speech recognition is unavailable');
+    if (isNoService) {
+      return l10n?.speechRecognitionNoService ??
+          l10n?.speechRecognitionUnavailable ??
+          'Speech recognition is unavailable';
+    }
+    return raw;
   }
 
   TextSelection _validSelectionOrEnd(TextEditingValue value) {

@@ -59,6 +59,7 @@
   "regenerateFromPreceding": "根据上一条消息重新生成",
   "voiceSetupFailed": "语音设置失败：{error}",
   "speechRecognitionUnavailable": "语音识别不可用",
+  "speechRecognitionNoService": "语音识别服务不可用，请使用输入法键盘上的语音按钮",
   "readingResponseAloud": "正在朗读回复…",
   "readAloudUnavailable": "此设备不支持朗读",
   "responseReady": "回复已就绪",

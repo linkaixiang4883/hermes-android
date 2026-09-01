@@ -132,6 +132,7 @@
     }
   },
   "speechRecognitionUnavailable": "Speech recognition is unavailable",
+  "speechRecognitionNoService": "Speech recognition service unavailable — use the keyboard's voice input instead",
   "readingResponseAloud": "Reading response aloud",
   "readAloudUnavailable": "Read aloud is unavailable on this device",
   "responseReady": "Response ready",

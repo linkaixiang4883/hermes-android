@@ -473,7 +473,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   void _onVoiceComposerChanged() {
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    setState(() {});
+    final status = _voiceComposer.status;
+    if (status != null &&
+        !_voiceComposer.listening &&
+        (status.contains('语音识别服务不可用') ||
+            status.contains('Speech recognition service unavailable'))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(status)),
+      );
+    }
   }
 
   Future<void> _speakAssistantText(String text) async {

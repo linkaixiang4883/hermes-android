@@ -208,6 +208,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get speechRecognitionUnavailable => '语音识别不可用';
 
   @override
+  String get speechRecognitionNoService => '语音识别服务不可用，请使用输入法键盘上的语音按钮';
+
+  @override
   String get readingResponseAloud => '正在朗读回复…';
 
   @override
