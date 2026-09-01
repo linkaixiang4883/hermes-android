@@ -22,6 +22,7 @@ class VoiceComposerController extends ChangeNotifier {
   bool _acceptResults = false;
   bool _stopping = false;
   bool _disposed = false;
+  bool _hasReceivedResult = false;
   Duration _elapsed = Duration.zero;
   String? _status;
 
@@ -73,6 +74,7 @@ class VoiceComposerController extends ChangeNotifier {
     final insertion = _validSelectionOrEnd(_startValue!);
     _configureReplacement(_startValue!, insertion);
     _acceptResults = true;
+    _hasReceivedResult = false;
     _listening = true;
     _status = 'Listening';
     _startElapsedTimer();
@@ -99,7 +101,14 @@ class VoiceComposerController extends ChangeNotifier {
       if (!_disposed) {
         _stopping = false;
         _acceptResults = false;
-        _finishListening(status: stopError?.toString());
+        final status = stopError?.toString() ??
+            (!_hasReceivedResult ? _localizeRecognitionError('bind to recognition service failed') : null);
+        // Only show guidance if we truly got no transcript; successful
+        // dictation already cleared _hasReceivedResult via _handleResult
+        // and will have inserted text.
+        final effectiveStatus =
+            _hasReceivedResult ? stopError?.toString() : status;
+        _finishListening(status: effectiveStatus);
         _clearSession();
       }
     }
@@ -127,6 +136,7 @@ class VoiceComposerController extends ChangeNotifier {
     if (_disposed || !_acceptResults) return;
     final recognized = transcript.trim();
     if (recognized.isEmpty) return;
+    _hasReceivedResult = true;
 
     final value = textController.value;
     var start = _replacementStart;
@@ -200,15 +210,14 @@ class VoiceComposerController extends ChangeNotifier {
     }
     if (normalized == 'done' || normalized == 'notlistening') {
       if (_stopping || !_listening) return;
-      // On devices without a system RecognitionService (e.g. Xiaomi MIUI 11
-      // where AsrService is `not found`), the plugin never calls onError —
-      // it just flips to done/notListening after ~2s with no transcript.
-      // Treat any result-less termination as a no-service failure so
-      // the user gets the keyboard hint instead of silent disappearance.
+      // On devices without a system RecognitionService the plugin never
+      // calls onError — it just flips to done/notListening with no
+      // transcript. Only show the keyboard hint when we got no result.
       _acceptResults = false;
-      _finishListening(
-        status: _localizeRecognitionError('bind to recognition service failed'),
-      );
+      final status = _hasReceivedResult
+          ? null
+          : _localizeRecognitionError('bind to recognition service failed');
+      _finishListening(status: status);
       _clearSession();
     }
   }
@@ -294,6 +303,7 @@ class VoiceComposerController extends ChangeNotifier {
     _replacementEnd = null;
     _needsLeadingSeparator = false;
     _needsTrailingSeparator = false;
+    _hasReceivedResult = false;
   }
 
   void _notify() {
