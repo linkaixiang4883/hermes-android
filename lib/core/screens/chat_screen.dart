@@ -21,6 +21,7 @@ import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_coordinator.dart';
 import '../services/gateway_turn_recovery.dart';
 import '../services/gateway_turn_ui_projection.dart';
+import '../services/remote_files_client.dart';
 import '../services/turn_notification_service.dart';
 import '../services/voice_composer_adapter.dart';
 import '../services/ws_client.dart';
@@ -31,10 +32,15 @@ import '../models/gateway_clarify.dart';
 import '../models/gateway_insight.dart';
 import '../models/gateway_sensitive_prompt.dart';
 import '../models/gateway_turn_contract.dart';
+import '../utils/chat_display_items.dart';
 import '../utils/chat_history_scroll.dart';
 import '../utils/message_content.dart';
 import '../utils/responsive.dart';
+import '../utils/turn_recovery_fallback.dart';
+import 'files_screen.dart';
 import '../widgets/gateway_activity_card.dart';
+import '../widgets/chat_context_header.dart';
+import '../widgets/markdown_code_block.dart';
 import '../widgets/attachment_draft_tile.dart';
 import '../widgets/chat_end_affordance.dart';
 import '../widgets/gateway_approval_dialog.dart';
@@ -73,13 +79,6 @@ const _reasoningEffortLabels = <String, String>{
   'ultra': 'Ultra',
 };
 
-class _GatewayReasoningDisplay {
-  final String text;
-  final bool initiallyExpanded;
-
-  const _GatewayReasoningDisplay(this.text, this.initiallyExpanded);
-}
-
 enum _ResponseTransport { none, rest, desktop }
 
 const _legacyTransportNotice =
@@ -117,6 +116,18 @@ class _PendingClarifyPrompt {
 class ChatScreen extends StatefulWidget {
   final SavedConnection connection;
   final Session session;
+
+  /// The server-owned Project this chat was opened from, when known.
+  /// `null` stays explicit as Unassigned in the sticky context header.
+  final String? projectName;
+
+  /// Optional text supplied by Android's share sheet. It only prefills the
+  /// composer; sending remains an explicit user action.
+  final String? initialComposerText;
+
+  /// Validated app-private files supplied by Android's share sheet.
+  final List<AttachmentDraft> initialAttachmentDrafts;
+
   final GatewayTurnApplicationController? turnApplicationController;
 
   @visibleForTesting
@@ -132,6 +143,9 @@ class ChatScreen extends StatefulWidget {
   final TestRemotePromptSubmit? testRemotePromptSubmit;
 
   @visibleForTesting
+  final Future<String?> Function()? testServerFilePicker;
+
+  @visibleForTesting
   final TestRemoteAttachmentUpload? testRemoteAttachmentUpload;
 
   @visibleForTesting
@@ -140,17 +154,27 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final VoiceComposerAdapter? testVoiceComposerAdapter;
 
+  /// Lets a test observe what the chat posts to Android when a turn settles,
+  /// without touching the notification platform channel.
+  @visibleForTesting
+  final TurnNotificationService? testTurnNotifications;
+
   const ChatScreen({
     required this.connection,
     required this.session,
+    this.projectName,
+    this.initialComposerText,
+    this.initialAttachmentDrafts = const [],
     this.turnApplicationController,
     this.testTurnApplicationSession,
     this.testApiClient,
     this.testAttachmentDraftService,
     this.testRemotePromptSubmit,
+    this.testServerFilePicker,
     this.testRemoteAttachmentUpload,
     this.testInitialAttachmentDrafts = const [],
     this.testVoiceComposerAdapter,
+    this.testTurnNotifications,
     super.key,
   });
 
@@ -238,7 +262,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _turnNotifications = TurnNotificationService();
+    _textController.text = widget.initialComposerText ?? '';
+    _textController.selection = TextSelection.collapsed(
+      offset: _textController.text.length,
+    );
+    _turnNotifications =
+        widget.testTurnNotifications ?? TurnNotificationService();
     unawaited(_turnNotifications.ensureInitialized());
     _client =
         widget.testApiClient ??
@@ -258,13 +287,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       adapter:
           widget.testVoiceComposerAdapter ?? SpeechToTextVoiceComposerAdapter(),
     )..addListener(_onVoiceComposerChanged);
-    _attachmentDrafts.addAll(widget.testInitialAttachmentDrafts);
+    _attachmentDrafts
+      ..addAll(widget.initialAttachmentDrafts)
+      ..addAll(widget.testInitialAttachmentDrafts);
     _gatewayNotices = List<GatewayNotice>.from(
       _savedGatewayNotices[_gatewayNoticeIdentity] ?? const [],
     );
     _chatModelStore = ChatModelOverrideStore.open();
     _sessionModelRestore = _restoreSessionModelOverride();
-    if (widget.connection.desktopGatewayUrl?.trim().isNotEmpty == true) {
+    final hasDashboardAuth =
+        widget.connection.dashboardProxied ||
+        (widget.connection.dashboardUsername?.trim().isNotEmpty == true &&
+            widget.connection.dashboardPassword?.trim().isNotEmpty == true);
+    if (widget.connection.desktopGatewayUrl?.trim().isNotEmpty == true ||
+        hasDashboardAuth) {
       try {
         _desktopGateway = DesktopGatewayClient.fromConnection(
           widget.connection,
@@ -753,10 +789,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } catch (error) {
       if (!mounted) return;
-      if (allowLegacyFallback &&
-          error is GatewayTurnCoordinatorException &&
-          error.failure ==
-              GatewayTurnCoordinatorFailure.unsupportedCapability) {
+      final fallback = classifyTurnRecoveryFailure(
+        error,
+        allowLegacyFallback: allowLegacyFallback,
+      );
+      if (fallback == TurnRecoveryFallback.legacyTransport) {
         setState(() {
           _legacyTransportFallback = true;
           _sending = false;
@@ -946,6 +983,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 _pickCameraImage();
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.cloud_outlined),
+              title: const Text('Browse server files'),
+              subtitle: const Text('Insert a remote @file reference'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                unawaited(_pickServerFile());
+              },
+            ),
             if (_desktopGateway != null)
               ListTile(
                 leading: const Icon(Icons.description_outlined),
@@ -961,6 +1007,38 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _pickServerFile() async {
+    String? path;
+    final testPicker = widget.testServerFilePicker;
+    if (testPicker != null) {
+      path = await testPicker();
+    } else {
+      final files = RemoteFilesClient.fromConnection(widget.connection);
+      try {
+        if (!mounted) return;
+        path = await Navigator.of(context).push<String>(
+          MaterialPageRoute<String>(
+            builder: (_) => FilesScreen(
+              files: files,
+              onAddToChat: (selectedPath) =>
+                  Navigator.of(context).pop(selectedPath),
+            ),
+          ),
+        );
+      } finally {
+        files.close();
+      }
+    }
+    if (!mounted || path == null || path.trim().isEmpty) return;
+    final current = _textController.text.trimRight();
+    final reference = '@file ${path.trim()} ';
+    final next = current.isEmpty ? reference : '$current\n$reference';
+    _textController.value = TextEditingValue(
+      text: next,
+      selection: TextSelection.collapsed(offset: next.length),
     );
   }
 
@@ -1211,7 +1289,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Configure Desktop Gateway URL and Dashboard credentials to choose a chat model.',
+            'Configure Dashboard credentials to choose a chat model.',
           ),
         ),
       );
@@ -2509,62 +2587,43 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scheduleStreamingFollow();
   }
 
+  ChatConnectionStatus get _chatConnectionStatus {
+    if (_desktopGateway == null) {
+      if (_loading) return ChatConnectionStatus.connecting;
+      return _error == null
+          ? ChatConnectionStatus.connected
+          : ChatConnectionStatus.offline;
+    }
+    return switch (_desktopConnectionState) {
+      DesktopConnectionState.connected => ChatConnectionStatus.connected,
+      DesktopConnectionState.connecting => ChatConnectionStatus.connecting,
+      DesktopConnectionState.reconnecting => ChatConnectionStatus.reconnecting,
+      DesktopConnectionState.disconnected => ChatConnectionStatus.offline,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        centerTitle: true,
-        title: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              widget.session.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 2),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 7,
-                  height: 7,
-                  decoration: BoxDecoration(
-                    color: _desktopGateway == null
-                        ? (_loading
-                              ? Colors.orange
-                              : _error == null
-                              ? Colors.green
-                              : Theme.of(context).colorScheme.error)
-                        : switch (_desktopConnectionState) {
-                            DesktopConnectionState.connected => Colors.green,
-                            DesktopConnectionState.connecting ||
-                            DesktopConnectionState.reconnecting =>
-                              Colors.orange,
-                            DesktopConnectionState.disconnected => Theme.of(
-                              context,
-                            ).colorScheme.error,
-                          },
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    '${widget.connection.label} • ${_desktopGateway == null ? (_loading
-                              ? 'connecting'
-                              : _error == null
-                              ? 'connected'
-                              : 'offline') : _desktopConnectionState.name}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ],
+        centerTitle: false,
+        title: Text(
+          widget.session.title.trim().isEmpty
+              ? 'Untitled chat'
+              : widget.session.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: ChatContextHeader(
+            projectName: widget.projectName,
+            model: _sessionModel ?? widget.session.model,
+            reasoningEffort: _sessionReasoningEffort ?? 'default',
+            connectionLabel: widget.connection.label,
+            connectionStatus: _chatConnectionStatus,
+          ),
         ),
         actions: [
           if (_streaming)
@@ -2838,9 +2897,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     label: 'Message',
                     textField: true,
                     child: TextField(
+                      key: const Key('chat-message-composer'),
                       controller: _textController,
                       decoration: InputDecoration(
-                        hintText: 'Type a message…',
+                        hintText: 'Message Hermes…',
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
                         ),
@@ -2851,7 +2911,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         isDense: true,
                       ),
                       minLines: 1,
-                      maxLines: 4,
+                      maxLines: 5,
                       textCapitalization: TextCapitalization.sentences,
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.send,
@@ -2976,63 +3036,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
 
-    // Build display list: consecutive tool messages grouped into cards,
-    // interleaved with user/assistant bubbles.
-    final toolQueue = List<GatewayToolActivity>.from(_toolActivities);
-    final displayMessages = <dynamic>[];
-    final currentGroup = <GatewayToolActivity>[];
-    String? lastUserPrompt;
-
-    for (final msg in _messages) {
-      final role = (msg['role'] as String?) ?? 'assistant';
-      if (isToolResultMessage(msg)) {
-        if (toolQueue.isNotEmpty) {
-          currentGroup.add(toolQueue.removeAt(0));
-        }
-        continue;
-      }
-      if (role != 'user' && role != 'assistant') continue;
-      final content = stripToolResultText(messageContentToText(msg['content']));
-      final reasoning = msg['_gateway_reasoning']?.toString() ?? '';
-      if (content.isEmpty && reasoning.trim().isEmpty) continue;
-
-      if (currentGroup.isNotEmpty) {
-        displayMessages.add(currentGroup.toList());
-        currentGroup.clear();
-      }
-      if (role == 'assistant' && reasoning.trim().isNotEmpty) {
-        displayMessages.add(
-          _GatewayReasoningDisplay(
-            reasoning,
-            _verboseMode || msg['_gateway_reasoning_verbose'] == true,
-          ),
-        );
-      }
-      if (content.isNotEmpty) {
-        if (role == 'user') lastUserPrompt = content;
-        displayMessages.add({
-          ...msg,
-          '_display_content': content,
-          if (role == 'assistant' && lastUserPrompt != null)
-            '_retry_prompt': lastUserPrompt,
-        });
-      }
-    }
-    if (currentGroup.isNotEmpty) {
-      displayMessages.add(currentGroup.toList());
-    }
-
-    // Tools from SSE events that arrived during streaming but haven't been
-    // matched to server messages yet — show them as a card.
-    if (toolQueue.isNotEmpty) {
-      displayMessages.add(toolQueue.toList());
-    }
-    if (_subagentActivities.isNotEmpty) {
-      displayMessages.add(
-        List<GatewaySubagentActivity>.from(_subagentActivities),
-      );
-    }
-    displayMessages.addAll(_gatewayNotices);
+    final displayMessages = buildChatDisplayItems(
+      messages: _messages,
+      toolActivities: _toolActivities,
+      subagentActivities: _subagentActivities,
+      notices: _gatewayNotices,
+      verbose: _verboseMode,
+    );
 
     return NotificationListener<ScrollMetricsNotification>(
       onNotification: (notification) {
@@ -3057,7 +3067,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             if (item is List<GatewaySubagentActivity>) {
               return GatewaySubagentCard(activities: item);
             }
-            if (item is _GatewayReasoningDisplay) {
+            if (item is ChatReasoningItem) {
               return GatewayReasoningCard(
                 text: item.text,
                 initiallyExpanded: item.initiallyExpanded,
@@ -3149,6 +3159,165 @@ class MessageBubble extends StatelessWidget {
       );
   }
 
+  MarkdownStyleSheet _messageStyleSheet(
+    ThemeData theme, {
+    required bool isUser,
+    required Color assistantTextColor,
+  }) {
+    return MarkdownStyleSheet(
+      p: (isUser
+          ? theme.textTheme.bodyMedium?.copyWith(
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.bodyMedium?.copyWith(color: assistantTextColor)),
+      code: TextStyle(
+        backgroundColor: (isUser ? Colors.white : Colors.black).withValues(
+          alpha: 0.12,
+        ),
+        fontFamily: 'monospace',
+        color: isUser ? hermesUserMessageForeground : null,
+      ),
+      a: TextStyle(
+        color: isUser ? hermesUserMessageForeground : theme.colorScheme.primary,
+      ),
+      h1: isUser
+          ? theme.textTheme.headlineSmall?.copyWith(
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.headlineSmall,
+      h2: isUser
+          ? theme.textTheme.titleLarge?.copyWith(
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.titleLarge,
+      h3: isUser
+          ? theme.textTheme.titleMedium?.copyWith(
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.titleMedium,
+      blockquote: TextStyle(
+        color: isUser ? hermesUserMessageForeground : Colors.grey,
+        fontStyle: FontStyle.italic,
+      ),
+      blockquoteDecoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: isUser
+                ? hermesUserMessageForeground.withValues(alpha: 0.65)
+                : theme.colorScheme.primary,
+            width: 3,
+          ),
+        ),
+      ),
+      em: isUser
+          ? theme.textTheme.bodyMedium?.copyWith(
+              fontStyle: FontStyle.italic,
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic),
+      strong: isUser
+          ? theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: hermesUserMessageForeground,
+            )
+          : theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+    );
+  }
+
+  Future<void> _showActions(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      // The sheet scrolls: at large text scales four 48 dp tiles plus the
+      // header exceed the default sheet height, and an action a user cannot
+      // reach is worse than one that scrolls.
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                child: Text(
+                  'Message actions',
+                  style: Theme.of(sheetContext).textTheme.titleSmall,
+                ),
+              ),
+              _actionTile(
+                sheetContext,
+                label: 'Copy message',
+                tooltip: 'Copy message',
+                icon: Icons.copy_outlined,
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  unawaited(_copyMessage(context));
+                },
+              ),
+              if (onReadAloud != null)
+                _actionTile(
+                  sheetContext,
+                  label: 'Read aloud',
+                  tooltip: 'Read aloud',
+                  icon: Icons.volume_up_outlined,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(onReadAloud!());
+                  },
+                ),
+              if (onEdit != null)
+                _actionTile(
+                  sheetContext,
+                  label: 'Edit and resend',
+                  tooltip: 'Edit and resend',
+                  icon: Icons.edit_outlined,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    onEdit!();
+                  },
+                ),
+              if (onRetry != null)
+                _actionTile(
+                  sheetContext,
+                  label: 'Regenerate response',
+                  tooltip: 'Regenerate response',
+                  icon: Icons.refresh,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    unawaited(onRetry!());
+                  },
+                ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile(
+    BuildContext context, {
+    required String label,
+    required String tooltip,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return Semantics(
+      label: label,
+      button: true,
+      excludeSemantics: true,
+      child: Tooltip(
+        message: tooltip,
+        child: ListTile(
+          leading: Icon(icon),
+          title: Text(label),
+          minTileHeight: 48,
+          onTap: onTap,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -3178,191 +3347,89 @@ class MessageBubble extends StatelessWidget {
       }
     }
 
-    final bubble = Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.of(context).size.width - 80,
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: BoxDecoration(
-        color: isUser ? userBubbleColor : assistantBubbleColor,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Verbose metadata header
-          if (metaLines.isNotEmpty) ...[
-            Container(
-              margin: const EdgeInsets.only(bottom: 8),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: (isUser ? Colors.white : Colors.black).withValues(
-                  alpha: 0.1,
+    final bubble = GestureDetector(
+      key: const Key('message-bubble'),
+      onLongPress: () => _showActions(context),
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width - 80,
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isUser ? userBubbleColor : assistantBubbleColor,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Role header keeps user and assistant prose clearly separated.
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                isUser ? 'You' : 'Hermes',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: isUser
+                      ? hermesUserMessageForeground.withValues(alpha: 0.75)
+                      : theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.4,
                 ),
-                borderRadius: BorderRadius.circular(6),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: metaLines
-                    .map(
-                      (line) => Text(
-                        line,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontFamily: 'monospace',
-                          color: isUser
-                              ? hermesUserMessageForeground
-                              : (isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
+            // Verbose metadata header
+            if (metaLines.isNotEmpty) ...[
+              Container(
+                margin: const EdgeInsets.only(bottom: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (isUser ? Colors.white : Colors.black).withValues(
+                    alpha: 0.1,
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: metaLines
+                      .map(
+                        (line) => Text(
+                          line,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontFamily: 'monospace',
+                            color: isUser
+                                ? hermesUserMessageForeground
+                                : (isDark
+                                      ? Colors.grey[400]
+                                      : Colors.grey[600]),
+                          ),
                         ),
-                      ),
-                    )
-                    .toList(),
+                      )
+                      .toList(),
+                ),
               ),
+            ],
+            // Message content: prose renders as markdown; fenced code
+            // blocks render with language, copy, and wrap controls.
+            ...splitMarkdownCodeBlocks(content).map(
+              (segment) => segment is MarkdownCodeBlock
+                  ? segment
+                  : MarkdownBody(
+                      data: segment as String,
+                      selectable: false,
+                      styleSheet: _messageStyleSheet(
+                        theme,
+                        isUser: isUser,
+                        assistantTextColor: assistantTextColor,
+                      ),
+                    ),
             ),
+            const SizedBox(height: 4),
           ],
-          // Message content
-          MarkdownBody(
-            data: content,
-            selectable: true,
-            styleSheet: MarkdownStyleSheet(
-              p: (isUser
-                  ? theme.textTheme.bodyMedium?.copyWith(
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.bodyMedium?.copyWith(
-                      color: assistantTextColor,
-                    )),
-              code: TextStyle(
-                backgroundColor: (isUser ? Colors.white : Colors.black)
-                    .withValues(alpha: 0.12),
-                fontFamily: 'monospace',
-                color: isUser ? hermesUserMessageForeground : null,
-              ),
-              a: TextStyle(
-                color: isUser
-                    ? hermesUserMessageForeground
-                    : theme.colorScheme.primary,
-              ),
-              h1: isUser
-                  ? theme.textTheme.headlineSmall?.copyWith(
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.headlineSmall,
-              h2: isUser
-                  ? theme.textTheme.titleLarge?.copyWith(
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.titleLarge,
-              h3: isUser
-                  ? theme.textTheme.titleMedium?.copyWith(
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.titleMedium,
-              blockquote: TextStyle(
-                color: isUser ? hermesUserMessageForeground : Colors.grey,
-                fontStyle: FontStyle.italic,
-              ),
-              blockquoteDecoration: BoxDecoration(
-                border: Border(
-                  left: BorderSide(
-                    color: isUser
-                        ? hermesUserMessageForeground.withValues(alpha: 0.65)
-                        : theme.colorScheme.primary,
-                    width: 3,
-                  ),
-                ),
-              ),
-              em: isUser
-                  ? theme.textTheme.bodyMedium?.copyWith(
-                      fontStyle: FontStyle.italic,
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.bodyMedium?.copyWith(
-                      fontStyle: FontStyle.italic,
-                    ),
-              strong: isUser
-                  ? theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: hermesUserMessageForeground,
-                    )
-                  : theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Align(
-            alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-            child: Wrap(
-              spacing: 0,
-              runSpacing: 0,
-              children: [
-                Semantics(
-                  label: 'Copy message',
-                  button: true,
-                  excludeSemantics: true,
-                  child: IconButton(
-                    icon: const Icon(Icons.copy_outlined, size: 19),
-                    tooltip: 'Copy message',
-                    onPressed: () => _copyMessage(context),
-                    constraints: const BoxConstraints.tightFor(
-                      width: 48,
-                      height: 48,
-                    ),
-                  ),
-                ),
-                if (onReadAloud != null)
-                  Semantics(
-                    label: 'Read aloud',
-                    button: true,
-                    excludeSemantics: true,
-                    child: IconButton(
-                      icon: const Icon(Icons.volume_up_outlined, size: 20),
-                      tooltip: 'Read aloud',
-                      onPressed: onReadAloud,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 48,
-                        height: 48,
-                      ),
-                    ),
-                  ),
-                if (onEdit != null)
-                  Semantics(
-                    label: 'Edit and resend',
-                    button: true,
-                    excludeSemantics: true,
-                    child: IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                      tooltip: 'Edit and resend',
-                      onPressed: onEdit,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 48,
-                        height: 48,
-                      ),
-                    ),
-                  ),
-                if (onRetry != null)
-                  Semantics(
-                    label: 'Regenerate response',
-                    button: true,
-                    excludeSemantics: true,
-                    child: IconButton(
-                      icon: const Icon(Icons.refresh, size: 20),
-                      tooltip: 'Regenerate from the preceding prompt',
-                      onPressed: onRetry,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 48,
-                        height: 48,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
 

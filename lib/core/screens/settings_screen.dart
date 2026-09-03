@@ -2,7 +2,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../services/config_backup_io.dart';
+import '../services/config_backup_service.dart';
 import '../services/connection_manager.dart';
+import '../widgets/config_backup_card.dart';
 import '../widgets/text_size_settings_card.dart';
 import '../../main.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -366,11 +369,56 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
         const SizedBox(height: 16),
 
+        // ---- Section: Backup ----
+        _buildSectionHeader('Backup & restore'),
+        ConfigBackupCard(
+          onExport: _exportConfig,
+          onDeliverExport: _deliverExport,
+          onPickBackupFile: _pickBackupFile,
+          onImport: _importConfig,
+        ),
+        const SizedBox(height: 16),
+
         // ---- Section: About ----
         _buildSectionHeader('About'),
         _AboutCard(),
       ],
     );
+  }
+
+  ConfigBackupIo _backupIo() {
+    final app = context.findAncestorStateOfType<HermesAppState>()!;
+    return ConfigBackupIo(connectionManager: app.widget.connManager);
+  }
+
+  Future<String> _exportConfig(String passphrase) {
+    return _backupIo().exportEncrypted(passphrase);
+  }
+
+  Future<String?> _deliverExport(String contents) {
+    return _backupIo().deliverExport(contents);
+  }
+
+  Future<String?> _pickBackupFile() {
+    return _backupIo().pickBackupFile();
+  }
+
+  Future<ConfigImportResult> _importConfig(
+    String contents,
+    String passphrase,
+    ConfigImportMode mode,
+  ) async {
+    final result = await _backupIo().importEncrypted(
+      contents,
+      passphrase,
+      mode,
+    );
+    if (mounted) {
+      // Theme and text size are read at app root; refresh so a restored
+      // preference is visible without restarting the app.
+      context.findAncestorStateOfType<HermesAppState>()?.setState(() {});
+    }
+    return result;
   }
 
   Widget _buildSectionHeader(String title) {

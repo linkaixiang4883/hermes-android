@@ -2,8 +2,10 @@
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart' show IOClient;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/connection.dart';
@@ -193,6 +195,81 @@ class ConnectionManager {
     return _connectionsFromMaps(
       _readConnectionMaps(),
     ).map(_hydrateFromCachedCredentials).toList();
+  }
+
+  /// Returns every saved connection with its secrets read back from the secure
+  /// store, rather than from the in-memory cache used by [getConnections].
+  ///
+  /// Config export needs this: a freshly launched app has an empty credential
+  /// cache, so [getConnections] alone would hand back connections with blank
+  /// API keys and silently produce a useless backup.
+  Future<List<SavedConnection>> loadConnectionsWithSecrets() async {
+    final connections = _connectionsFromMaps(_readConnectionMaps());
+    final hydrated = <SavedConnection>[];
+    for (final connection in connections) {
+      final encoded = await _credentialStore.read(
+        _credentialKey(connection.id),
+      );
+      if (encoded == null) {
+        hydrated.add(connection);
+        continue;
+      }
+      final credentials = _ConnectionCredentials.decode(encoded);
+      hydrated.add(
+        connection.copyWith(
+          apiKey: credentials.apiKey,
+          dashboardPassword: credentials.dashboardPassword,
+          clearDashboardPassword: credentials.dashboardPassword == null,
+        ),
+      );
+    }
+    return hydrated;
+  }
+
+  /// Writes a whole set of connections at once, preserving their ids.
+  ///
+  /// Every credential bundle is written and verified before the metadata list
+  /// is committed, matching the fail-closed contract of the single-connection
+  /// paths. When [replaceExisting] is true, connections absent from [incoming]
+  /// are removed along with their credentials.
+  Future<void> importConnections(
+    List<SavedConnection> incoming, {
+    required bool replaceExisting,
+  }) async {
+    final current = _connectionsFromMaps(_readConnectionMaps());
+
+    final ordered = List<SavedConnection>.of(incoming);
+
+    final List<SavedConnection> next;
+    final removed = <SavedConnection>[];
+    if (replaceExisting) {
+      final keep = ordered.map((connection) => connection.id).toSet();
+      removed.addAll(
+        current.where((connection) => !keep.contains(connection.id)),
+      );
+      next = ordered;
+    } else {
+      final incomingIds = ordered.map((connection) => connection.id).toSet();
+      next = <SavedConnection>[
+        ...ordered,
+        ...current.where((connection) => !incomingIds.contains(connection.id)),
+      ];
+    }
+
+    for (final connection in ordered) {
+      await _writeAndVerifyCredentials(
+        connection.id,
+        _ConnectionCredentials.fromConnection(connection),
+      );
+    }
+    for (final connection in removed) {
+      await _writeAndVerifyCredentials(
+        connection.id,
+        const _ConnectionCredentials(apiKey: '', dashboardPassword: null),
+      );
+    }
+
+    await _saveAll(next);
   }
 
   Future<void> saveConnection(
@@ -535,6 +612,13 @@ class ApiClient {
   final String baseUrl;
   final String _apiKey;
 
+  /// How long a single request may take before the UI may surface an error.
+  ///
+  /// A gateway on a dead keep-alive socket can otherwise hang forever while
+  /// the server already answered or closed the connection; every read path
+  /// uses this bound so the user always gets a loadable error state.
+  static const Duration requestTimeout = Duration(seconds: 20);
+
   // Keep the public parameter name `apiKey` while storing it privately.
   ApiClient({
     required String baseUrl,
@@ -543,7 +627,19 @@ class ApiClient {
     http.Client? httpClient,
   }) : _apiKey = apiKey,
        baseUrl = SavedConnection.joinBaseUrl(baseUrl, pathPrefix),
-       _http = httpClient ?? http.Client();
+       _http = httpClient ?? _freshClient();
+
+  /// Builds a client that does not pool keep-alive sockets.
+  ///
+  /// dart:io's pooled connections go stale silently (the server closed an
+  /// idle connection; the client only notices on the *next* request, which
+  /// then hangs). Home/tablet/LAN gateways are cheap to reconnect to, so a
+  /// fresh TCP connection per request is a fair price for never wedging the
+  /// session list on a stale socket.
+  static http.Client _freshClient() {
+    final io = HttpClient()..idleTimeout = Duration.zero;
+    return IOClient(io);
+  }
 
   Map<String, String> get _headers => {
     'Authorization': 'Bearer $_apiKey',
@@ -552,11 +648,10 @@ class ApiClient {
 
   // ── Session listing ──────────────────────────────────────────────────
 
-  Future<List<Session>> getSessions() async {
-    final res = await _http.get(
-      Uri.parse('$baseUrl/api/sessions'),
-      headers: _headers,
-    );
+  Future<List<Session>> getSessions({Duration timeout = requestTimeout}) async {
+    final res = await _http
+        .get(Uri.parse('$baseUrl/api/sessions'), headers: _headers)
+        .timeout(timeout);
     if (res.statusCode != 200) {
       throw Exception('HTTP ${res.statusCode}: ${res.body}');
     }
@@ -1094,6 +1189,14 @@ class DashboardClient {
     };
   }
 
+  /// Resolves the dashboard auth headers for a caller that issues its own
+  /// requests against [baseUrl].
+  ///
+  /// Exposed so collaborators such as the session search client can reuse this
+  /// client's cached cookie/token and its single-flight login, instead of
+  /// re-implementing the auth ladder and triggering a second password login.
+  Future<Map<String, String>> authHeaders() => _authHeaders();
+
   /// Mints the short-lived, single-use WebSocket ticket required by a secured
   /// Hermes Desktop gateway. The HTTP API cookie stays in this client; only the
   /// ticket is passed to the WebSocket URL.
@@ -1129,19 +1232,42 @@ class DashboardClient {
 
   Future<Map<String, dynamic>> apiGet(
     String endpoint, {
+    Map<String, String>? queryParameters,
     bool retried = false,
   }) async {
     final headers = await _authHeaders();
-    final res = await _http.get(
-      Uri.parse('$_baseUrl/api/$endpoint'),
-      headers: headers,
-    );
+    final uri = Uri.parse(
+      '$_baseUrl/api/$endpoint',
+    ).replace(queryParameters: queryParameters);
+    final res = await _http.get(uri, headers: headers);
     if (res.statusCode == 401 && !retried) {
       _resetAuth();
-      return apiGet(endpoint, retried: true);
+      return apiGet(endpoint, queryParameters: queryParameters, retried: true);
     }
     if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
     return _decodeMapResponse(res);
+  }
+
+  Future<http.Response> apiGetBytes(
+    String endpoint, {
+    Map<String, String>? queryParameters,
+    bool retried = false,
+  }) async {
+    final headers = await _authHeaders();
+    final uri = Uri.parse(
+      '$_baseUrl/api/$endpoint',
+    ).replace(queryParameters: queryParameters);
+    final res = await _http.get(uri, headers: headers);
+    if (res.statusCode == 401 && !retried) {
+      _resetAuth();
+      return apiGetBytes(
+        endpoint,
+        queryParameters: queryParameters,
+        retried: true,
+      );
+    }
+    if (res.statusCode != 200) throw Exception('HTTP ${res.statusCode}');
+    return res;
   }
 
   Future<List<dynamic>> apiGetList(
