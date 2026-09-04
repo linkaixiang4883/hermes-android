@@ -155,6 +155,15 @@ void main() {
           ]) {
             expect(tester.getSize(find.byTooltip(tooltip)), const Size(48, 48));
           }
+          final messageField = tester.widget<TextField>(
+            find.descendant(
+              of: find.bySemanticsLabel('Message'),
+              matching: find.byType(TextField),
+            ),
+          );
+          expect(messageField.minLines, 1);
+          expect(messageField.maxLines, 5);
+          expect(messageField.decoration?.hintText, 'Message Hermes…');
           expect(tester.takeException(), isNull);
         }
       },
@@ -437,6 +446,28 @@ void main() {
         expect(tester.takeException(), isNull);
       },
     );
+    testWidgets(
+      'server file picker inserts an @file reference in the composer',
+      (tester) async {
+        await _pumpChat(
+          tester,
+          client: _ControlledChatHttpClient(const []),
+          connectionId: 'server-file',
+          sessionId: 'server-file',
+          serverFilePicker: () async => '/srv/project/README.md',
+        );
+
+        await tester.tap(find.bySemanticsLabel('Add attachment'));
+        await tester.pumpAndSettle();
+        expect(find.text('Browse server files'), findsOneWidget);
+
+        await tester.tap(find.text('Browse server files'));
+        await tester.pumpAndSettle();
+
+        final composer = tester.widget<TextField>(find.byType(TextField));
+        expect(composer.controller!.text, '@file /srv/project/README.md ');
+      },
+    );
   });
 }
 
@@ -448,6 +479,7 @@ Future<void> _pumpChat(
   double textScale = 1,
   EdgeInsets viewInsets = EdgeInsets.zero,
   TestRemotePromptSubmit? remoteSubmit,
+  Future<String?> Function()? serverFilePicker,
   List<AttachmentDraft> initialDrafts = const [],
   bool settle = true,
 }) async {
@@ -487,6 +519,7 @@ Future<void> _pumpChat(
         ),
         testApiClient: apiClient,
         testRemotePromptSubmit: remoteSubmit,
+        testServerFilePicker: serverFilePicker,
         testInitialAttachmentDrafts: initialDrafts,
       ),
     ),

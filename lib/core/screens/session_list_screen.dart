@@ -1,15 +1,24 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../l10n/l10n.dart';
+import '../models/session_search_hit.dart';
+import '../services/ai_search_query_rewriter.dart';
+import '../services/chat_space_store.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_turn_application_controller.dart';
+import '../services/session_search_client.dart';
+import '../services/session_search_preferences.dart';
 import '../services/ws_client.dart';
 import 'chat_screen.dart';
 import 'settings_screen.dart';
 import 'memory_screen.dart';
+import 'spaces_screen.dart';
 import 'cron_screen.dart';
 import 'skills_screen.dart';
+import 'workspace_screen.dart';
 
 Future<String?> showSessionNameDialog({
   required BuildContext context,
@@ -59,16 +68,44 @@ class SessionListScreen extends StatefulWidget {
 }
 
 class _SessionListScreenState extends State<SessionListScreen> {
+  /// Debounce window before a typed query is sent to the dashboard. Local
+  /// search filters in-memory on every keystroke; server search must not.
+  static const _searchDebounce = Duration(milliseconds: 350);
+
   late final ApiClient _client;
   DesktopGatewayClient? _desktopGateway;
   final _searchController = TextEditingController();
   List<SavedConnection> _profiles = const [];
   List<Session> _sessions = [];
+  ChatSpaceStore? _spaceStore;
+  ChatSpaceState _spaceState = const ChatSpaceState(
+    spaces: [],
+    assignments: {},
+  );
+  ChatSpaceScope _spaceScope = const ChatSpaceScope.all();
   bool _loading = true;
   String? _error;
   bool _healthOk = false;
   final Set<String> _deletingSessionIds = {};
   final Set<String> _branchingSessionIds = {};
+
+  SessionSearchPreferences? _searchPreferences;
+  SessionSearchMode _searchMode = SessionSearchMode.local;
+  AiSearchModel? _aiSearchModel;
+  AiSearchQueryRewriter? _aiRewriter;
+  String? _aiRewrittenQuery;
+  bool _loadingAiModels = false;
+  DashboardClient? _searchDashboard;
+  SessionSearchClient? _searchClient;
+  Timer? _searchDebounceTimer;
+  int _searchRequestGeneration = 0;
+
+  /// Query currently reflected by [_serverResults]; guards against an earlier
+  /// slow response overwriting the results of a newer query.
+  String _serverQuery = '';
+  List<SessionSearchHit>? _serverResults;
+  bool _searching = false;
+  String? _searchError;
 
   @override
   void initState() {
@@ -88,13 +125,302 @@ class _SessionListScreenState extends State<SessionListScreen> {
       }
     }
     _loadProfiles();
+    _loadChatSpaces();
+    _loadSearchPreferences();
     _checkHealth();
+  }
+
+  /// Restores the saved search mode for this connection.
+  ///
+  /// Failing to read preferences must not break the session list, so any
+  /// error leaves the local default in place.
+  Future<void> _loadSearchPreferences() async {
+    try {
+      final preferences = await SessionSearchPreferences.open();
+      if (!mounted) return;
+      setState(() {
+        _searchPreferences = preferences;
+        _searchMode = preferences.readMode(
+          connectionIdentity: _searchConnectionIdentity,
+        );
+        _aiSearchModel = preferences.readAiModel(
+          connectionIdentity: _searchConnectionIdentity,
+        );
+      });
+    } catch (_) {
+      // Keep SessionSearchMode.local.
+    }
+  }
+
+  /// Namespaces stored search preferences, matching the chat model override
+  /// convention so two connections to the same host stay independent.
+  String get _searchConnectionIdentity =>
+      '${widget.connection.baseUrl}|'
+      '${widget.connection.gatewayPrefix ?? ''}|'
+      '${widget.connection.desktopGatewayUrl ?? ''}';
+
+  /// Server search reaches the dashboard, which the gateway connection alone
+  /// does not guarantee is reachable.
+  bool get _serverSearchAvailable => widget.connection.host.trim().isNotEmpty;
+
+  SessionSearchClient _ensureSearchClient() {
+    final existing = _searchClient;
+    if (existing != null) return existing;
+
+    final dashboard = DashboardClient(
+      host: widget.connection.host,
+      port: widget.connection.dashboardPort,
+      pathPrefix: widget.connection.dashboardPrefix ?? '',
+      proxied: widget.connection.dashboardProxied,
+      useHttps: widget.connection.useHttps,
+      username: widget.connection.dashboardUsername,
+      password: widget.connection.dashboardPassword,
+    );
+    final created = SessionSearchClient(
+      baseUrl: dashboard.baseUrl,
+      headers: dashboard.authHeaders,
+    );
+    _searchDashboard = dashboard;
+    _searchClient = created;
+    return created;
+  }
+
+  Future<void> _setSearchMode(SessionSearchMode mode) async {
+    if (mode == _searchMode) return;
+    if (mode == SessionSearchMode.ai && _aiSearchModel == null) {
+      final selected = await _showAiModelSelector();
+      if (selected == null) return;
+    }
+    setState(() {
+      _searchRequestGeneration++;
+      _searchMode = mode;
+      _serverResults = null;
+      _searchError = null;
+      _serverQuery = '';
+      _aiRewrittenQuery = null;
+    });
+    await _searchPreferences?.saveMode(
+      connectionIdentity: _searchConnectionIdentity,
+      mode: mode,
+    );
+    if (mode != SessionSearchMode.local) {
+      _onSearchChanged(_searchController.text);
+    }
+  }
+
+  /// Handles a keystroke in the search bar.
+  ///
+  /// Local mode only needs a rebuild. Server mode debounces so typing a word
+  /// issues one request instead of one per character.
+  void _onSearchChanged(String raw) {
+    setState(() {});
+    if (_searchMode == SessionSearchMode.local) return;
+
+    _searchDebounceTimer?.cancel();
+    final query = raw.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _searchRequestGeneration++;
+        _serverResults = null;
+        _searchError = null;
+        _searching = false;
+        _serverQuery = '';
+        _aiRewrittenQuery = null;
+      });
+      return;
+    }
+    _searchDebounceTimer = Timer(
+      _searchDebounce,
+      () => _runServerSearch(query),
+    );
+  }
+
+  AiSearchQueryRewriter _ensureAiRewriter() {
+    final existing = _aiRewriter;
+    if (existing != null) return existing;
+    final created = AiSearchQueryRewriter(
+      baseUrl: widget.connection.baseUrl,
+      pathPrefix: widget.connection.gatewayPrefix ?? '',
+      apiKey: widget.connection.apiKey,
+    );
+    _aiRewriter = created;
+    return created;
+  }
+
+  Future<AiSearchModel?> _showAiModelSelector() async {
+    if (_loadingAiModels) return null;
+    setState(() => _loadingAiModels = true);
+    try {
+      final options = await _client.getModelOptions();
+      final choices = AiSearchModel.configuredFromOptions(options);
+      if (choices.isEmpty) {
+        throw StateError('Hermes returned no configured selectable models.');
+      }
+
+      if (!mounted) return null;
+      final selection = await showModalBottomSheet<AiSearchModel>(
+        context: context,
+        showDragHandle: true,
+        isScrollControlled: true,
+        builder: (sheetContext) => SafeArea(
+          child: SizedBox(
+            height: MediaQuery.sizeOf(sheetContext).height * 0.75,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'AI search model',
+                        style: Theme.of(sheetContext).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'The model only rewrites your question into a short '
+                        'full-text query. Hermes uses the provider credentials '
+                        'already configured on the host.',
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: choices.length,
+                    itemBuilder: (_, index) {
+                      final choice = choices[index];
+                      final isSelected =
+                          _aiSearchModel?.provider == choice.provider &&
+                          _aiSearchModel?.model == choice.model;
+                      return ListTile(
+                        leading: Icon(
+                          choice.isRecommended
+                              ? Icons.savings_outlined
+                              : Icons.smart_toy_outlined,
+                        ),
+                        title: Text(choice.model),
+                        subtitle: Text(
+                          choice.isRecommended
+                              ? '${choice.provider} • Recommended: small and inexpensive'
+                              : choice.provider,
+                        ),
+                        trailing: isSelected
+                            ? const Icon(Icons.check_circle)
+                            : null,
+                        onTap: () => Navigator.pop(sheetContext, choice),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      if (selection == null || !mounted) return null;
+      setState(() => _aiSearchModel = selection);
+      await _searchPreferences?.saveAiModel(
+        connectionIdentity: _searchConnectionIdentity,
+        selection: selection,
+      );
+      if (_searchMode == SessionSearchMode.ai &&
+          _searchController.text.trim().isNotEmpty) {
+        unawaited(_runServerSearch(_searchController.text.trim()));
+      }
+      return selection;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not load AI search models: $error')),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _loadingAiModels = false);
+    }
+  }
+
+  Future<void> _runServerSearch(String query) async {
+    if (!mounted || query.isEmpty) return;
+    final requestGeneration = ++_searchRequestGeneration;
+    final requestMode = _searchMode;
+    setState(() {
+      _searching = true;
+      _searchError = null;
+    });
+
+    bool requestIsCurrent() =>
+        mounted &&
+        requestGeneration == _searchRequestGeneration &&
+        _searchController.text.trim() == query;
+
+    try {
+      var effectiveQuery = query;
+      if (requestMode == SessionSearchMode.ai) {
+        final selected = _aiSearchModel;
+        if (selected == null) {
+          throw const AiSearchRewriteException(
+            'Choose an AI search model before using AI search.',
+          );
+        }
+        effectiveQuery = await _ensureAiRewriter().rewrite(
+          query: query,
+          provider: selected.provider,
+          model: selected.model,
+        );
+      }
+      final hits = await _ensureSearchClient().search(effectiveQuery);
+      if (!requestIsCurrent()) return;
+      setState(() {
+        _serverResults = hits;
+        _serverQuery = query;
+        _aiRewrittenQuery = requestMode == SessionSearchMode.ai
+            ? effectiveQuery
+            : null;
+        _searching = false;
+      });
+    } on AiSearchRewriteException catch (error) {
+      if (!requestIsCurrent()) return;
+      setState(() {
+        _searchError = error.message;
+        _serverResults = null;
+        _searching = false;
+      });
+    } on SessionSearchException catch (error) {
+      if (!requestIsCurrent()) return;
+      setState(() {
+        _searchError = error.message;
+        _serverResults = null;
+        _searching = false;
+      });
+    } catch (error) {
+      if (!requestIsCurrent()) return;
+      setState(() {
+        _searchError = 'Session search failed: $error';
+        _serverResults = null;
+        _searching = false;
+      });
+    }
   }
 
   Future<void> _loadProfiles() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
     setState(() => _profiles = ConnectionManager(prefs).getConnections());
+  }
+
+  Future<void> _loadChatSpaces() async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = ChatSpaceStore(prefs, connectionId: widget.connection.id);
+    final state = await store.load();
+    if (!mounted) return;
+    setState(() {
+      _spaceStore = store;
+      _spaceState = state;
+    });
   }
 
   Future<void> _switchProfile(String profileId) async {
@@ -157,6 +483,10 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
   @override
   void dispose() {
+    _searchDebounceTimer?.cancel();
+    _searchClient?.close();
+    _searchDashboard?.close();
+    _aiRewriter?.close();
     _searchController.dispose();
     _desktopGateway?.close();
     _client.close();
@@ -252,6 +582,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
     await Future<void>.delayed(kThemeAnimationDuration);
     if (!mounted) return;
     switch (action) {
+      case 'move':
+        await _moveSession(session);
       case 'rename':
         await _renameSession(session);
       case 'branch':
@@ -259,6 +591,45 @@ class _SessionListScreenState extends State<SessionListScreen> {
       case 'delete':
         await _confirmDeleteSession(session);
     }
+  }
+
+  Future<void> _moveSession(Session session) async {
+    final store = _spaceStore;
+    if (store == null) return;
+    final selected = await showModalBottomSheet<String?>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Move chat'),
+              subtitle: Text('Choose its destination space'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.inbox_outlined),
+              title: const Text('Unassigned'),
+              onTap: () => Navigator.pop(sheetContext, ''),
+            ),
+            for (final space in _spaceState.spaces)
+              ListTile(
+                leading: const Icon(Icons.folder_outlined),
+                title: Text(space.name),
+                trailing: _spaceState.spaceIdForSession(session.id) == space.id
+                    ? const Icon(Icons.check)
+                    : null,
+                onTap: () => Navigator.pop(sheetContext, space.id),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    await store.assignSession(session.id, selected.isEmpty ? null : selected);
+    final state = await store.load();
+    if (!mounted) return;
+    setState(() => _spaceState = state);
   }
 
   Future<void> _fetchSessions() async {
@@ -275,8 +646,17 @@ class _SessionListScreenState extends State<SessionListScreen> {
       final filtered = sessions
           .where((s) => !excluded.contains(s.source))
           .toList();
+      final store =
+          _spaceStore ??
+          ChatSpaceStore(prefs, connectionId: widget.connection.id);
+      await store.pruneAssignments(
+        sessions.map((session) => session.id).toSet(),
+      );
+      final spaceState = await store.load();
       if (!mounted) return;
       setState(() {
+        _spaceStore = store;
+        _spaceState = spaceState;
         _sessions = filtered;
         _loading = false;
       });
@@ -327,6 +707,10 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
     try {
       await _client.deleteSession(session.id);
+      await _spaceStore?.assignSession(session.id, null);
+      if (_spaceStore != null) {
+        _spaceState = await _spaceStore!.load();
+      }
       if (!mounted) return;
       setState(() {
         _sessions.removeWhere((item) => item.id == session.id);
@@ -344,7 +728,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
     }
   }
 
-  void _createNewSession() {
+  Future<void> _createNewSession() async {
     final sessionId = GatewayChatClient.generateSessionId();
     final session = Session(
       id: sessionId,
@@ -356,6 +740,11 @@ class _SessionListScreenState extends State<SessionListScreen> {
       preview: '',
       startedAt: DateTime.now().millisecondsSinceEpoch.toDouble() / 1000,
     );
+    if (_spaceScope.kind == ChatSpaceScopeKind.space && _spaceStore != null) {
+      await _spaceStore!.assignSession(sessionId, _spaceScope.spaceId);
+      _spaceState = await _spaceStore!.load();
+      if (!mounted) return;
+    }
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -382,13 +771,46 @@ class _SessionListScreenState extends State<SessionListScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
 
+  String get _spaceScopeLabel {
+    return switch (_spaceScope.kind) {
+      ChatSpaceScopeKind.all => 'All chats',
+      ChatSpaceScopeKind.unassigned => 'Unassigned',
+      ChatSpaceScopeKind.space =>
+        _spaceState.spaces
+                .where((space) => space.id == _spaceScope.spaceId)
+                .map((space) => space.name)
+                .firstOrNull ??
+            'Space',
+    };
+  }
+
+  void _openSpaces({bool closeDrawer = false}) {
+    final store = _spaceStore;
+    if (store == null) return;
+    if (closeDrawer) Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (spaceContext) => SpacesScreen(
+          store: store,
+          sessions: _sessions,
+          onScopeSelected: (scope) {
+            setState(() => _spaceScope = scope);
+            Navigator.pop(spaceContext);
+          },
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(
           'HERMES',
-          style: TextStyle(fontFamily: 'Cinzel', 
+          style: TextStyle(
+            fontFamily: 'Cinzel',
             fontWeight: FontWeight.w700,
             letterSpacing: 6,
             fontSize: 22,
@@ -434,7 +856,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
                 children: [
                   Text(
                     'HERMES',
-                    style: TextStyle(fontFamily: 'Cinzel', 
+                    style: TextStyle(
+                      fontFamily: 'Cinzel',
                       fontSize: 22,
                       fontWeight: FontWeight.w700,
                       color: const Color(0xFFD4AF37),
@@ -449,6 +872,32 @@ class _SessionListScreenState extends State<SessionListScreen> {
                 ],
               ),
             ),
+            ListTile(
+              key: const Key('open-spaces'),
+              leading: const Icon(Icons.folder_copy_outlined),
+              title: const Text('Spaces'),
+              subtitle: Text(_spaceScopeLabel),
+              enabled: _spaceStore != null,
+              onTap: () => _openSpaces(closeDrawer: true),
+            ),
+            ListTile(
+              key: const Key('open-workspace'),
+              leading: const Icon(Icons.dashboard_outlined),
+              title: const Text('Workspace'),
+              subtitle: const Text('Projects, Activity — new navigation'),
+              onTap: () {
+                Navigator.pop(context);
+                _openScreen(
+                  WorkspaceScreen(
+                    connection: widget.connection,
+                    // Home opens chats itself now; without the owner they
+                    // would lose durable turn recovery.
+                    turnApplicationController: widget.turnApplicationController,
+                  ),
+                );
+              },
+            ),
+            const Divider(),
             ListTile(
               leading: const Icon(Icons.memory),
               title: Text(context.l10n.memoryTab),
@@ -563,20 +1012,38 @@ class _SessionListScreenState extends State<SessionListScreen> {
       );
     }
 
-    final query = _searchController.text.trim().toLowerCase();
-    final visibleSessions = query.isEmpty
-        ? _sessions
-        : _sessions
+    final rawQuery = _searchController.text.trim();
+    final localQuery = rawQuery.toLowerCase();
+    final scopedSessions = _spaceState.sessionsFor(_sessions, _spaceScope);
+    final aiMode = _searchMode == SessionSearchMode.ai;
+    final serverMode = _searchMode != SessionSearchMode.local;
+    final serverHitsCurrent = serverMode && _serverQuery == rawQuery
+        ? _serverResults
+        : null;
+    final visibleSessions = rawQuery.isEmpty
+        ? scopedSessions
+        : serverMode
+        ? _spaceState.sessionsFor(
+            serverHitsCurrent?.map((hit) => hit.session).toList() ?? const [],
+            _spaceScope,
+          )
+        : scopedSessions
               .where(
                 (session) =>
-                    session.title.toLowerCase().contains(query) ||
-                    session.preview.toLowerCase().contains(query) ||
-                    session.model.toLowerCase().contains(query),
+                    session.title.toLowerCase().contains(localQuery) ||
+                    session.preview.toLowerCase().contains(localQuery) ||
+                    session.model.toLowerCase().contains(localQuery),
               )
               .toList();
+    final snippetsBySession = <String, SessionSearchHit>{
+      for (final hit in serverHitsCurrent ?? const <SessionSearchHit>[])
+        hit.session.id: hit,
+    };
 
     return RefreshIndicator(
-      onRefresh: _fetchSessions,
+      onRefresh: rawQuery.isNotEmpty && serverMode
+          ? () => _runServerSearch(rawQuery)
+          : _fetchSessions,
       child: ListView.builder(
         padding: const EdgeInsets.all(16),
         itemCount: visibleSessions.length + 1,
@@ -584,25 +1051,206 @@ class _SessionListScreenState extends State<SessionListScreen> {
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SearchBar(
-                controller: _searchController,
-                leading: const Icon(Icons.search),
-                hintText: context.l10n.searchChats,
-                trailing: [
-                  if (query.isNotEmpty)
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() {});
-                      },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: ActionChip(
+                      key: const Key('active-space'),
+                      avatar: const Icon(Icons.folder_outlined, size: 18),
+                      label: Text(_spaceScopeLabel),
+                      onPressed: _spaceStore == null ? null : _openSpaces,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  SearchBar(
+                    controller: _searchController,
+                    leading: _searching
+                        ? const Padding(
+                            padding: EdgeInsets.all(12),
+                            child: SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          )
+                        : const Icon(Icons.search),
+                    hintText: aiMode
+                        ? context.l10n.searchHintAi
+                        : serverMode
+                        ? context.l10n.searchHintServer
+                        : context.l10n.searchHintLocal,
+                    trailing: [
+                      if (rawQuery.isNotEmpty)
+                        IconButton(
+                          tooltip: 'Clear search',
+                          icon: const Icon(Icons.close),
+                          onPressed: () {
+                            _searchDebounceTimer?.cancel();
+                            _searchController.clear();
+                            setState(() {
+                              _searchRequestGeneration++;
+                              _serverResults = null;
+                              _searchError = null;
+                              _serverQuery = '';
+                              _aiRewrittenQuery = null;
+                              _searching = false;
+                            });
+                          },
+                        ),
+                      if (aiMode)
+                        IconButton(
+                          tooltip: 'Change AI search model',
+                          icon: _loadingAiModels
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.tune),
+                          onPressed: _loadingAiModels
+                              ? null
+                              : _showAiModelSelector,
+                        ),
+                      PopupMenuButton<SessionSearchMode>(
+                        tooltip: 'Search mode',
+                        icon: Icon(
+                          aiMode
+                              ? Icons.auto_awesome
+                              : serverMode
+                              ? Icons.manage_search
+                              : Icons.phone_android,
+                        ),
+                        onSelected: _setSearchMode,
+                        itemBuilder: (_) => [
+                          CheckedPopupMenuItem(
+                            value: SessionSearchMode.local,
+                            checked: !serverMode,
+                            child: const ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.phone_android),
+                              title: Text('On-device'),
+                              subtitle: Text('Titles, previews, and models'),
+                            ),
+                          ),
+                          CheckedPopupMenuItem(
+                            value: SessionSearchMode.server,
+                            enabled: _serverSearchAvailable,
+                            checked: _searchMode == SessionSearchMode.server,
+                            child: const ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.manage_search),
+                              title: Text('Full-text'),
+                              subtitle: Text('All stored message content'),
+                            ),
+                          ),
+                          CheckedPopupMenuItem(
+                            value: SessionSearchMode.ai,
+                            enabled: _serverSearchAvailable,
+                            checked: aiMode,
+                            child: ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.auto_awesome),
+                              title: const Text('AI + full-text'),
+                              subtitle: Text(
+                                _aiSearchModel == null
+                                    ? 'Choose a small model to rewrite queries'
+                                    : '${_aiSearchModel!.provider} • ${_aiSearchModel!.model}',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                    onChanged: _onSearchChanged,
+                    onSubmitted: (value) {
+                      _searchDebounceTimer?.cancel();
+                      if (serverMode && value.trim().isNotEmpty) {
+                        _runServerSearch(value.trim());
+                      }
+                    },
+                  ),
+                  if (aiMode && _aiRewrittenQuery != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, size: 16),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'AI searched for: $_aiRewrittenQuery',
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (_searchError != null) ...[
+                    const SizedBox(height: 8),
+                    Material(
+                      color: Theme.of(context).colorScheme.errorContainer,
+                      borderRadius: BorderRadius.circular(12),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onErrorContainer,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                _searchError!,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onErrorContainer,
+                                ),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () =>
+                                  _setSearchMode(SessionSearchMode.local),
+                              child: const Text('Use on-device'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                  if (rawQuery.isEmpty && scopedSessions.isEmpty) ...[
+                    const SizedBox(height: 32),
+                    Center(
+                      child: Text(
+                        _spaceScope.kind == ChatSpaceScopeKind.space
+                            ? 'No chats in this space yet. Tap + to start one.'
+                            : 'No unassigned chats.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                  ],
+                  if (serverMode &&
+                      rawQuery.isNotEmpty &&
+                      !_searching &&
+                      _searchError == null &&
+                      serverHitsCurrent != null &&
+                      serverHitsCurrent.isEmpty) ...[
+                    const SizedBox(height: 16),
+                    const Center(child: Text('No message-content matches')),
+                  ],
                 ],
-                onChanged: (_) => setState(() {}),
               ),
             );
           }
           final session = visibleSessions[index - 1];
+          final searchHit = snippetsBySession[session.id];
           final isDeleting = _deletingSessionIds.contains(session.id);
           final isBranching = _branchingSessionIds.contains(session.id);
           return Card(
@@ -624,6 +1272,13 @@ class _SessionListScreenState extends State<SessionListScreen> {
                       onSelected: (action) =>
                           _handleSessionAction(action, session),
                       itemBuilder: (_) => [
+                        const PopupMenuItem(
+                          value: 'move',
+                          child: ListTile(
+                            leading: Icon(Icons.drive_file_move_outline),
+                            title: Text('Move to space'),
+                          ),
+                        ),
                         if (_desktopGateway != null)
                           PopupMenuItem(
                             value: 'rename',
@@ -661,7 +1316,16 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     context.l10n.sessionMeta(session.messageCount, session.model, _formatTime(session.startedAt)),
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  if (session.preview.isNotEmpty)
+                  if (searchHit?.snippet.isNotEmpty == true)
+                    Text(
+                      searchHit!.snippet,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    )
+                  else if (session.preview.isNotEmpty)
                     Text(
                       session.preview,
                       maxLines: 2,
@@ -672,7 +1336,9 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     ),
                 ],
               ),
-              isThreeLine: session.preview.isNotEmpty,
+              isThreeLine:
+                  searchHit?.snippet.isNotEmpty == true ||
+                  session.preview.isNotEmpty,
               onLongPress: isDeleting ? null : () => _renameSession(session),
               onTap: isDeleting
                   ? null

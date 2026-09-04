@@ -158,7 +158,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get message => '消息';
 
   @override
-  String get typeAMessage => '输入消息…';
+  String get typeAMessage => '给 Hermes 发消息…';
 
   @override
   String get spokenReplies => '语音回复';
@@ -186,6 +186,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get copyMessage => '复制消息';
+
+  @override
+  String get messageActions => '消息操作';
+
+  @override
+  String get you => '你';
 
   @override
   String get readAloud => '朗读';
@@ -326,6 +332,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noConnections => '暂无连接';
+
+  @override
+  String get restoreConfiguration => '恢复配置';
 
   @override
   String get tapPlusToAdd => '点击 + 添加远程 Hermes 网关\n(API Server，端口 8642)';
@@ -554,6 +563,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchChats => '搜索聊天';
+
+  @override
+  String get searchHintAi => '让 AI 帮你找对话';
+
+  @override
+  String get searchHintServer => '搜索全部消息内容';
+
+  @override
+  String get searchHintLocal => '搜索已加载的对话';
 
   @override
   String get branch => '分支';
@@ -906,7 +924,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get hermesActivity => 'Hermes 活动';
+  String get hermesActivity => '工具动态';
 
   @override
   String couldNotSendApproval(String error) {

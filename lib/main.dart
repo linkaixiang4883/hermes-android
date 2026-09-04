@@ -4,22 +4,45 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'l10n/app_localizations.dart';
 import 'l10n/l10n.dart';
+import 'core/services/android_launch_intent_service.dart';
+import 'core/services/android_share_intent_service.dart';
+import 'core/services/config_backup.dart';
+import 'core/services/config_backup_io.dart';
+import 'core/services/config_backup_service.dart';
 import 'core/services/connection_manager.dart';
 import 'core/services/gateway_turn_application_controller.dart';
 import 'core/services/text_size_preference.dart';
-import 'core/screens/session_list_screen.dart';
+import 'core/screens/workspace_screen.dart';
+import 'core/theme/hermes_theme.dart';
 import 'core/utils/responsive.dart';
+import 'core/widgets/config_backup_card.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
   final connManager = await ConnectionManager.create(prefs);
-  runApp(HermesApp(connManager: connManager));
+  final shareIntents = AndroidShareIntentService();
+  final launchIntents = AndroidLaunchIntentService();
+  await Future.wait([shareIntents.initialize(), launchIntents.initialize()]);
+  runApp(
+    HermesApp(
+      connManager: connManager,
+      shareIntents: shareIntents,
+      launchIntents: launchIntents,
+    ),
+  );
 }
 
 class HermesApp extends StatefulWidget {
   final ConnectionManager connManager;
-  const HermesApp({required this.connManager, super.key});
+  final AndroidShareIntentService? shareIntents;
+  final AndroidLaunchIntentService? launchIntents;
+  const HermesApp({
+    required this.connManager,
+    this.shareIntents,
+    this.launchIntents,
+    super.key,
+  });
 
   @override
   State<HermesApp> createState() => HermesAppState();
@@ -93,57 +116,11 @@ class HermesAppState extends State<HermesApp> {
 
   @override
   Widget build(BuildContext context) {
-    const gold = Color(0xFFD4AF37);
-
     return MaterialApp(
       title: 'Hermes Agent',
       themeMode: HermesApp.getThemeMode(widget.connManager.prefs),
-      theme: ThemeData(
-        colorSchemeSeed: gold,
-        brightness: Brightness.light,
-        useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFFAFAFA),
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        cardTheme: CardThemeData(
-          color: Colors.white,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.grey.withValues(alpha: 0.15)),
-          ),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: gold,
-          foregroundColor: Colors.white,
-        ),
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: gold,
-        brightness: Brightness.dark,
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.black,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.black,
-          elevation: 0,
-          centerTitle: true,
-        ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF1A1A1A),
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
-          ),
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: gold,
-          foregroundColor: Colors.black,
-        ),
-      ),
+      theme: hermesTheme(Brightness.light),
+      darkTheme: hermesTheme(Brightness.dark),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: HermesApp.getLocale(widget.connManager.prefs),
@@ -162,6 +139,8 @@ class HermesAppState extends State<HermesApp> {
       home: HomeScreen(
         connManager: widget.connManager,
         turnApplicationController: _turnApplicationController,
+        shareIntents: widget.shareIntents,
+        launchIntents: widget.launchIntents,
       ),
     );
   }
@@ -223,24 +202,86 @@ class HermesHeader extends StatelessWidget {
 class HomeScreen extends StatefulWidget {
   final ConnectionManager connManager;
   final GatewayTurnApplicationController turnApplicationController;
+  final AndroidShareIntentService? shareIntents;
+  final AndroidLaunchIntentService? launchIntents;
+  final Future<String?> Function()? pickBackupFile;
+  final Future<ConfigImportResult> Function(
+    String contents,
+    String passphrase,
+    ConfigImportMode mode,
+  )?
+  importBackup;
 
   const HomeScreen({
     required this.connManager,
     required this.turnApplicationController,
+    this.shareIntents,
+    this.launchIntents,
+    this.pickBackupFile,
+    this.importBackup,
     super.key,
   });
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   List<SavedConnection> _connections = [];
   bool _autoNavigated = false;
   static const String _lastConnectionKey = 'last_connection_id';
 
   void _refresh() {
     setState(() => _connections = widget.connManager.getConnections());
+  }
+
+  /// Public only so the import flow and its widget test can refresh Home after
+  /// restoring connections without restarting the process.
+  void refreshConnections() => _refresh();
+
+  ConfigBackupIo get _backupIo =>
+      ConfigBackupIo(connectionManager: widget.connManager);
+
+  Future<void> _showRestoreConfig() async {
+    String? contents;
+    try {
+      contents =
+          await (widget.pickBackupFile?.call() ?? _backupIo.pickBackupFile());
+    } catch (error) {
+      if (!mounted) return;
+      _showRestoreError(error);
+      return;
+    }
+    if (contents == null || !mounted) return;
+
+    final choice = await showModalBottomSheet<ImportChoice>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const ImportOptionsSheet(),
+    );
+    if (choice == null || !mounted) return;
+
+    try {
+      final importer = widget.importBackup ?? _backupIo.importEncrypted;
+      final result = await importer(contents, choice.passphrase, choice.mode);
+      if (!mounted) return;
+      _refresh();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.summary)));
+    } catch (error) {
+      if (!mounted) return;
+      _showRestoreError(error);
+    }
+  }
+
+  void _showRestoreError(Object error) {
+    final message = error is ConfigBackupException
+        ? error.message
+        : 'The backup could not be restored.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _closeDialogAndRefresh(BuildContext dialogContext) async {
@@ -260,6 +301,45 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _refresh();
+    widget.shareIntents?.pendingShare.addListener(_onSharedText);
+    widget.launchIntents?.pendingQuickChat.addListener(_onQuickChat);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onSharedText();
+      _onQuickChat();
+    });
+  }
+
+  SavedConnection? _connectionForExternalAction() {
+    final lastId = widget.connManager.prefs.getString(_lastConnectionKey);
+    final preferred = _connections
+        .where((connection) => connection.id == lastId)
+        .firstOrNull;
+    return preferred ?? (_connections.length == 1 ? _connections.single : null);
+  }
+
+  void _onSharedText() {
+    if (!mounted || widget.shareIntents?.pendingShare.value == null) return;
+    final connection = _connectionForExternalAction();
+    if (connection == null) return;
+    _autoNavigated = true;
+    _navigateToWorkspace(connection);
+  }
+
+  void _onQuickChat() {
+    if (!mounted || widget.launchIntents?.pendingQuickChat.value != true) {
+      return;
+    }
+    final connection = _connectionForExternalAction();
+    if (connection == null) return;
+    _autoNavigated = true;
+    _navigateToWorkspace(connection);
+  }
+
+  @override
+  void dispose() {
+    widget.shareIntents?.pendingShare.removeListener(_onSharedText);
+    widget.launchIntents?.pendingQuickChat.removeListener(_onQuickChat);
+    super.dispose();
   }
 
   @override
@@ -272,23 +352,35 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _maybeAutoNavigate() {
+    // The share listener owns this route so the regular last-connection
+    // auto-navigation cannot stack a second Workspace above the shared draft.
+    if (widget.shareIntents?.pendingShare.value != null ||
+        widget.launchIntents?.pendingQuickChat.value == true) {
+      return;
+    }
     final lastId = widget.connManager.prefs.getString(_lastConnectionKey);
     if (lastId == null) return;
     final conn = _connections.where((c) => c.id == lastId).firstOrNull;
     if (conn == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _navigateToSessions(conn);
+      if (mounted) _navigateToWorkspace(conn);
     });
   }
 
-  void _navigateToSessions(SavedConnection conn) {
+  void _navigateToWorkspace(SavedConnection conn) {
     widget.connManager.prefs.setString(_lastConnectionKey, conn.id);
+    final sharedPayload = widget.shareIntents?.takePendingShare();
+    final initialQuickChat =
+        widget.launchIntents?.takePendingQuickChat() == true &&
+        sharedPayload == null;
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => SessionListScreen(
+        builder: (_) => WorkspaceScreen(
           connection: conn,
           turnApplicationController: widget.turnApplicationController,
+          initialSharedPayload: sharedPayload,
+          initialQuickChat: initialQuickChat,
         ),
       ),
     );
@@ -769,7 +861,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
-        onTap: () => _navigateToSessions(conn),
+        onTap: () => _navigateToWorkspace(conn),
       ),
     );
   }
@@ -788,6 +880,15 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
         centerTitle: true,
+        actions: [
+          if (_connections.isNotEmpty)
+            IconButton(
+              key: const Key('home_restore_config_menu'),
+              tooltip: context.l10n.restoreConfiguration,
+              onPressed: _showRestoreConfig,
+              icon: const Icon(Icons.settings_backup_restore),
+            ),
+        ],
       ),
       body: _connections.isEmpty
           ? Center(
@@ -807,6 +908,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       context,
                     ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  OutlinedButton.icon(
+                    key: const Key('home_restore_config_button'),
+                    onPressed: _showRestoreConfig,
+                    icon: const Icon(Icons.settings_backup_restore),
+                    label: Text(context.l10n.restoreConfiguration),
                   ),
                 ],
               ),
@@ -903,8 +1011,13 @@ class _AddDialogState extends State<_AddDialog> {
     );
     _dashUser = TextEditingController(text: conn?.dashboardUsername ?? '');
     _dashPass = TextEditingController(text: conn?.dashboardPassword ?? '');
+    // The Desktop Gateway URL is an advanced override, not a default: the
+    // app derives the JSON-RPC/WebSocket origin from the dashboard details
+    // when this field is blank. Pre-filling a hardcoded example here made
+    // every new connection silently point at a dead host and wedge Project
+    // loading. See docs/ANDROID_FINAL_UI_SPEC_DRAFT.md.
     _desktopGatewayUrl = TextEditingController(
-      text: conn?.desktopGatewayUrl ?? 'http://192.168.1.193/desktop',
+      text: conn?.desktopGatewayUrl ?? '',
     );
     _dashboardProxied = conn?.dashboardProxied ?? false;
     _showDashboard =

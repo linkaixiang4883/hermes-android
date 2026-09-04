@@ -49,6 +49,11 @@ app.*.map.json
 # Local keystore properties
 /key.properties
 /release.keystore
+key.properties
 
 # Android Studio agentbridge plugin workspace
 .agentbridge/
+
+# Graphify local incremental cache and machine-specific scan root
+graphify-out/cache/
+graphify-out/.graphify_root

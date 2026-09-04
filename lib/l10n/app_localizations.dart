@@ -359,7 +359,7 @@ abstract class AppLocalizations {
   /// No description provided for @typeAMessage.
   ///
   /// In en, this message translates to:
-  /// **'Type a message…'**
+  /// **'Message Hermes…'**
   String get typeAMessage;
 
   /// No description provided for @spokenReplies.
@@ -415,6 +415,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copy message'**
   String get copyMessage;
+
+  /// No description provided for @messageActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Message actions'**
+  String get messageActions;
+
+  /// No description provided for @you.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get you;
 
   /// No description provided for @readAloud.
   ///
@@ -667,6 +679,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No connections'**
   String get noConnections;
+
+  /// No description provided for @restoreConfiguration.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore configuration'**
+  String get restoreConfiguration;
 
   /// No description provided for @tapPlusToAdd.
   ///
@@ -1075,6 +1093,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search chats'**
   String get searchChats;
+
+  /// No description provided for @searchHintAi.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask AI to find a conversation'**
+  String get searchHintAi;
+
+  /// No description provided for @searchHintServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Search all message content'**
+  String get searchHintServer;
+
+  /// No description provided for @searchHintLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'Search loaded chats'**
+  String get searchHintLocal;
 
   /// No description provided for @branch.
   ///
@@ -1697,7 +1733,7 @@ abstract class AppLocalizations {
   /// No description provided for @hermesActivity.
   ///
   /// In en, this message translates to:
-  /// **'Hermes activity'**
+  /// **'Tool activity'**
   String get hermesActivity;
 
   /// No description provided for @couldNotSendApproval.

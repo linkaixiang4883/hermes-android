@@ -109,7 +109,7 @@
   "addAttachment": "Add attachment",
   "attachImageOrFile": "Attach image or file",
   "message": "Message",
-  "typeAMessage": "Type a message…",
+  "typeAMessage": "Message Hermes…",
   "spokenReplies": "Spoken replies",
   "spokenRepliesOn": "Spoken replies on",
   "spokenRepliesOff": "Spoken replies off",
@@ -119,6 +119,8 @@
   "failedToLoadMessages": "Failed to load messages",
   "messageCopied": "Message copied",
   "copyMessage": "Copy message",
+  "messageActions": "Message actions",
+  "you": "You",
   "readAloud": "Read aloud",
   "editAndResend": "Edit and resend",
   "regenerateResponse": "Regenerate response",
@@ -216,6 +218,7 @@
   "addGatewayConnection": "Add Gateway Connection",
   "editGatewayConnection": "Edit Gateway Connection",
   "noConnections": "No connections",
+  "restoreConfiguration": "Restore configuration",
   "tapPlusToAdd": "Tap + to add a remote Hermes Gateway\n(API Server, port 8642)",
   "connectionLabel": "Label",
   "hostField": "Host",
@@ -369,6 +372,9 @@
   "noSessionsYet": "No sessions yet",
   "tapPlusNewChat": "Tap the + button to start a new chat",
   "searchChats": "Search chats",
+  "searchHintAi": "Ask AI to find a conversation",
+  "searchHintServer": "Search all message content",
+  "searchHintLocal": "Search loaded chats",
   "branch": "Branch",
   "sessionMeta": "{count} msgs • {model} • {time}",
   "@sessionMeta": {
@@ -624,7 +630,7 @@
       }
     }
   },
-  "hermesActivity": "Hermes activity",
+  "hermesActivity": "Tool activity",
   "couldNotSendApproval": "Could not send the approval: {error}",
   "@couldNotSendApproval": {
     "placeholders": {

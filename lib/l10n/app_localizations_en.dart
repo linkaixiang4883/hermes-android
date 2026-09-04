@@ -162,7 +162,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get message => 'Message';
 
   @override
-  String get typeAMessage => 'Type a message…';
+  String get typeAMessage => 'Message Hermes…';
 
   @override
   String get spokenReplies => 'Spoken replies';
@@ -190,6 +190,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get copyMessage => 'Copy message';
+
+  @override
+  String get messageActions => 'Message actions';
+
+  @override
+  String get you => 'You';
 
   @override
   String get readAloud => 'Read aloud';
@@ -337,6 +343,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noConnections => 'No connections';
+
+  @override
+  String get restoreConfiguration => 'Restore configuration';
 
   @override
   String get tapPlusToAdd =>
@@ -575,6 +584,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchChats => 'Search chats';
+
+  @override
+  String get searchHintAi => 'Ask AI to find a conversation';
+
+  @override
+  String get searchHintServer => 'Search all message content';
+
+  @override
+  String get searchHintLocal => 'Search loaded chats';
 
   @override
   String get branch => 'Branch';
@@ -929,7 +947,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get hermesActivity => 'Hermes activity';
+  String get hermesActivity => 'Tool activity';
 
   @override
   String couldNotSendApproval(String error) {
