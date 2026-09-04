@@ -214,7 +214,12 @@ class _MemoryScreenState extends State<MemoryScreen> {
                       Chip(
                         label: Text(
                           target,
-                          style: const TextStyle(fontSize: 11),
+                          // Chip 背景是深色（blue/grey.shade800），必须显式浅色字，
+                          // 否则跟随主题的默认深色字会糊进背景里看不见。
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.white,
+                          ),
                         ),
                         padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,
