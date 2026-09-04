@@ -7,6 +7,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../theme/hermes_theme.dart';
 
 /// Default wording for each semantic status, phrased for a person, not a state
@@ -288,7 +289,10 @@ class ErrorState extends StatelessWidget {
           ),
           if (onRetry != null) ...[
             const SizedBox(height: HermesSpacing.xl),
-            FilledButton.tonal(onPressed: onRetry, child: const Text('Retry')),
+            FilledButton.tonal(
+              onPressed: onRetry,
+              child: Text(context.l10n.retry),
+            ),
           ],
         ],
       ),
@@ -333,7 +337,7 @@ class _LoadingSkeletonState extends State<LoadingSkeleton>
     final tokens = HermesTokens.of(context);
 
     return Semantics(
-      label: 'Loading',
+      label: context.l10n.loadingLabel,
       container: true,
       child: Column(
         children: List.generate(widget.rows, (index) {

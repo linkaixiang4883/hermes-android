@@ -1775,6 +1775,247 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noViewMatches => 'No conversation matches this view.';
 
   @override
+  String get spaceCountOne => '1 space';
+
+  @override
+  String spaceCountMany(int count) {
+    return '$count spaces';
+  }
+
+  @override
+  String get projectsToCreateNone => 'no new projects needed';
+
+  @override
+  String get projectsToCreateOne => '1 project to create';
+
+  @override
+  String projectsToCreateMany(int count) {
+    return '$count projects to create';
+  }
+
+  @override
+  String migrationResultSummary(int linked, int created) {
+    return '$linked chats migrated · $created projects created';
+  }
+
+  @override
+  String migrationUnlinkedHint(int count) {
+    return '$count chats stayed in local Spaces and can be retried safely.';
+  }
+
+  @override
+  String get assignedChatOne => '1 assigned chat';
+
+  @override
+  String assignedChatsMany(int count) {
+    return '$count assigned chats';
+  }
+
+  @override
+  String migrationNoMatchHint(String assigned) {
+    return 'No server project matches this name · $assigned';
+  }
+
+  @override
+  String migrationMatchHint(String name, String assigned) {
+    return 'Matches $name · $assigned';
+  }
+
+  @override
+  String get continueAction => 'Continue';
+
+  @override
+  String get migrationNothingToDo => 'Nothing to migrate';
+
+  @override
+  String get migrationNoSpacesHint =>
+      'No local spaces were found for this connection, so Projects are already the only organization in use here.';
+
+  @override
+  String get migrationPreviewTitle => 'Migration preview';
+
+  @override
+  String get migrationDryRunHint =>
+      'Nothing has moved yet — this is only what a migration would do.';
+
+  @override
+  String get migrationComplete => 'Migration complete';
+
+  @override
+  String get migrationIncomplete => 'Migration incomplete';
+
+  @override
+  String get migrationFailedHint =>
+      'Migration failed. Local Spaces were kept unchanged.';
+
+  @override
+  String get migratingAction => 'Migrating…';
+
+  @override
+  String get migrateAction => 'Migrate';
+
+  @override
+  String get migrationMatched => 'Matched';
+
+  @override
+  String get closeAction => 'Close';
+
+  @override
+  String get loadingLabel => 'Loading';
+
+  @override
+  String get offLabel => 'Off';
+
+  @override
+  String get quickChatRetention => 'Auto-archives after 72 hours';
+
+  @override
+  String get modeProjectChat => 'Project chat';
+
+  @override
+  String get modeProjectChatDesc =>
+      'Durable work inside one of your projects, shared with Desktop.';
+
+  @override
+  String get modeQuickChat => 'Quick chat';
+
+  @override
+  String get modeQuickChatDesc =>
+      'A one-off question. Archives itself after 72 hours; anything worth keeping is still remembered.';
+
+  @override
+  String get stillLoadingProjects => 'Still loading your projects.';
+
+  @override
+  String get gatewayNoProjectsHint =>
+      'This gateway does not host projects yet. Update the gateway to organize chats across your devices.';
+
+  @override
+  String get createProjectFirst =>
+      'Create a project first, then chats can live inside it.';
+
+  @override
+  String get startSomethingNew => 'Start something new';
+
+  @override
+  String get whichProject => 'Which project?';
+
+  @override
+  String get shareToHermes => 'Share to Hermes';
+
+  @override
+  String get shareNoText => 'No text shared';
+
+  @override
+  String get shareAttachmentOne => '1 attachment';
+
+  @override
+  String shareAttachmentsMany(int count) {
+    return '$count attachments';
+  }
+
+  @override
+  String get shareActionTitle => 'Action';
+
+  @override
+  String get shareUseAsIs => 'Use as is';
+
+  @override
+  String get shareSummarize => 'Summarize';
+
+  @override
+  String get shareExplain => 'Explain';
+
+  @override
+  String get shareResearch => 'Research';
+
+  @override
+  String get shareExtractTasks => 'Extract tasks';
+
+  @override
+  String get shareRemember => 'Remember';
+
+  @override
+  String get shareFillFromDoc => 'Fill from document';
+
+  @override
+  String get shareDestinationTitle => 'Destination';
+
+  @override
+  String get chooseActiveProjectNext => 'Choose an active Project next';
+
+  @override
+  String get noActiveProjects => 'No active Projects on this Gateway';
+
+  @override
+  String get enterPassphrase => 'Enter a passphrase.';
+
+  @override
+  String get enterBackupPassphrase => 'Enter the passphrase for this backup.';
+
+  @override
+  String get useEightChars => 'Use at least 8 characters.';
+
+  @override
+  String get passphrasesMismatch => 'The two passphrases do not match.';
+
+  @override
+  String get protectBackupTitle => 'Protect this backup';
+
+  @override
+  String get protectBackupDesc =>
+      'The file contains your API keys and dashboard password, so it is encrypted. Without this passphrase the backup cannot be restored.';
+
+  @override
+  String get passphraseField => 'Passphrase';
+
+  @override
+  String get confirmPassphraseField => 'Confirm passphrase';
+
+  @override
+  String get showPassphrase => 'Show passphrase';
+
+  @override
+  String get hidePassphrase => 'Hide passphrase';
+
+  @override
+  String get backupExportFailed => 'The backup could not be exported.';
+
+  @override
+  String get exportAction => 'Export';
+
+  @override
+  String get importAction => 'Import';
+
+  @override
+  String get restoreBackup => 'Restore';
+
+  @override
+  String get mergeAction => 'Merge';
+
+  @override
+  String get mergeDesc =>
+      'Add and update connections from the backup, keep the rest.';
+
+  @override
+  String get replaceAction => 'Replace';
+
+  @override
+  String get replaceDesc => 'Delete connections that are not in the backup.';
+
+  @override
+  String get backupRestoreTitle => 'Backup & restore';
+
+  @override
+  String get backupCardDesc =>
+      'Save your connections and settings to an encrypted file, then restore them after reinstalling or on another device.';
+
+  @override
+  String backupExportedTo(String destination) {
+    return 'Backup exported — $destination';
+  }
+
+  @override
   String get nothingHereView => 'Nothing here';
 
   @override

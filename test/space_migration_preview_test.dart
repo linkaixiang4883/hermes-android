@@ -6,6 +6,8 @@ import 'package:hermes_android/core/services/projects_repository.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/widgets/space_migration_preview.dart';
 
+import 'support/l10n_test_utils.dart';
+
 ChatSpace _space(String id, String name) =>
     ChatSpace(id: id, name: name, createdAt: 1750000000);
 
@@ -27,6 +29,8 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(brightness),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(

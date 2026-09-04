@@ -936,7 +936,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     final mode = await showModalBottomSheet<NewChatMode>(
       context: context,
-      builder: (_) => NewChatSheet(options: buildNewChatOptionsFor(view)),
+      builder: (_) => NewChatSheet(
+        options: buildNewChatOptionsFor(context.l10n, view),
+      ),
     );
     if (mode == null || !mounted) return;
 

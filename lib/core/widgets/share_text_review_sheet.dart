@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../services/android_share_intent_service.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/new_chat_options.dart';
@@ -16,6 +18,27 @@ enum ShareFavoriteAction {
   final String label;
   final IconData icon;
   const ShareFavoriteAction(this.label, this.icon);
+
+  /// Localized variant of [label] for UI call sites. The prompt builders
+  /// below stay English on purpose: they are model instructions, not UI.
+  String labelLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case ShareFavoriteAction.useAsIs:
+        return l10n.shareUseAsIs;
+      case ShareFavoriteAction.summarize:
+        return l10n.shareSummarize;
+      case ShareFavoriteAction.explain:
+        return l10n.shareExplain;
+      case ShareFavoriteAction.research:
+        return l10n.shareResearch;
+      case ShareFavoriteAction.extractTasks:
+        return l10n.shareExtractTasks;
+      case ShareFavoriteAction.remember:
+        return l10n.shareRemember;
+      case ShareFavoriteAction.fillFromDocument:
+        return l10n.shareFillFromDoc;
+    }
+  }
 }
 
 String buildSharedPrompt(
@@ -99,13 +122,13 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Share to Hermes',
+                      context.l10n.shareToHermes,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: HermesSpacing.sm),
                     Text(
                       widget.sharedText.trim().isEmpty
-                          ? 'No text shared'
+                          ? context.l10n.shareNoText
                           : widget.sharedText,
                       maxLines: 4,
                       overflow: TextOverflow.ellipsis,
@@ -114,7 +137,11 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                     if (widget.sharedFiles.isNotEmpty) ...[
                       const SizedBox(height: HermesSpacing.md),
                       Text(
-                        '${widget.sharedFiles.length} ${widget.sharedFiles.length == 1 ? 'attachment' : 'attachments'}',
+                        widget.sharedFiles.length == 1
+                            ? context.l10n.shareAttachmentOne
+                            : context.l10n.shareAttachmentsMany(
+                                widget.sharedFiles.length,
+                              ),
                         style: Theme.of(context).textTheme.titleSmall,
                       ),
                       const SizedBox(height: HermesSpacing.xs),
@@ -137,7 +164,7 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                     ],
                     const SizedBox(height: HermesSpacing.lg),
                     Text(
-                      'Action',
+                      context.l10n.shareActionTitle,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     const SizedBox(height: HermesSpacing.sm),
@@ -148,7 +175,9 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                         for (final action in ShareFavoriteAction.values)
                           ChoiceChip(
                             avatar: Icon(action.icon, size: 18),
-                            label: Text(action.label),
+                            label: Text(
+                              action.labelLocalized(context.l10n),
+                            ),
                             selected: _action == action,
                             onSelected: (_) => setState(() => _action = action),
                           ),
@@ -156,7 +185,7 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                     ),
                     const SizedBox(height: HermesSpacing.lg),
                     Text(
-                      'Destination',
+                      context.l10n.shareDestinationTitle,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                     RadioGroup<NewChatMode>(
@@ -166,19 +195,21 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                       },
                       child: Column(
                         children: [
-                          const RadioListTile<NewChatMode>(
+                          RadioListTile<NewChatMode>(
                             contentPadding: EdgeInsets.zero,
-                            title: Text('Quick chat'),
-                            subtitle: Text('Auto-archives after 72 hours'),
+                            title: Text(context.l10n.modeQuickChat),
+                            subtitle: Text(
+                              context.l10n.quickChatRetention,
+                            ),
                             value: NewChatMode.quickChat,
                           ),
                           RadioListTile<NewChatMode>(
                             contentPadding: EdgeInsets.zero,
-                            title: const Text('Project chat'),
+                            title: Text(context.l10n.modeProjectChat),
                             subtitle: Text(
                               widget.projectChatEnabled
-                                  ? 'Choose an active Project next'
-                                  : 'No active Projects on this Gateway',
+                                  ? context.l10n.chooseActiveProjectNext
+                                  : context.l10n.noActiveProjects,
                             ),
                             value: NewChatMode.projectChat,
                             enabled: widget.projectChatEnabled,
@@ -196,7 +227,7 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(context.l10n.cancel),
                 ),
                 const SizedBox(width: HermesSpacing.sm),
                 FilledButton.icon(
@@ -204,7 +235,7 @@ class _ShareTextReviewSheetState extends State<ShareTextReviewSheet> {
                     context,
                   ).pop(ShareTextDecision(action: _action, mode: _mode)),
                   icon: const Icon(Icons.arrow_forward_rounded),
-                  label: const Text('Continue'),
+                  label: Text(context.l10n.continueAction),
                 ),
               ],
             ),

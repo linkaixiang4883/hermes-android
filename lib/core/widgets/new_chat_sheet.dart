@@ -14,6 +14,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/hermes_project.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/new_chat_options.dart';
@@ -41,7 +42,7 @@ class NewChatSheet extends StatelessWidget {
               HermesSpacing.sm,
             ),
             child: Text(
-              'Start something new',
+              context.l10n.startSomethingNew,
               style: tokens.typography.title.copyWith(color: tokens.onSurface),
             ),
           ),
@@ -50,8 +51,11 @@ class NewChatSheet extends StatelessWidget {
               enabled: option.enabled,
               // A disabled row still explains itself, so the reason replaces
               // the description rather than hiding beside it.
-              title: Text(option.label),
-              subtitle: Text(option.disabledReason ?? option.description),
+              title: Text(option.mode.labelLocalized(context.l10n)),
+              subtitle: Text(
+                option.disabledReason ??
+                    option.mode.descriptionLocalized(context.l10n),
+              ),
               leading: Icon(
                 option.mode == NewChatMode.quickChat
                     ? Icons.bolt_outlined
@@ -94,7 +98,7 @@ class ProjectPickerSheet extends StatelessWidget {
               HermesSpacing.sm,
             ),
             child: Text(
-              'Which project?',
+              context.l10n.whichProject,
               style: tokens.typography.title.copyWith(color: tokens.onSurface),
             ),
           ),

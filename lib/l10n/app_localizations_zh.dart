@@ -1709,6 +1709,238 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noViewMatches => '没有对话符合该视图。';
 
   @override
+  String get spaceCountOne => '1 个空间';
+
+  @override
+  String spaceCountMany(int count) {
+    return '$count 个空间';
+  }
+
+  @override
+  String get projectsToCreateNone => '无需新建项目';
+
+  @override
+  String get projectsToCreateOne => '需新建 1 个项目';
+
+  @override
+  String projectsToCreateMany(int count) {
+    return '需新建 $count 个项目';
+  }
+
+  @override
+  String migrationResultSummary(int linked, int created) {
+    return '已迁移 $linked 个聊天 · 已创建 $created 个项目';
+  }
+
+  @override
+  String migrationUnlinkedHint(int count) {
+    return '$count 个聊天仍在本地空间，可安全重试';
+  }
+
+  @override
+  String get assignedChatOne => '1 个已分配聊天';
+
+  @override
+  String assignedChatsMany(int count) {
+    return '$count 个已分配聊天';
+  }
+
+  @override
+  String migrationNoMatchHint(String assigned) {
+    return '没有服务端项目匹配此名称 · $assigned';
+  }
+
+  @override
+  String migrationMatchHint(String name, String assigned) {
+    return '匹配 $name · $assigned';
+  }
+
+  @override
+  String get continueAction => '继续';
+
+  @override
+  String get migrationNothingToDo => '没有可迁移的内容';
+
+  @override
+  String get migrationNoSpacesHint => '该连接下没有本地空间，项目已是唯一的组织方式。';
+
+  @override
+  String get migrationPreviewTitle => '迁移预览';
+
+  @override
+  String get migrationDryRunHint => '尚未移动任何内容——这只是迁移预演。';
+
+  @override
+  String get migrationComplete => '迁移完成';
+
+  @override
+  String get migrationIncomplete => '迁移未完成';
+
+  @override
+  String get migrationFailedHint => '迁移失败，本地空间原样保留。';
+
+  @override
+  String get migratingAction => '正在迁移……';
+
+  @override
+  String get migrateAction => '迁移';
+
+  @override
+  String get migrationMatched => '已匹配';
+
+  @override
+  String get closeAction => '关闭';
+
+  @override
+  String get loadingLabel => '加载中';
+
+  @override
+  String get offLabel => '关';
+
+  @override
+  String get quickChatRetention => '72 小时后自动归档';
+
+  @override
+  String get modeProjectChat => '项目聊天';
+
+  @override
+  String get modeProjectChatDesc => '在项目中持久工作，与桌面端共享。';
+
+  @override
+  String get modeQuickChat => '闪聊';
+
+  @override
+  String get modeQuickChatDesc => '一次性问答，72 小时后自动归档，值得保留的仍会被记住。';
+
+  @override
+  String get stillLoadingProjects => '正在加载项目。';
+
+  @override
+  String get gatewayNoProjectsHint => '该网关尚不支持项目，请升级网关以便跨设备整理聊天。';
+
+  @override
+  String get createProjectFirst => '先新建一个项目，聊天才能住进去。';
+
+  @override
+  String get startSomethingNew => '新建聊天';
+
+  @override
+  String get whichProject => '选择哪个项目？';
+
+  @override
+  String get shareToHermes => '分享到 Hermes';
+
+  @override
+  String get shareNoText => '没有分享文本';
+
+  @override
+  String get shareAttachmentOne => '1 个附件';
+
+  @override
+  String shareAttachmentsMany(int count) {
+    return '$count 个附件';
+  }
+
+  @override
+  String get shareActionTitle => '操作';
+
+  @override
+  String get shareUseAsIs => '直接使用';
+
+  @override
+  String get shareSummarize => '总结';
+
+  @override
+  String get shareExplain => '解释';
+
+  @override
+  String get shareResearch => '研究';
+
+  @override
+  String get shareExtractTasks => '提取任务';
+
+  @override
+  String get shareRemember => '记住';
+
+  @override
+  String get shareFillFromDoc => '按文档填表';
+
+  @override
+  String get shareDestinationTitle => '目标';
+
+  @override
+  String get chooseActiveProjectNext => '下一步选择一个活跃项目';
+
+  @override
+  String get noActiveProjects => '该网关上没有活跃项目';
+
+  @override
+  String get enterPassphrase => '输入口令。';
+
+  @override
+  String get enterBackupPassphrase => '输入该备份的口令。';
+
+  @override
+  String get useEightChars => '至少 8 个字符。';
+
+  @override
+  String get passphrasesMismatch => '两次输入的口令不一致。';
+
+  @override
+  String get protectBackupTitle => '给备份加个口令';
+
+  @override
+  String get protectBackupDesc =>
+      '文件包含你的 API 密钥和 Dashboard 密码，已加密。没有口令将无法恢复备份。';
+
+  @override
+  String get passphraseField => '口令';
+
+  @override
+  String get confirmPassphraseField => '确认口令';
+
+  @override
+  String get showPassphrase => '显示口令';
+
+  @override
+  String get hidePassphrase => '隐藏口令';
+
+  @override
+  String get backupExportFailed => '备份导出失败。';
+
+  @override
+  String get exportAction => '导出';
+
+  @override
+  String get importAction => '导入';
+
+  @override
+  String get restoreBackup => '恢复';
+
+  @override
+  String get mergeAction => '合并';
+
+  @override
+  String get mergeDesc => '从备份添加和更新连接，其余保留。';
+
+  @override
+  String get replaceAction => '替换';
+
+  @override
+  String get replaceDesc => '删除备份中没有的连接。';
+
+  @override
+  String get backupRestoreTitle => '备份与恢复';
+
+  @override
+  String get backupCardDesc => '把连接和设置存到加密文件，重装或换设备后恢复。';
+
+  @override
+  String backupExportedTo(String destination) {
+    return '备份已导出到 $destination';
+  }
+
+  @override
   String get nothingHereView => '空空如也';
 
   @override

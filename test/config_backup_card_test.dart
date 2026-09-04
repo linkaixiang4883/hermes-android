@@ -4,8 +4,12 @@ import 'package:hermes_android/core/services/config_backup.dart';
 import 'package:hermes_android/core/services/config_backup_service.dart';
 import 'package:hermes_android/core/widgets/config_backup_card.dart';
 
+import 'support/l10n_test_utils.dart';
+
 Widget wrap(Widget child) {
   return MaterialApp(
+    localizationsDelegates: l10nTestDelegates,
+    supportedLocales: l10nTestSupportedLocales,
     home: Scaffold(body: SingleChildScrollView(child: child)),
   );
 }

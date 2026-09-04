@@ -1,7 +1,13 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/hermes_project.dart';
 import 'package:hermes_android/core/services/projects_repository.dart';
 import 'package:hermes_android/core/utils/new_chat_options.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
+/// English copy for builder tests (mirrors the app wiring).
+AppLocalizations _enL10n() =>
+    lookupAppLocalizations(const Locale('en'));
 
 final _now = DateTime.utc(2026, 8, 28, 9, 30, 0);
 
@@ -53,6 +59,7 @@ void main() {
       // reason*, never dropped from the sheet.
       for (final support in ProjectsSupport.values) {
         final options = buildNewChatOptions(
+          l10n: _enL10n(),
           support: support,
           projects: const [],
         );
@@ -66,6 +73,7 @@ void main() {
 
     test('enables Project chat when the gateway hosts a project', () {
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.native,
         projects: [_project()],
       );
@@ -79,6 +87,7 @@ void main() {
       // Quick chat needs no project and no `projects.*` family, so a legacy
       // gateway must still be able to start a chat from Home.
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.unsupported,
         projects: const [],
       );
@@ -91,6 +100,7 @@ void main() {
     test('disables Project chat on a gateway without Projects, with a reason '
         'naming the gateway rather than the user', () {
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.unsupported,
         projects: const [],
       );
@@ -103,6 +113,7 @@ void main() {
     test('a supported gateway with no project yet asks for one instead of '
         'blaming the gateway', () {
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.native,
         projects: const [],
       );
@@ -119,6 +130,7 @@ void main() {
         // The capability registry treats an absent advertisement as `unknown`;
         // telling the user Projects are missing before probing would be a lie.
         final options = buildNewChatOptions(
+          l10n: _enL10n(),
           support: ProjectsSupport.unknown,
           projects: const [],
         );
@@ -132,6 +144,7 @@ void main() {
 
     test('an archived project cannot enable Project chat', () {
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.native,
         projects: [_project(archived: true)],
       );
@@ -143,6 +156,7 @@ void main() {
       // Offline must degrade the freshness of the project list, not the
       // ability to start work in a project the user already knows about.
       final options = buildNewChatOptions(
+        l10n: _enL10n(),
         support: ProjectsSupport.native,
         projects: [_project()],
         isStale: true,
@@ -160,7 +174,7 @@ void main() {
           support: ProjectsSupport.native,
         );
 
-        final options = buildNewChatOptionsFor(view);
+        final options = buildNewChatOptionsFor(_enL10n(), view);
 
         expect(_option(options, NewChatMode.projectChat).enabled, isTrue);
         expect(_option(options, NewChatMode.quickChat).enabled, isTrue);

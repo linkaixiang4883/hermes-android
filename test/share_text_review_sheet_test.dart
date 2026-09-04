@@ -4,6 +4,8 @@ import 'package:hermes_android/core/services/android_share_intent_service.dart';
 import 'package:hermes_android/core/utils/new_chat_options.dart';
 import 'package:hermes_android/core/widgets/share_text_review_sheet.dart';
 
+import 'support/l10n_test_utils.dart';
+
 void main() {
   test(
     'favorite actions produce explicit prompts without losing source text',
@@ -41,6 +43,8 @@ void main() {
   testWidgets('lists shared attachments for confirmation', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: ShareTextReviewSheet(
             sharedText: '',
@@ -76,6 +80,8 @@ void main() {
     ShareTextDecision? decision;
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: Builder(
             builder: (context) => TextButton(
@@ -116,7 +122,9 @@ void main() {
 
   testWidgets('explains when Project chat is unavailable', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: ShareTextReviewSheet(
             sharedText: 'Shared text',

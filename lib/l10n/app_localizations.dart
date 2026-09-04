@@ -3194,6 +3194,432 @@ abstract class AppLocalizations {
   /// **'No conversation matches this view.'**
   String get noViewMatches;
 
+  /// No description provided for @spaceCountOne.
+  ///
+  /// In en, this message translates to:
+  /// **'1 space'**
+  String get spaceCountOne;
+
+  /// No description provided for @spaceCountMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} spaces'**
+  String spaceCountMany(int count);
+
+  /// No description provided for @projectsToCreateNone.
+  ///
+  /// In en, this message translates to:
+  /// **'no new projects needed'**
+  String get projectsToCreateNone;
+
+  /// No description provided for @projectsToCreateOne.
+  ///
+  /// In en, this message translates to:
+  /// **'1 project to create'**
+  String get projectsToCreateOne;
+
+  /// No description provided for @projectsToCreateMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} projects to create'**
+  String projectsToCreateMany(int count);
+
+  /// No description provided for @migrationResultSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{linked} chats migrated · {created} projects created'**
+  String migrationResultSummary(int linked, int created);
+
+  /// No description provided for @migrationUnlinkedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chats stayed in local Spaces and can be retried safely.'**
+  String migrationUnlinkedHint(int count);
+
+  /// No description provided for @assignedChatOne.
+  ///
+  /// In en, this message translates to:
+  /// **'1 assigned chat'**
+  String get assignedChatOne;
+
+  /// No description provided for @assignedChatsMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} assigned chats'**
+  String assignedChatsMany(int count);
+
+  /// No description provided for @migrationNoMatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No server project matches this name · {assigned}'**
+  String migrationNoMatchHint(String assigned);
+
+  /// No description provided for @migrationMatchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Matches {name} · {assigned}'**
+  String migrationMatchHint(String name, String assigned);
+
+  /// No description provided for @continueAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get continueAction;
+
+  /// No description provided for @migrationNothingToDo.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing to migrate'**
+  String get migrationNothingToDo;
+
+  /// No description provided for @migrationNoSpacesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No local spaces were found for this connection, so Projects are already the only organization in use here.'**
+  String get migrationNoSpacesHint;
+
+  /// No description provided for @migrationPreviewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration preview'**
+  String get migrationPreviewTitle;
+
+  /// No description provided for @migrationDryRunHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing has moved yet — this is only what a migration would do.'**
+  String get migrationDryRunHint;
+
+  /// No description provided for @migrationComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration complete'**
+  String get migrationComplete;
+
+  /// No description provided for @migrationIncomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration incomplete'**
+  String get migrationIncomplete;
+
+  /// No description provided for @migrationFailedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Migration failed. Local Spaces were kept unchanged.'**
+  String get migrationFailedHint;
+
+  /// No description provided for @migratingAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrating…'**
+  String get migratingAction;
+
+  /// No description provided for @migrateAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Migrate'**
+  String get migrateAction;
+
+  /// No description provided for @migrationMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get migrationMatched;
+
+  /// No description provided for @closeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get closeAction;
+
+  /// No description provided for @loadingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading'**
+  String get loadingLabel;
+
+  /// No description provided for @offLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get offLabel;
+
+  /// No description provided for @quickChatRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-archives after 72 hours'**
+  String get quickChatRetention;
+
+  /// No description provided for @modeProjectChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Project chat'**
+  String get modeProjectChat;
+
+  /// No description provided for @modeProjectChatDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Durable work inside one of your projects, shared with Desktop.'**
+  String get modeProjectChatDesc;
+
+  /// No description provided for @modeQuickChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick chat'**
+  String get modeQuickChat;
+
+  /// No description provided for @modeQuickChatDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'A one-off question. Archives itself after 72 hours; anything worth keeping is still remembered.'**
+  String get modeQuickChatDesc;
+
+  /// No description provided for @stillLoadingProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'Still loading your projects.'**
+  String get stillLoadingProjects;
+
+  /// No description provided for @gatewayNoProjectsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This gateway does not host projects yet. Update the gateway to organize chats across your devices.'**
+  String get gatewayNoProjectsHint;
+
+  /// No description provided for @createProjectFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a project first, then chats can live inside it.'**
+  String get createProjectFirst;
+
+  /// No description provided for @startSomethingNew.
+  ///
+  /// In en, this message translates to:
+  /// **'Start something new'**
+  String get startSomethingNew;
+
+  /// No description provided for @whichProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Which project?'**
+  String get whichProject;
+
+  /// No description provided for @shareToHermes.
+  ///
+  /// In en, this message translates to:
+  /// **'Share to Hermes'**
+  String get shareToHermes;
+
+  /// No description provided for @shareNoText.
+  ///
+  /// In en, this message translates to:
+  /// **'No text shared'**
+  String get shareNoText;
+
+  /// No description provided for @shareAttachmentOne.
+  ///
+  /// In en, this message translates to:
+  /// **'1 attachment'**
+  String get shareAttachmentOne;
+
+  /// No description provided for @shareAttachmentsMany.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} attachments'**
+  String shareAttachmentsMany(int count);
+
+  /// No description provided for @shareActionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Action'**
+  String get shareActionTitle;
+
+  /// No description provided for @shareUseAsIs.
+  ///
+  /// In en, this message translates to:
+  /// **'Use as is'**
+  String get shareUseAsIs;
+
+  /// No description provided for @shareSummarize.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize'**
+  String get shareSummarize;
+
+  /// No description provided for @shareExplain.
+  ///
+  /// In en, this message translates to:
+  /// **'Explain'**
+  String get shareExplain;
+
+  /// No description provided for @shareResearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Research'**
+  String get shareResearch;
+
+  /// No description provided for @shareExtractTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Extract tasks'**
+  String get shareExtractTasks;
+
+  /// No description provided for @shareRemember.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember'**
+  String get shareRemember;
+
+  /// No description provided for @shareFillFromDoc.
+  ///
+  /// In en, this message translates to:
+  /// **'Fill from document'**
+  String get shareFillFromDoc;
+
+  /// No description provided for @shareDestinationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Destination'**
+  String get shareDestinationTitle;
+
+  /// No description provided for @chooseActiveProjectNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an active Project next'**
+  String get chooseActiveProjectNext;
+
+  /// No description provided for @noActiveProjects.
+  ///
+  /// In en, this message translates to:
+  /// **'No active Projects on this Gateway'**
+  String get noActiveProjects;
+
+  /// No description provided for @enterPassphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a passphrase.'**
+  String get enterPassphrase;
+
+  /// No description provided for @enterBackupPassphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the passphrase for this backup.'**
+  String get enterBackupPassphrase;
+
+  /// No description provided for @useEightChars.
+  ///
+  /// In en, this message translates to:
+  /// **'Use at least 8 characters.'**
+  String get useEightChars;
+
+  /// No description provided for @passphrasesMismatch.
+  ///
+  /// In en, this message translates to:
+  /// **'The two passphrases do not match.'**
+  String get passphrasesMismatch;
+
+  /// No description provided for @protectBackupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Protect this backup'**
+  String get protectBackupTitle;
+
+  /// No description provided for @protectBackupDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'The file contains your API keys and dashboard password, so it is encrypted. Without this passphrase the backup cannot be restored.'**
+  String get protectBackupDesc;
+
+  /// No description provided for @passphraseField.
+  ///
+  /// In en, this message translates to:
+  /// **'Passphrase'**
+  String get passphraseField;
+
+  /// No description provided for @confirmPassphraseField.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm passphrase'**
+  String get confirmPassphraseField;
+
+  /// No description provided for @showPassphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Show passphrase'**
+  String get showPassphrase;
+
+  /// No description provided for @hidePassphrase.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide passphrase'**
+  String get hidePassphrase;
+
+  /// No description provided for @backupExportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The backup could not be exported.'**
+  String get backupExportFailed;
+
+  /// No description provided for @exportAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get exportAction;
+
+  /// No description provided for @importAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get importAction;
+
+  /// No description provided for @restoreBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get restoreBackup;
+
+  /// No description provided for @mergeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Merge'**
+  String get mergeAction;
+
+  /// No description provided for @mergeDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Add and update connections from the backup, keep the rest.'**
+  String get mergeDesc;
+
+  /// No description provided for @replaceAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Replace'**
+  String get replaceAction;
+
+  /// No description provided for @replaceDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete connections that are not in the backup.'**
+  String get replaceDesc;
+
+  /// No description provided for @backupRestoreTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup & restore'**
+  String get backupRestoreTitle;
+
+  /// No description provided for @backupCardDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Save your connections and settings to an encrypted file, then restore them after reinstalling or on another device.'**
+  String get backupCardDesc;
+
+  /// No description provided for @backupExportedTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup exported — {destination}'**
+  String backupExportedTo(String destination);
+
   /// No description provided for @nothingHereView.
   ///
   /// In en, this message translates to:

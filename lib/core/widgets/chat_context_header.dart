@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../theme/hermes_theme.dart';
 
 /// Transport state shown in the sticky chat context header.
@@ -56,7 +58,7 @@ class ChatContextHeader extends StatelessWidget {
               _ContextChip(
                 icon: Icons.folder_outlined,
                 label: project == null || project.isEmpty
-                    ? 'Unassigned'
+                    ? context.l10n.spaceUnassigned
                     : project,
               ),
               const SizedBox(width: HermesSpacing.sm),
@@ -64,7 +66,7 @@ class ChatContextHeader extends StatelessWidget {
               const SizedBox(width: HermesSpacing.sm),
               _ContextChip(
                 icon: Icons.psychology_outlined,
-                label: _reasoningLabel(reasoningEffort),
+                label: _reasoningLabel(context.l10n, reasoningEffort),
               ),
               const SizedBox(width: HermesSpacing.sm),
               Semantics(
@@ -95,9 +97,9 @@ class ChatContextHeader extends StatelessWidget {
     };
   }
 
-  String _reasoningLabel(String value) {
+  String _reasoningLabel(AppLocalizations l10n, String value) {
     final normalized = value.trim().toLowerCase();
-    if (normalized.isEmpty || normalized == 'none') return 'Off';
+    if (normalized.isEmpty || normalized == 'none') return l10n.offLabel;
     return normalized[0].toUpperCase() + normalized.substring(1);
   }
 }

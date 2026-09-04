@@ -24,6 +24,7 @@
 /// See `docs/ANDROID_DAILY_DRIVER_ROADMAP.md`.
 library;
 
+import '../../l10n/app_localizations.dart';
 import '../models/hermes_project.dart';
 import '../models/session.dart';
 import '../services/projects_repository.dart';
@@ -51,6 +52,16 @@ enum NewChatMode {
     }
   }
 
+  /// Localized variant of [label] for UI call sites.
+  String labelLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case NewChatMode.projectChat:
+        return l10n.modeProjectChat;
+      case NewChatMode.quickChat:
+        return l10n.modeQuickChat;
+    }
+  }
+
   String get description {
     switch (this) {
       case NewChatMode.projectChat:
@@ -58,6 +69,16 @@ enum NewChatMode {
       case NewChatMode.quickChat:
         return 'A one-off question. Archives itself after 72 hours; anything '
             'worth keeping is still remembered.';
+    }
+  }
+
+  /// Localized variant of [description] for UI call sites.
+  String descriptionLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case NewChatMode.projectChat:
+        return l10n.modeProjectChatDesc;
+      case NewChatMode.quickChat:
+        return l10n.modeQuickChatDesc;
     }
   }
 }
@@ -87,6 +108,7 @@ class NewChatOption {
 /// from the offline cache, which deliberately does not disable anything — the
 /// user may still start work in a project they already know about.
 List<NewChatOption> buildNewChatOptions({
+  required AppLocalizations l10n,
   required ProjectsSupport support,
   required List<HermesProject> projects,
   bool isStale = false,
@@ -96,15 +118,11 @@ List<NewChatOption> buildNewChatOptions({
   String? projectChatBlocker;
   switch (support) {
     case ProjectsSupport.unknown:
-      projectChatBlocker = 'Still loading your projects.';
+      projectChatBlocker = l10n.stillLoadingProjects;
     case ProjectsSupport.unsupported:
-      projectChatBlocker =
-          'This gateway does not host projects yet. Update the gateway to '
-          'organize chats across your devices.';
+      projectChatBlocker = l10n.gatewayNoProjectsHint;
     case ProjectsSupport.native:
-      projectChatBlocker = usable.isEmpty
-          ? 'Create a project first, then chats can live inside it.'
-          : null;
+      projectChatBlocker = usable.isEmpty ? l10n.createProjectFirst : null;
   }
 
   return [
@@ -121,8 +139,12 @@ List<NewChatOption> buildNewChatOptions({
 
 /// Convenience over [buildNewChatOptions] reading a [ProjectsView] directly,
 /// so a caller cannot drift from the repository's own view of support.
-List<NewChatOption> buildNewChatOptionsFor(ProjectsView view) {
+List<NewChatOption> buildNewChatOptionsFor(
+  AppLocalizations l10n,
+  ProjectsView view,
+) {
   return buildNewChatOptions(
+    l10n: l10n,
     support: view.support,
     projects: view.projects,
     isStale: view.isStale,

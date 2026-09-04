@@ -1044,6 +1044,146 @@
   "promoteToProject": "Promote to project",
   "unassignedViewEmpty": "Every conversation is already assigned to a Project.",
   "noViewMatches": "No conversation matches this view.",
+  "spaceCountOne": "1 space",
+  "spaceCountMany": "{count} spaces",
+  "@spaceCountMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "projectsToCreateNone": "no new projects needed",
+  "projectsToCreateOne": "1 project to create",
+  "projectsToCreateMany": "{count} projects to create",
+  "@projectsToCreateMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "migrationResultSummary": "{linked} chats migrated · {created} projects created",
+  "@migrationResultSummary": {
+    "placeholders": {
+      "linked": {
+        "type": "int"
+      },
+      "created": {
+        "type": "int"
+      }
+    }
+  },
+  "migrationUnlinkedHint": "{count} chats stayed in local Spaces and can be retried safely.",
+  "@migrationUnlinkedHint": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "assignedChatOne": "1 assigned chat",
+  "assignedChatsMany": "{count} assigned chats",
+  "@assignedChatsMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "migrationNoMatchHint": "No server project matches this name · {assigned}",
+  "@migrationNoMatchHint": {
+    "placeholders": {
+      "assigned": {
+        "type": "String"
+      }
+    }
+  },
+  "migrationMatchHint": "Matches {name} · {assigned}",
+  "@migrationMatchHint": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "assigned": {
+        "type": "String"
+      }
+    }
+  },
+  "continueAction": "Continue",
+  "migrationNothingToDo": "Nothing to migrate",
+  "migrationNoSpacesHint": "No local spaces were found for this connection, so Projects are already the only organization in use here.",
+  "migrationPreviewTitle": "Migration preview",
+  "migrationDryRunHint": "Nothing has moved yet — this is only what a migration would do.",
+  "migrationComplete": "Migration complete",
+  "migrationIncomplete": "Migration incomplete",
+  "migrationFailedHint": "Migration failed. Local Spaces were kept unchanged.",
+  "migratingAction": "Migrating…",
+  "migrateAction": "Migrate",
+  "migrationMatched": "Matched",
+  "closeAction": "Close",
+  "loadingLabel": "Loading",
+  "offLabel": "Off",
+  "quickChatRetention": "Auto-archives after 72 hours",
+  "modeProjectChat": "Project chat",
+  "modeProjectChatDesc": "Durable work inside one of your projects, shared with Desktop.",
+  "modeQuickChat": "Quick chat",
+  "modeQuickChatDesc": "A one-off question. Archives itself after 72 hours; anything worth keeping is still remembered.",
+  "stillLoadingProjects": "Still loading your projects.",
+  "gatewayNoProjectsHint": "This gateway does not host projects yet. Update the gateway to organize chats across your devices.",
+  "createProjectFirst": "Create a project first, then chats can live inside it.",
+  "startSomethingNew": "Start something new",
+  "whichProject": "Which project?",
+  "shareToHermes": "Share to Hermes",
+  "shareNoText": "No text shared",
+  "shareAttachmentOne": "1 attachment",
+  "shareAttachmentsMany": "{count} attachments",
+  "@shareAttachmentsMany": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shareActionTitle": "Action",
+  "shareUseAsIs": "Use as is",
+  "shareSummarize": "Summarize",
+  "shareExplain": "Explain",
+  "shareResearch": "Research",
+  "shareExtractTasks": "Extract tasks",
+  "shareRemember": "Remember",
+  "shareFillFromDoc": "Fill from document",
+  "shareDestinationTitle": "Destination",
+  "chooseActiveProjectNext": "Choose an active Project next",
+  "noActiveProjects": "No active Projects on this Gateway",
+  "enterPassphrase": "Enter a passphrase.",
+  "enterBackupPassphrase": "Enter the passphrase for this backup.",
+  "useEightChars": "Use at least 8 characters.",
+  "passphrasesMismatch": "The two passphrases do not match.",
+  "protectBackupTitle": "Protect this backup",
+  "protectBackupDesc": "The file contains your API keys and dashboard password, so it is encrypted. Without this passphrase the backup cannot be restored.",
+  "passphraseField": "Passphrase",
+  "confirmPassphraseField": "Confirm passphrase",
+  "showPassphrase": "Show passphrase",
+  "hidePassphrase": "Hide passphrase",
+  "backupExportFailed": "The backup could not be exported.",
+  "exportAction": "Export",
+  "importAction": "Import",
+  "restoreBackup": "Restore",
+  "mergeAction": "Merge",
+  "mergeDesc": "Add and update connections from the backup, keep the rest.",
+  "replaceAction": "Replace",
+  "replaceDesc": "Delete connections that are not in the backup.",
+  "backupRestoreTitle": "Backup & restore",
+  "backupCardDesc": "Save your connections and settings to an encrypted file, then restore them after reinstalling or on another device.",
+  "backupExportedTo": "Backup exported — {destination}",
+  "@backupExportedTo": {
+    "placeholders": {
+      "destination": {
+        "type": "String"
+      }
+    }
+  },
   "nothingHereView": "Nothing here",
   "noMatchesView": "No matches",
   "projectFallback": "Project",
