@@ -559,7 +559,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Couldn’t prepare the shared files.')),
+        SnackBar(
+          content: Text(context.l10n.prepareSharedFilesFailed),
+        ),
       );
       return;
     }
@@ -663,7 +665,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     switch (destination) {
       case HermesDestination.chats:
         return WorkspaceSessionsScreen(
-          title: 'Chats',
+          title: context.l10n.chatsTab,
           view: WorkspaceSessionView.all,
           embedded: true,
           load: _loadWorkspaceSessionsData,
@@ -680,12 +682,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           );
         }
         if (repository == null) {
-          return const ErrorState.unsupported(
-            title: 'Projects unavailable',
-            message:
-                'Projects need a Desktop Gateway connection. Add the Desktop '
-                'Gateway URL to this connection to organize chats across '
-                'your devices.',
+          return ErrorState.unsupported(
+            title: context.l10n.projectsUnavailable,
+            message: context.l10n.projectsNeedDesktopHint,
           );
         }
         return ProjectsPane(
@@ -746,7 +745,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final launched = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (launched || !mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Could not open the Hermes dashboard.')),
+      SnackBar(
+        content: Text(context.l10n.openDashboardFailed),
+      ),
     );
   }
 
@@ -814,7 +815,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         .firstOrNull;
 
     final project =
-        known ?? HermesProject(id: projectId, slug: projectId, name: 'Project');
+        known ??
+        HermesProject(
+          id: projectId,
+          slug: projectId,
+          name: context.l10n.projectFallback,
+        );
 
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -843,7 +849,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   void _openInbox() {
     _push(
       Scaffold(
-        appBar: AppBar(title: const Text('Inbox')),
+        appBar: AppBar(title: Text(context.l10n.inboxTitle)),
         body: ActivityPane(
           key: _inboxKey,
           loadFeed: _loadActivity,
@@ -1005,9 +1011,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         messenger.hideCurrentSnackBar();
         messenger.showSnackBar(
           SnackBar(
-            content: const Text('Couldn’t create Project chat'),
+            content: Text(context.l10n.createProjectChatFailed),
             action: SnackBarAction(
-              label: 'Retry',
+              label: context.l10n.retry,
               onPressed: () => unawaited(
                 _finishNewChat(
                   draft,
@@ -1228,8 +1234,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           if (_destination == HermesDestination.home) ...[
             IconButton(
               tooltip: _inboxActionCount == 0
-                  ? 'Open inbox'
-                  : 'Open inbox ($_inboxActionCount)',
+                  ? context.l10n.openInbox
+                  : context.l10n.openInboxCount(_inboxActionCount),
               onPressed: _openInbox,
               icon: Badge(
                 isLabelVisible: _inboxActionCount > 0,
@@ -1238,7 +1244,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               ),
             ),
             IconButton(
-              tooltip: 'Search all chats',
+              tooltip: context.l10n.searchAllChats,
               onPressed: () =>
                   _openWorkspaceSessionView(WorkspaceSessionView.search),
               icon: const Icon(Icons.search),
@@ -1266,7 +1272,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 key: kWorkspaceNewChatButtonKey,
                 onPressed: () => unawaited(_startNewChat()),
                 icon: const Icon(Icons.add),
-                label: const Text('New'),
+                label: Text(context.l10n.newAction),
               )
             : null,
         builder: _pane,

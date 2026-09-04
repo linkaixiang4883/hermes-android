@@ -1610,4 +1610,127 @@ class AppLocalizationsZh extends AppLocalizations {
   String aiModelsLoadFailed(String error) {
     return 'AI 搜索模型加载失败：$error';
   }
+
+  @override
+  String downloadedFile(String filename) {
+    return '$filename 已下载';
+  }
+
+  @override
+  String saveFileTitle(String filename) {
+    return '保存 $filename';
+  }
+
+  @override
+  String get folderEmpty => '文件夹为空';
+
+  @override
+  String get folderEmptyHint => '该服务器文件夹中没有可见文件。';
+
+  @override
+  String get previewTruncated => '预览已截断';
+
+  @override
+  String get projectsUnavailable => '项目不可用';
+
+  @override
+  String get projectsNeedDesktopHint =>
+      '项目需要 Desktop Gateway 连接，请给该连接加上 Desktop Gateway URL，以便跨设备整理聊天。';
+
+  @override
+  String get createProjectChatFailed => '项目聊天创建失败';
+
+  @override
+  String get loadConversationsFailed => '对话加载失败';
+
+  @override
+  String get loadConversationsHint => '请检查连接后重试。';
+
+  @override
+  String get searchConversations => '搜索对话';
+
+  @override
+  String get archivedViewEmpty => '超过保留期的闪聊会显示在这里。';
+
+  @override
+  String get newAction => '新建';
+
+  @override
+  String get openInbox => '打开收件箱';
+
+  @override
+  String openInboxCount(int n) {
+    return '打开收件箱（$n）';
+  }
+
+  @override
+  String get binaryPreviewUnavailable => '二进制预览不可用，请下载文件后打开。';
+
+  @override
+  String get previewUnavailable => '无预览';
+
+  @override
+  String get previewFailed => '文件预览失败';
+
+  @override
+  String get previewFailedHint => '请检查 Dashboard 连接后重试。';
+
+  @override
+  String get inboxTitle => '收件箱';
+
+  @override
+  String get openDashboardFailed => '无法打开 Hermes Dashboard';
+
+  @override
+  String get searchAllChats => '搜索全部聊天';
+
+  @override
+  String get downloadAction => '下载';
+
+  @override
+  String get fileRefAdded => '文件引用已加入聊天';
+
+  @override
+  String get addToChat => '加入聊天';
+
+  @override
+  String get promotedToProject => '已转正为项目聊天';
+
+  @override
+  String get promoteConversationFailed => '对话转正失败';
+
+  @override
+  String get promoteToProject => '转正为项目聊天';
+
+  @override
+  String get unassignedViewEmpty => '所有对话都已归入项目。';
+
+  @override
+  String get noViewMatches => '没有对话符合该视图。';
+
+  @override
+  String get nothingHereView => '空空如也';
+
+  @override
+  String get noMatchesView => '无匹配';
+
+  @override
+  String get projectFallback => '项目';
+
+  @override
+  String get archivedFilterEmpty => '已归档对话显示在这里。';
+
+  @override
+  String get recentFilterEmpty => '过去七天没有任何变化。';
+
+  @override
+  String get loadFilesFailed => '文件加载失败';
+
+  @override
+  String get prepareSharedFilesFailed => '分享文件准备失败';
+
+  @override
+  String downloadFailed(String error) {
+    return '下载失败：$error';
+  }
 }

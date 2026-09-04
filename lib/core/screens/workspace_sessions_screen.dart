@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/session.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/relative_time.dart';
@@ -247,16 +248,18 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
       }
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Promoted to a Project')));
+      ).showSnackBar(
+        SnackBar(content: Text(context.l10n.promotedToProject)),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _promoting.remove(session.id));
       if (error is QuickChatPromotionCancelled) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Couldn’t promote conversation'),
+          content: Text(context.l10n.promoteConversationFailed),
           action: SnackBarAction(
-            label: 'Retry',
+            label: context.l10n.retry,
             onPressed: () => unawaited(_promote(session)),
           ),
         ),
@@ -274,8 +277,8 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
                   child: LoadingSkeleton(rows: 5),
                 )
               : ErrorState(
-                  title: 'Could not load conversations',
-                  message: 'Check the connection and try again.',
+                  title: context.l10n.loadConversationsFailed,
+                  message: context.l10n.loadConversationsHint,
                   onRetry: _load,
                 )
         : _buildLoaded(data);
@@ -329,12 +332,12 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
             key: kWorkspaceSessionSearchKey,
             autofocus: widget.view == WorkspaceSessionView.search,
             decoration: InputDecoration(
-              hintText: 'Search conversations',
+              hintText: context.l10n.searchConversations,
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _query.isEmpty
                   ? null
                   : IconButton(
-                      tooltip: 'Clear search',
+                      tooltip: context.l10n.clearSearch,
                       onPressed: () => setState(() => _query = ''),
                       icon: const Icon(Icons.clear),
                     ),
@@ -349,7 +352,9 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
           if (sessions.isEmpty)
             EmptyState(
               icon: _emptyIcon,
-              title: _query.isEmpty ? 'Nothing here' : 'No matches',
+              title: _query.isEmpty
+                  ? context.l10n.nothingHereView
+                  : context.l10n.noMatchesView,
               message: _emptyMessage,
             )
           else
@@ -439,7 +444,9 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
                       status: session.isActive
                           ? HermesStatus.running
                           : HermesStatus.completed,
-                      label: session.isActive ? 'Running' : 'Done',
+                      label: session.isActive
+                          ? context.l10n.runningStateLabel
+                          : context.l10n.doneStateLabel,
                     ),
                     if (projectLabel != null)
                       _MetaChip(
@@ -448,7 +455,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
                       )
                     else
                       _MetaChip(
-                        label: 'Unassigned',
+                        label: context.l10n.spaceUnassigned,
                         icon: Icons.inbox_outlined,
                       ),
                     Text(
@@ -469,7 +476,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : IconButton(
-                    tooltip: 'Promote to project',
+                    tooltip: context.l10n.promoteToProject,
                     onPressed: () => unawaited(_promote(session)),
                     icon: const Icon(Icons.drive_file_move_outline),
                   ),
@@ -496,20 +503,17 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen> {
     if (widget.embedded) {
       return switch (_filter) {
         WorkspaceChatsFilter.unassigned =>
-          'Every conversation is already assigned to a Project.',
-        WorkspaceChatsFilter.archived => 'Archived conversations appear here.',
-        WorkspaceChatsFilter.recent =>
-          'Nothing changed in the last seven days.',
-        WorkspaceChatsFilter.all => 'No conversation matches this view.',
+          context.l10n.unassignedViewEmpty,
+        WorkspaceChatsFilter.archived => context.l10n.archivedFilterEmpty,
+        WorkspaceChatsFilter.recent => context.l10n.recentFilterEmpty,
+        WorkspaceChatsFilter.all => context.l10n.noViewMatches,
       };
     }
     return switch (widget.view) {
-      WorkspaceSessionView.unassigned =>
-        'Every conversation is already assigned to a Project.',
-      WorkspaceSessionView.archivedQuick =>
-        'Quick chats appear here after their retention period.',
-      WorkspaceSessionView.all ||
-      WorkspaceSessionView.search => 'No conversation matches this view.',
+      WorkspaceSessionView.unassigned => context.l10n.unassignedViewEmpty,
+      WorkspaceSessionView.archivedQuick => context.l10n.archivedViewEmpty,
+      WorkspaceSessionView.all || WorkspaceSessionView.search =>
+        context.l10n.noViewMatches,
     };
   }
 

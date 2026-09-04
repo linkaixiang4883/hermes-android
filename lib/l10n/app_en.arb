@@ -993,6 +993,72 @@
   "workspaceNavHint": "Projects, Activity — new navigation",
   "spaceAllChats": "All chats",
   "aiModelsLoadFailed": "Could not load AI search models: {error}",
+  "downloadedFile": "{filename} downloaded",
+  "@downloadedFile": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "saveFileTitle": "Save {filename}",
+  "@saveFileTitle": {
+    "placeholders": {
+      "filename": {
+        "type": "String"
+      }
+    }
+  },
+  "folderEmpty": "Folder is empty",
+  "folderEmptyHint": "There are no visible files in this server folder.",
+  "previewTruncated": "Preview truncated",
+  "projectsUnavailable": "Projects unavailable",
+  "projectsNeedDesktopHint": "Projects need a Desktop Gateway connection. Add the Desktop Gateway URL to this connection to organize chats across your devices.",
+  "createProjectChatFailed": "Couldn’t create Project chat",
+  "loadConversationsFailed": "Could not load conversations",
+  "loadConversationsHint": "Check the connection and try again.",
+  "searchConversations": "Search conversations",
+  "archivedViewEmpty": "Quick chats appear here after their retention period.",
+  "newAction": "New",
+  "openInbox": "Open inbox",
+  "openInboxCount": "Open inbox ({n})",
+  "@openInboxCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "binaryPreviewUnavailable": "Binary preview is unavailable. Download the file to open it.",
+  "previewUnavailable": "Preview unavailable",
+  "previewFailed": "Could not preview file",
+  "previewFailedHint": "Check the Dashboard connection and try again.",
+  "inboxTitle": "Inbox",
+  "openDashboardFailed": "Could not open the Hermes dashboard.",
+  "searchAllChats": "Search all chats",
+  "downloadAction": "Download",
+  "fileRefAdded": "File reference added to chat",
+  "addToChat": "Add to chat",
+  "promotedToProject": "Promoted to a Project",
+  "promoteConversationFailed": "Couldn’t promote conversation",
+  "promoteToProject": "Promote to project",
+  "unassignedViewEmpty": "Every conversation is already assigned to a Project.",
+  "noViewMatches": "No conversation matches this view.",
+  "nothingHereView": "Nothing here",
+  "noMatchesView": "No matches",
+  "projectFallback": "Project",
+  "archivedFilterEmpty": "Archived conversations appear here.",
+  "recentFilterEmpty": "Nothing changed in the last seven days.",
+  "loadFilesFailed": "Could not load files",
+  "prepareSharedFilesFailed": "Couldn’t prepare the shared files.",
+  "downloadFailed": "Download failed: {error}",
+  "@downloadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "@aiModelsLoadFailed": {
     "placeholders": {
       "error": {

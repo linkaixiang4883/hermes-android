@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../services/remote_files_client.dart';
 import '../theme/hermes_theme.dart';
 import '../widgets/hermes_components.dart';
@@ -135,6 +136,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Future<void> _download() async {
     final selected = _selected;
     if (selected == null || _downloading) return;
+    final l10n = context.l10n;
     setState(() => _downloading = true);
     try {
       final download = await widget.files.download(selected.path);
@@ -143,20 +145,26 @@ class _FilesScreenState extends State<FilesScreen> {
         await saver(download);
       } else {
         await FilePicker.platform.saveFile(
-          dialogTitle: 'Save ${download.filename}',
+          dialogTitle: l10n.saveFileTitle(download.filename),
           fileName: download.filename,
           bytes: download.bytes,
         );
       }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${download.filename} downloaded')),
+        SnackBar(
+          content: Text(context.l10n.downloadedFile(download.filename)),
+        ),
       );
     } catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Download failed: $error')));
+      ).showSnackBar(
+        SnackBar(
+          content: Text(context.l10n.downloadFailed('$error')),
+        ),
+      );
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -164,11 +172,11 @@ class _FilesScreenState extends State<FilesScreen> {
 
   Widget _directoryBody() {
     if (_entries.isEmpty) {
-      return const Center(
+      return Center(
         child: EmptyState(
           icon: Icons.folder_open_outlined,
-          title: 'Folder is empty',
-          message: 'There are no visible files in this server folder.',
+          title: context.l10n.folderEmpty,
+          message: context.l10n.folderEmptyHint,
         ),
       );
     }
@@ -225,9 +233,9 @@ class _FilesScreenState extends State<FilesScreen> {
               if (preview != null)
                 StatusChip(status: HermesStatus.idle, label: preview.language),
               if (preview?.truncated == true)
-                const StatusChip(
+                StatusChip(
                   status: HermesStatus.blocked,
-                  label: 'Preview truncated',
+                  label: context.l10n.previewTruncated,
                 ),
             ],
           ),
@@ -237,8 +245,8 @@ class _FilesScreenState extends State<FilesScreen> {
               child: SingleChildScrollView(
                 child: SelectableText(
                   preview?.binary == true
-                      ? 'Binary preview is unavailable. Download the file to open it.'
-                      : preview?.text ?? 'Preview unavailable',
+                      ? context.l10n.binaryPreviewUnavailable
+                      : preview?.text ?? context.l10n.previewUnavailable,
                   style: tokens.typography.body.copyWith(
                     fontFamily: 'monospace',
                     color: tokens.onSurface,
@@ -254,7 +262,7 @@ class _FilesScreenState extends State<FilesScreen> {
                 child: OutlinedButton.icon(
                   onPressed: _downloading ? null : _download,
                   icon: const Icon(Icons.download_outlined),
-                  label: const Text('Download'),
+                  label: Text(context.l10n.downloadAction),
                 ),
               ),
               if (widget.onAddToChat != null) ...[
@@ -264,13 +272,15 @@ class _FilesScreenState extends State<FilesScreen> {
                     onPressed: () {
                       widget.onAddToChat!(selected.path);
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('File reference added to chat'),
+                        SnackBar(
+                          content: Text(
+                            context.l10n.fileRefAdded,
+                          ),
                         ),
                       );
                     },
                     icon: const Icon(Icons.add_comment_outlined),
-                    label: const Text('Add to chat'),
+                    label: Text(context.l10n.addToChat),
                   ),
                 ),
               ],
@@ -287,9 +297,9 @@ class _FilesScreenState extends State<FilesScreen> {
       return Center(
         child: ErrorState(
           title: _selected == null
-              ? 'Could not load files'
-              : 'Could not preview file',
-          message: 'Check the Dashboard connection and try again.',
+              ? context.l10n.loadFilesFailed
+              : context.l10n.previewFailed,
+          message: context.l10n.previewFailedHint,
           onRetry: _selected == null
               ? () => unawaited(
                   _path == null ? _loadRoot() : _openDirectory(_path!),
@@ -305,7 +315,7 @@ class _FilesScreenState extends State<FilesScreen> {
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       leading: IconButton(onPressed: _back, icon: const Icon(Icons.arrow_back)),
-      title: const Text('Files'),
+      title: Text(context.l10n.files),
       bottom: _selected == null && _path != null
           ? PreferredSize(
               preferredSize: const Size.fromHeight(42),

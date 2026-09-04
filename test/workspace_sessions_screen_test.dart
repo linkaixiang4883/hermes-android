@@ -4,6 +4,8 @@ import 'package:hermes_android/core/models/session.dart';
 import 'package:hermes_android/core/screens/workspace_sessions_screen.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 
+import 'support/l10n_test_utils.dart';
+
 Session _session(
   String id,
   String title, {
@@ -167,6 +169,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: hermesTheme(Brightness.dark),
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: WorkspaceSessionsScreen(
           title: 'Chats',
           view: WorkspaceSessionView.all,
@@ -196,6 +200,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: hermesTheme(Brightness.dark),
+          localizationsDelegates: l10nTestDelegates,
+          supportedLocales: l10nTestSupportedLocales,
           home: WorkspaceSessionsScreen(
             title: 'Chats',
             view: WorkspaceSessionView.all,
@@ -274,6 +280,8 @@ void main() {
       await tester.pumpWidget(
         MaterialApp(
           theme: hermesTheme(Brightness.dark),
+          localizationsDelegates: l10nTestDelegates,
+          supportedLocales: l10nTestSupportedLocales,
           home: WorkspaceSessionsScreen(
             title: 'Chats',
             view: WorkspaceSessionView.all,
@@ -342,6 +350,8 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         theme: hermesTheme(Brightness.dark),
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: WorkspaceSessionsScreen(
           title: 'Archived Quick chats',
           view: WorkspaceSessionView.archivedQuick,

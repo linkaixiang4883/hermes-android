@@ -1671,4 +1671,132 @@ class AppLocalizationsEn extends AppLocalizations {
   String aiModelsLoadFailed(String error) {
     return 'Could not load AI search models: $error';
   }
+
+  @override
+  String downloadedFile(String filename) {
+    return '$filename downloaded';
+  }
+
+  @override
+  String saveFileTitle(String filename) {
+    return 'Save $filename';
+  }
+
+  @override
+  String get folderEmpty => 'Folder is empty';
+
+  @override
+  String get folderEmptyHint =>
+      'There are no visible files in this server folder.';
+
+  @override
+  String get previewTruncated => 'Preview truncated';
+
+  @override
+  String get projectsUnavailable => 'Projects unavailable';
+
+  @override
+  String get projectsNeedDesktopHint =>
+      'Projects need a Desktop Gateway connection. Add the Desktop Gateway URL to this connection to organize chats across your devices.';
+
+  @override
+  String get createProjectChatFailed => 'Couldn’t create Project chat';
+
+  @override
+  String get loadConversationsFailed => 'Could not load conversations';
+
+  @override
+  String get loadConversationsHint => 'Check the connection and try again.';
+
+  @override
+  String get searchConversations => 'Search conversations';
+
+  @override
+  String get archivedViewEmpty =>
+      'Quick chats appear here after their retention period.';
+
+  @override
+  String get newAction => 'New';
+
+  @override
+  String get openInbox => 'Open inbox';
+
+  @override
+  String openInboxCount(int n) {
+    return 'Open inbox ($n)';
+  }
+
+  @override
+  String get binaryPreviewUnavailable =>
+      'Binary preview is unavailable. Download the file to open it.';
+
+  @override
+  String get previewUnavailable => 'Preview unavailable';
+
+  @override
+  String get previewFailed => 'Could not preview file';
+
+  @override
+  String get previewFailedHint =>
+      'Check the Dashboard connection and try again.';
+
+  @override
+  String get inboxTitle => 'Inbox';
+
+  @override
+  String get openDashboardFailed => 'Could not open the Hermes dashboard.';
+
+  @override
+  String get searchAllChats => 'Search all chats';
+
+  @override
+  String get downloadAction => 'Download';
+
+  @override
+  String get fileRefAdded => 'File reference added to chat';
+
+  @override
+  String get addToChat => 'Add to chat';
+
+  @override
+  String get promotedToProject => 'Promoted to a Project';
+
+  @override
+  String get promoteConversationFailed => 'Couldn’t promote conversation';
+
+  @override
+  String get promoteToProject => 'Promote to project';
+
+  @override
+  String get unassignedViewEmpty =>
+      'Every conversation is already assigned to a Project.';
+
+  @override
+  String get noViewMatches => 'No conversation matches this view.';
+
+  @override
+  String get nothingHereView => 'Nothing here';
+
+  @override
+  String get noMatchesView => 'No matches';
+
+  @override
+  String get projectFallback => 'Project';
+
+  @override
+  String get archivedFilterEmpty => 'Archived conversations appear here.';
+
+  @override
+  String get recentFilterEmpty => 'Nothing changed in the last seven days.';
+
+  @override
+  String get loadFilesFailed => 'Could not load files';
+
+  @override
+  String get prepareSharedFilesFailed => 'Couldn’t prepare the shared files.';
+
+  @override
+  String downloadFailed(String error) {
+    return 'Download failed: $error';
+  }
 }

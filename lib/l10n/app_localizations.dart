@@ -3013,6 +3013,234 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not load AI search models: {error}'**
   String aiModelsLoadFailed(String error);
+
+  /// No description provided for @downloadedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'{filename} downloaded'**
+  String downloadedFile(String filename);
+
+  /// No description provided for @saveFileTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Save {filename}'**
+  String saveFileTitle(String filename);
+
+  /// No description provided for @folderEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder is empty'**
+  String get folderEmpty;
+
+  /// No description provided for @folderEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'There are no visible files in this server folder.'**
+  String get folderEmptyHint;
+
+  /// No description provided for @previewTruncated.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview truncated'**
+  String get previewTruncated;
+
+  /// No description provided for @projectsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects unavailable'**
+  String get projectsUnavailable;
+
+  /// No description provided for @projectsNeedDesktopHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects need a Desktop Gateway connection. Add the Desktop Gateway URL to this connection to organize chats across your devices.'**
+  String get projectsNeedDesktopHint;
+
+  /// No description provided for @createProjectChatFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t create Project chat'**
+  String get createProjectChatFailed;
+
+  /// No description provided for @loadConversationsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load conversations'**
+  String get loadConversationsFailed;
+
+  /// No description provided for @loadConversationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the connection and try again.'**
+  String get loadConversationsHint;
+
+  /// No description provided for @searchConversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Search conversations'**
+  String get searchConversations;
+
+  /// No description provided for @archivedViewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick chats appear here after their retention period.'**
+  String get archivedViewEmpty;
+
+  /// No description provided for @newAction.
+  ///
+  /// In en, this message translates to:
+  /// **'New'**
+  String get newAction;
+
+  /// No description provided for @openInbox.
+  ///
+  /// In en, this message translates to:
+  /// **'Open inbox'**
+  String get openInbox;
+
+  /// No description provided for @openInboxCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Open inbox ({n})'**
+  String openInboxCount(int n);
+
+  /// No description provided for @binaryPreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Binary preview is unavailable. Download the file to open it.'**
+  String get binaryPreviewUnavailable;
+
+  /// No description provided for @previewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview unavailable'**
+  String get previewUnavailable;
+
+  /// No description provided for @previewFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not preview file'**
+  String get previewFailed;
+
+  /// No description provided for @previewFailedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check the Dashboard connection and try again.'**
+  String get previewFailedHint;
+
+  /// No description provided for @inboxTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Inbox'**
+  String get inboxTitle;
+
+  /// No description provided for @openDashboardFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the Hermes dashboard.'**
+  String get openDashboardFailed;
+
+  /// No description provided for @searchAllChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Search all chats'**
+  String get searchAllChats;
+
+  /// No description provided for @downloadAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Download'**
+  String get downloadAction;
+
+  /// No description provided for @fileRefAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'File reference added to chat'**
+  String get fileRefAdded;
+
+  /// No description provided for @addToChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Add to chat'**
+  String get addToChat;
+
+  /// No description provided for @promotedToProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Promoted to a Project'**
+  String get promotedToProject;
+
+  /// No description provided for @promoteConversationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t promote conversation'**
+  String get promoteConversationFailed;
+
+  /// No description provided for @promoteToProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Promote to project'**
+  String get promoteToProject;
+
+  /// No description provided for @unassignedViewEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Every conversation is already assigned to a Project.'**
+  String get unassignedViewEmpty;
+
+  /// No description provided for @noViewMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No conversation matches this view.'**
+  String get noViewMatches;
+
+  /// No description provided for @nothingHereView.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing here'**
+  String get nothingHereView;
+
+  /// No description provided for @noMatchesView.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get noMatchesView;
+
+  /// No description provided for @projectFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Project'**
+  String get projectFallback;
+
+  /// No description provided for @archivedFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived conversations appear here.'**
+  String get archivedFilterEmpty;
+
+  /// No description provided for @recentFilterEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing changed in the last seven days.'**
+  String get recentFilterEmpty;
+
+  /// No description provided for @loadFilesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load files'**
+  String get loadFilesFailed;
+
+  /// No description provided for @prepareSharedFilesFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t prepare the shared files.'**
+  String get prepareSharedFilesFailed;
+
+  /// No description provided for @downloadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Download failed: {error}'**
+  String downloadFailed(String error);
 }
 
 class _AppLocalizationsDelegate

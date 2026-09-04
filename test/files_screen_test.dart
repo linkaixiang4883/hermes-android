@@ -4,6 +4,8 @@ import 'package:hermes_android/core/screens/files_screen.dart';
 import 'package:hermes_android/core/services/remote_files_client.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 
+import 'support/l10n_test_utils.dart';
+
 class _FakeFilesDataSource implements RemoteFilesDataSource {
   Object? listError;
   final openedDirectories = <String>[];
@@ -59,6 +61,8 @@ Future<void> _pump(
 }) => tester.pumpWidget(
   MaterialApp(
     theme: hermesTheme(Brightness.dark),
+    localizationsDelegates: l10nTestDelegates,
+    supportedLocales: l10nTestSupportedLocales,
     home: FilesScreen(
       files: source,
       onAddToChat: onAddToChat,
