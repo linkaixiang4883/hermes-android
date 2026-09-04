@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/models/gateway_turn_contract.dart';
@@ -5,8 +6,13 @@ import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 import 'package:hermes_android/core/services/gateway_turn_journal.dart';
 import 'package:hermes_android/core/services/gateway_turn_recovery.dart';
 import 'package:hermes_android/core/utils/home_turn_signals.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
 import 'support/memory_turn_journal_store.dart';
+
+/// English copy for builder tests (mirrors the app wiring).
+AppLocalizations _enL10n() =>
+    lookupAppLocalizations(const Locale('en'));
 
 const _digestA =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -75,6 +81,7 @@ HomeTurnSignals _signals(
   DateTime? now,
 }) {
   return buildHomeTurnSignals(
+    l10n: _enL10n(),
     snapshot: GatewayTurnJournalSnapshot(bindings: bindings, entries: entries),
     now: now ?? _now,
     connectionId: connectionId,
@@ -410,6 +417,7 @@ void main() {
       );
 
       final signals = await readHomeTurnSignals(
+        l10n: _enL10n(),
         journal: journal,
         connectionId: 'connection-a',
         endpointDigest: _digestA,
@@ -426,6 +434,7 @@ void main() {
 
       expect(
         readHomeTurnSignals(
+          l10n: _enL10n(),
           journal: GatewayTurnJournal(store: store),
           connectionId: 'connection-a',
           endpointDigest: _digestA,

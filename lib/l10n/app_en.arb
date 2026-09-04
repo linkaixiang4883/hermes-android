@@ -1111,6 +1111,44 @@
     }
   },
   "continueAction": "Continue",
+  "browseServerFiles": "Browse server files",
+  "insertRemoteFileRef": "Insert a remote @file reference",
+  "copyCode": "Copy code",
+  "wrapLines": "Wrap lines",
+  "codeCopied": "Code copied",
+  "textSizeSystem": "System",
+  "textSizeSmall": "Small",
+  "textSizeStandard": "Default",
+  "textSizeLarge": "Large",
+  "textSizeExtraLarge": "Extra large",
+  "textSizeUseSystem": "Use Android accessibility text size exactly.",
+  "textSizePercent": "{percent}% of the Android text size.",
+  "@textSizePercent": {
+    "placeholders": {
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "textSizeCurrent": "Text size: {label}",
+  "@textSizeCurrent": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "attentionRecoveryFailed": "Turn recovery failed",
+  "attentionWaitingInput": "Waiting for your input",
+  "attentionLastFailed": "The last turn failed",
+  "delegatedTaskWithGoal": "Delegated task: {goal}",
+  "@delegatedTaskWithGoal": {
+    "placeholders": {
+      "goal": {
+        "type": "String"
+      }
+    }
+  },
   "migrationNothingToDo": "Nothing to migrate",
   "migrationNoSpacesHint": "No local spaces were found for this connection, so Projects are already the only organization in use here.",
   "migrationPreviewTitle": "Migration preview",

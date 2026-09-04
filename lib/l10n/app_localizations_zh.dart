@@ -1759,6 +1759,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get continueAction => '继续';
 
   @override
+  String get browseServerFiles => '浏览服务器文件';
+
+  @override
+  String get insertRemoteFileRef => '插入远程 @file 引用';
+
+  @override
+  String get copyCode => '复制代码';
+
+  @override
+  String get wrapLines => '折行显示';
+
+  @override
+  String get codeCopied => '代码已复制';
+
+  @override
+  String get textSizeSystem => '系统';
+
+  @override
+  String get textSizeSmall => '小';
+
+  @override
+  String get textSizeStandard => '默认';
+
+  @override
+  String get textSizeLarge => '大';
+
+  @override
+  String get textSizeExtraLarge => '特大';
+
+  @override
+  String get textSizeUseSystem => '完全使用 Android 无障碍字号。';
+
+  @override
+  String textSizePercent(int percent) {
+    return 'Android 字号的 $percent%';
+  }
+
+  @override
+  String textSizeCurrent(String label) {
+    return '文字大小：$label';
+  }
+
+  @override
+  String get attentionRecoveryFailed => '回合恢复失败';
+
+  @override
+  String get attentionWaitingInput => '等待你的输入';
+
+  @override
+  String get attentionLastFailed => '上个回合失败了';
+
+  @override
+  String delegatedTaskWithGoal(String goal) {
+    return '代办任务：$goal';
+  }
+
+  @override
   String get migrationNothingToDo => '没有可迁移的内容';
 
   @override

@@ -1825,6 +1825,64 @@ class AppLocalizationsEn extends AppLocalizations {
   String get continueAction => 'Continue';
 
   @override
+  String get browseServerFiles => 'Browse server files';
+
+  @override
+  String get insertRemoteFileRef => 'Insert a remote @file reference';
+
+  @override
+  String get copyCode => 'Copy code';
+
+  @override
+  String get wrapLines => 'Wrap lines';
+
+  @override
+  String get codeCopied => 'Code copied';
+
+  @override
+  String get textSizeSystem => 'System';
+
+  @override
+  String get textSizeSmall => 'Small';
+
+  @override
+  String get textSizeStandard => 'Default';
+
+  @override
+  String get textSizeLarge => 'Large';
+
+  @override
+  String get textSizeExtraLarge => 'Extra large';
+
+  @override
+  String get textSizeUseSystem =>
+      'Use Android accessibility text size exactly.';
+
+  @override
+  String textSizePercent(int percent) {
+    return '$percent% of the Android text size.';
+  }
+
+  @override
+  String textSizeCurrent(String label) {
+    return 'Text size: $label';
+  }
+
+  @override
+  String get attentionRecoveryFailed => 'Turn recovery failed';
+
+  @override
+  String get attentionWaitingInput => 'Waiting for your input';
+
+  @override
+  String get attentionLastFailed => 'The last turn failed';
+
+  @override
+  String delegatedTaskWithGoal(String goal) {
+    return 'Delegated task: $goal';
+  }
+
+  @override
   String get migrationNothingToDo => 'Nothing to migrate';
 
   @override

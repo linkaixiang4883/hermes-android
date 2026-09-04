@@ -1001,8 +1001,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             ),
             ListTile(
               leading: const Icon(Icons.cloud_outlined),
-              title: const Text('Browse server files'),
-              subtitle: const Text('Insert a remote @file reference'),
+              title: Text(context.l10n.browseServerFiles),
+              subtitle: Text(context.l10n.insertRemoteFileRef),
               onTap: () {
                 Navigator.pop(sheetContext);
                 unawaited(_pickServerFile());
@@ -2221,7 +2221,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       if (!update.isComplete) {
         _gatewayTurnStatus = GatewayTurnStatus(
           kind: 'subagent',
-          text: 'Delegated task: ${update.goal}',
+          text: context.l10n.delegatedTaskWithGoal(update.goal),
         );
       }
     });

@@ -3266,6 +3266,108 @@ abstract class AppLocalizations {
   /// **'Continue'**
   String get continueAction;
 
+  /// No description provided for @browseServerFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse server files'**
+  String get browseServerFiles;
+
+  /// No description provided for @insertRemoteFileRef.
+  ///
+  /// In en, this message translates to:
+  /// **'Insert a remote @file reference'**
+  String get insertRemoteFileRef;
+
+  /// No description provided for @copyCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy code'**
+  String get copyCode;
+
+  /// No description provided for @wrapLines.
+  ///
+  /// In en, this message translates to:
+  /// **'Wrap lines'**
+  String get wrapLines;
+
+  /// No description provided for @codeCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Code copied'**
+  String get codeCopied;
+
+  /// No description provided for @textSizeSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get textSizeSystem;
+
+  /// No description provided for @textSizeSmall.
+  ///
+  /// In en, this message translates to:
+  /// **'Small'**
+  String get textSizeSmall;
+
+  /// No description provided for @textSizeStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get textSizeStandard;
+
+  /// No description provided for @textSizeLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get textSizeLarge;
+
+  /// No description provided for @textSizeExtraLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Extra large'**
+  String get textSizeExtraLarge;
+
+  /// No description provided for @textSizeUseSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Use Android accessibility text size exactly.'**
+  String get textSizeUseSystem;
+
+  /// No description provided for @textSizePercent.
+  ///
+  /// In en, this message translates to:
+  /// **'{percent}% of the Android text size.'**
+  String textSizePercent(int percent);
+
+  /// No description provided for @textSizeCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Text size: {label}'**
+  String textSizeCurrent(String label);
+
+  /// No description provided for @attentionRecoveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn recovery failed'**
+  String get attentionRecoveryFailed;
+
+  /// No description provided for @attentionWaitingInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your input'**
+  String get attentionWaitingInput;
+
+  /// No description provided for @attentionLastFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The last turn failed'**
+  String get attentionLastFailed;
+
+  /// No description provided for @delegatedTaskWithGoal.
+  ///
+  /// In en, this message translates to:
+  /// **'Delegated task: {goal}'**
+  String delegatedTaskWithGoal(String goal);
+
   /// No description provided for @migrationNothingToDo.
   ///
   /// In en, this message translates to:

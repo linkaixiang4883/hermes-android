@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../l10n/app_localizations.dart';
+
 /// App-wide, non-secret reading-size choices stored independently of profiles.
 ///
 /// Explicit choices multiply the Android/OS [TextScaler], including its
@@ -29,6 +31,28 @@ enum TextSizePreference {
   String get description => followsSystemExactly
       ? 'Use Android accessibility text size exactly.'
       : '${(multiplier * 100).round()}% of the Android text size.';
+
+  /// Localized variant of [label] for UI call sites.
+  String labelLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case TextSizePreference.system:
+        return l10n.textSizeSystem;
+      case TextSizePreference.small:
+        return l10n.textSizeSmall;
+      case TextSizePreference.standard:
+        return l10n.textSizeStandard;
+      case TextSizePreference.large:
+        return l10n.textSizeLarge;
+      case TextSizePreference.extraLarge:
+        return l10n.textSizeExtraLarge;
+    }
+  }
+
+  /// Localized variant of [description] for UI call sites.
+  String descriptionLocalized(AppLocalizations l10n) {
+    if (followsSystemExactly) return l10n.textSizeUseSystem;
+    return l10n.textSizePercent((multiplier * 100).round());
+  }
 
   static TextSizePreference fromStorage(String? value) {
     return TextSizePreference.values.firstWhere(

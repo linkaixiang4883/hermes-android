@@ -209,7 +209,9 @@ void main() {
     );
 
     await tester.pumpWidget(
-      const MaterialApp(
+      MaterialApp(
+        localizationsDelegates: l10nTestDelegates,
+        supportedLocales: l10nTestSupportedLocales,
         home: Scaffold(
           body: MessageBubble(
             content: '```dart\nvoid main() => print("Hermes");\n```',

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../l10n/l10n.dart';
+
 /// Splits raw markdown into text segments and fenced code blocks.
 ///
 /// Returns a list of [String] (regular markdown, rendered by MarkdownBody)
@@ -55,8 +57,8 @@ class _MarkdownCodeBlockState extends State<MarkdownCodeBlock> {
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(
-        const SnackBar(
-          content: Text('Code copied'),
+        SnackBar(
+          content: Text(context.l10n.codeCopied),
           duration: Duration(seconds: 2),
         ),
       );
@@ -141,7 +143,7 @@ class _MarkdownCodeBlockState extends State<MarkdownCodeBlock> {
                     ),
                   ),
                 Tooltip(
-                  message: 'Wrap lines',
+                  message: context.l10n.wrapLines,
                   child: IconButton(
                     icon: const Icon(Icons.wrap_text, size: 18),
                     onPressed: () => setState(() => _wrap = true),
@@ -152,7 +154,7 @@ class _MarkdownCodeBlockState extends State<MarkdownCodeBlock> {
                   ),
                 ),
                 Tooltip(
-                  message: 'Copy code',
+                  message: context.l10n.copyCode,
                   child: IconButton(
                     icon: const Icon(Icons.copy_outlined, size: 18),
                     onPressed: _copy,
