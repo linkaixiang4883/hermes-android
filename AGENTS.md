@@ -25,14 +25,16 @@
 - 模型层 getter 保持英文（测试断言依赖），UI 显示用 `Localized` 变体（如 `statusLabelLocalized`）
 - 测试文件 pump widget 时需要 l10n 包裹：`test/support/l10n_test_utils.dart` 的 `l10nTestDelegates`/`l10nTestSupportedLocales`
 
-## 汉化改动范围（基于 v2.0.1+2131）
+## 汉化改动范围（基线 v2.1.0，2026-09-04 merge `0ea6938`→`6205192`）
 
 - 7 个屏幕（chat/cron/memory/session_list/settings/skills + main.dart）约 300 处替换
 - 9 个 widgets 组件（对话框/卡片/语音/附件）
 - 3 个模型的状态标签本地化变体（gateway_activity/insight/sensitive_prompt）
 - voice_composer_controller 注入 `AppLocalizations? l10n`（null 时保持英文，测试兼容）
 - main.dart：`HermesApp.getLocale/setLocale` + 设置页语言切换器（System/English/中文，prefs key `app_locale`）
-- 15 个测试文件加 l10n delegates
+- 15 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加，如 `widget_test`/`chat_turn_notification_wiring_test`）
+- v2.1.0 merge 新增 key：`messageActions/you/searchHintAi/searchHintServer/searchHintLocal/restoreConfiguration`（~316 条）
+- **后续汉化缺口（v2.1.0 新功能，仍为英文硬编码）**：Workspace/Projects/Home/More 新屏、Space scope chip、AI/全文搜索内部串（mode 名、tooltip、空态、错误态）、消息代码块按钮（Copy code/Wrap lines）、config backup 卡片内部
 
 ## 拉取上游 / Merge 流程
 
