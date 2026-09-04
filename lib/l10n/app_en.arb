@@ -811,5 +811,130 @@
   "moreNeedsAssets": "Needs a server-authoritative Assets index in the Hermes Gateway.",
   "moreNeedsPinUndo": "Needs durable pin ordering, batch mutation, and undo contracts in the Hermes Gateway.",
   "moreNeedsFiling": "Needs a correction-aware filing contract in the Hermes Gateway.",
-  "cronRowTitle": "Cron"
+  "cronRowTitle": "Cron",
+  "archiveProjectTitle": "Archive {name}?",
+  "@archiveProjectTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "archiveHintPane": "The Project will move to Archived. Its chats and files stay intact, and you can restore it at any time.",
+  "archiveHintDetail": "The Project will move to Archived. Its chats and files stay intact, and you can restore it later.",
+  "projectsUnreachableHint": "Check that the gateway is running and reachable, then try again.",
+  "noProjectsYet": "No projects yet",
+  "noProjectsHint": "Projects group related chats, files, and activity, and stay in sync with Hermes on your computer.",
+  "createProjectAction": "Create a project",
+  "projectsTitle": "Projects",
+  "reviewLocalSpaces": "Review local spaces",
+  "archivedSection": "Archived",
+  "compatExplanation": "This Hermes gateway is older than server-side projects, so chats stay grouped on this device only. Update Hermes to share the same projects across your devices.",
+  "compatModeTitle": "Compatibility mode",
+  "noSpacesOnDevice": "No spaces on this device",
+  "noSpacesHint": "Chats from this gateway are not grouped yet. Grouping stays on this phone until the gateway can host projects.",
+  "onThisDevice": "On this device",
+  "projectsOffline": "Offline — showing the last known projects.",
+  "activeChip": "Active",
+  "projectActions": "Project actions",
+  "renameProjectItem": "Rename project",
+  "archiveProjectItem": "Archive project",
+  "restoreProjectItem": "Restore project",
+  "deleteProjectItem": "Delete project",
+  "enterName": "Enter a name",
+  "nameField": "Name",
+  "oneChat": "1 chat",
+  "countChats": "{count} chats",
+  "@countChats": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "createAction": "Create",
+  "moveConversation": "Move conversation",
+  "renameProjectTitle": "Rename {name}",
+  "@renameProjectTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteProjectTitle": "Delete {name}?",
+  "@deleteProjectTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "deleteHintDetail": "This permanently deletes the Project. Chats will not be deleted; they’ll return to Unassigned.",
+  "movedToProject": "Moved to {label}",
+  "@movedToProject": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "newProject": "New project",
+  "spaceUnassigned": "Unassigned",
+  "moveToSpace": "Move to space",
+  "moveChat": "Move chat",
+  "projectActionFailed": "Could not {action} the project: {error}",
+  "@projectActionFailed": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "projectChatsUnavailable": "Project chats unavailable",
+  "projectChatsUnavailableHint": "This Hermes gateway does not support opening a project yet. Update Hermes on the server to browse a project from your phone.",
+  "couldNotOpenProject": "Could not open this project",
+  "couldNotOpenProjectHint": "Check that the gateway is running and reachable, then try again.",
+  "noChatsYet": "No chats yet",
+  "noChatsYetHint": "Chats you start in this project will appear here, on every device signed in to this Hermes.",
+  "noMatches": "No matches",
+  "noMatchesHint": "No chats in this project match “{query}”.",
+  "@noMatchesHint": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "chatsTab": "Chats",
+  "overviewTab": "Overview",
+  "activityTab": "Activity",
+  "conversationsInProject": "Conversations in this project",
+  "repositoriesHeader": "Repositories",
+  "locationHeader": "Location",
+  "noFoldersYet": "No folders yet",
+  "noFoldersHint": "The server has not reported folders for this project yet. Global Files stays available from More.",
+  "foldersHeader": "Folders",
+  "assetsUnavailable": "Assets unavailable",
+  "assetsUnavailableHint": "Assets need a server-authoritative Assets index in the Hermes Gateway before they can be shown per project.",
+  "noActivityYet": "No activity yet",
+  "noActivityHint": "Chats in this project will show their state and last activity here.",
+  "runningStateLabel": "Running",
+  "doneStateLabel": "Done",
+  "chatsOffline": "Offline — showing the last known chats",
+  "clearSearch": "Clear search",
+  "archiveAction": "Archive",
+  "moveConversationFailed": "Couldn’t move conversation",
+  "deleteProjectFailed": "Couldn’t delete project",
+  "couldNotActionProject": "Couldn’t {action} project",
+  "@couldNotActionProject": {
+    "placeholders": {
+      "action": {
+        "type": "String"
+      }
+    }
+  }
 }

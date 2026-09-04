@@ -10,6 +10,8 @@ import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/projects_pane.dart';
 import 'package:hermes_android/core/widgets/space_migration_preview.dart';
+
+import 'support/l10n_test_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 Map<String, dynamic> _projectJson({
@@ -148,6 +150,8 @@ Future<void> _pumpPane(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(brightness),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(

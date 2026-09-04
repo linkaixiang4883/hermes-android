@@ -1345,4 +1345,231 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get cronRowTitle => 'Cron';
+
+  @override
+  String archiveProjectTitle(String name) {
+    return 'Archive $name?';
+  }
+
+  @override
+  String get archiveHintPane =>
+      'The Project will move to Archived. Its chats and files stay intact, and you can restore it at any time.';
+
+  @override
+  String get archiveHintDetail =>
+      'The Project will move to Archived. Its chats and files stay intact, and you can restore it later.';
+
+  @override
+  String get projectsUnreachableHint =>
+      'Check that the gateway is running and reachable, then try again.';
+
+  @override
+  String get noProjectsYet => 'No projects yet';
+
+  @override
+  String get noProjectsHint =>
+      'Projects group related chats, files, and activity, and stay in sync with Hermes on your computer.';
+
+  @override
+  String get createProjectAction => 'Create a project';
+
+  @override
+  String get projectsTitle => 'Projects';
+
+  @override
+  String get reviewLocalSpaces => 'Review local spaces';
+
+  @override
+  String get archivedSection => 'Archived';
+
+  @override
+  String get compatExplanation =>
+      'This Hermes gateway is older than server-side projects, so chats stay grouped on this device only. Update Hermes to share the same projects across your devices.';
+
+  @override
+  String get compatModeTitle => 'Compatibility mode';
+
+  @override
+  String get noSpacesOnDevice => 'No spaces on this device';
+
+  @override
+  String get noSpacesHint =>
+      'Chats from this gateway are not grouped yet. Grouping stays on this phone until the gateway can host projects.';
+
+  @override
+  String get onThisDevice => 'On this device';
+
+  @override
+  String get projectsOffline => 'Offline — showing the last known projects.';
+
+  @override
+  String get activeChip => 'Active';
+
+  @override
+  String get projectActions => 'Project actions';
+
+  @override
+  String get renameProjectItem => 'Rename project';
+
+  @override
+  String get archiveProjectItem => 'Archive project';
+
+  @override
+  String get restoreProjectItem => 'Restore project';
+
+  @override
+  String get deleteProjectItem => 'Delete project';
+
+  @override
+  String get enterName => 'Enter a name';
+
+  @override
+  String get nameField => 'Name';
+
+  @override
+  String get oneChat => '1 chat';
+
+  @override
+  String countChats(int count) {
+    return '$count chats';
+  }
+
+  @override
+  String get createAction => 'Create';
+
+  @override
+  String get moveConversation => 'Move conversation';
+
+  @override
+  String renameProjectTitle(String name) {
+    return 'Rename $name';
+  }
+
+  @override
+  String deleteProjectTitle(String name) {
+    return 'Delete $name?';
+  }
+
+  @override
+  String get deleteHintDetail =>
+      'This permanently deletes the Project. Chats will not be deleted; they’ll return to Unassigned.';
+
+  @override
+  String movedToProject(String label) {
+    return 'Moved to $label';
+  }
+
+  @override
+  String get newProject => 'New project';
+
+  @override
+  String get spaceUnassigned => 'Unassigned';
+
+  @override
+  String get moveToSpace => 'Move to space';
+
+  @override
+  String get moveChat => 'Move chat';
+
+  @override
+  String projectActionFailed(String action, String error) {
+    return 'Could not $action the project: $error';
+  }
+
+  @override
+  String get projectChatsUnavailable => 'Project chats unavailable';
+
+  @override
+  String get projectChatsUnavailableHint =>
+      'This Hermes gateway does not support opening a project yet. Update Hermes on the server to browse a project from your phone.';
+
+  @override
+  String get couldNotOpenProject => 'Could not open this project';
+
+  @override
+  String get couldNotOpenProjectHint =>
+      'Check that the gateway is running and reachable, then try again.';
+
+  @override
+  String get noChatsYet => 'No chats yet';
+
+  @override
+  String get noChatsYetHint =>
+      'Chats you start in this project will appear here, on every device signed in to this Hermes.';
+
+  @override
+  String get noMatches => 'No matches';
+
+  @override
+  String noMatchesHint(String query) {
+    return 'No chats in this project match “$query”.';
+  }
+
+  @override
+  String get chatsTab => 'Chats';
+
+  @override
+  String get overviewTab => 'Overview';
+
+  @override
+  String get activityTab => 'Activity';
+
+  @override
+  String get conversationsInProject => 'Conversations in this project';
+
+  @override
+  String get repositoriesHeader => 'Repositories';
+
+  @override
+  String get locationHeader => 'Location';
+
+  @override
+  String get noFoldersYet => 'No folders yet';
+
+  @override
+  String get noFoldersHint =>
+      'The server has not reported folders for this project yet. Global Files stays available from More.';
+
+  @override
+  String get foldersHeader => 'Folders';
+
+  @override
+  String get assetsUnavailable => 'Assets unavailable';
+
+  @override
+  String get assetsUnavailableHint =>
+      'Assets need a server-authoritative Assets index in the Hermes Gateway before they can be shown per project.';
+
+  @override
+  String get noActivityYet => 'No activity yet';
+
+  @override
+  String get noActivityHint =>
+      'Chats in this project will show their state and last activity here.';
+
+  @override
+  String get runningStateLabel => 'Running';
+
+  @override
+  String get doneStateLabel => 'Done';
+
+  @override
+  String get chatsOffline => 'Offline — showing the last known chats';
+
+  @override
+  String get clearSearch => 'Clear search';
+
+  @override
+  String get archiveAction => 'Archive';
+
+  @override
+  String get moveConversationFailed => 'Couldn’t move conversation';
+
+  @override
+  String get deleteProjectFailed => 'Couldn’t delete project';
+
+  @override
+  String couldNotActionProject(String action) {
+    return 'Couldn’t $action project';
+  }
 }

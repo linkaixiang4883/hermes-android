@@ -1299,4 +1299,220 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get cronRowTitle => '定时任务';
+
+  @override
+  String archiveProjectTitle(String name) {
+    return '归档 $name？';
+  }
+
+  @override
+  String get archiveHintPane => '项目将移入“已归档”，其中的聊天和文件保持不变，可随时恢复。';
+
+  @override
+  String get archiveHintDetail => '项目将移入“已归档”，其中的聊天和文件保持不变，之后仍可恢复。';
+
+  @override
+  String get projectsUnreachableHint => '请确认网关正在运行且可达，然后重试。';
+
+  @override
+  String get noProjectsYet => '暂无项目';
+
+  @override
+  String get noProjectsHint => '项目把相关的聊天、文件和动态收在一起，并与电脑上的 Hermes 保持同步。';
+
+  @override
+  String get createProjectAction => '新建项目';
+
+  @override
+  String get projectsTitle => '项目';
+
+  @override
+  String get reviewLocalSpaces => '查看本地空格';
+
+  @override
+  String get archivedSection => '已归档';
+
+  @override
+  String get compatExplanation =>
+      '该 Hermes 网关版本过旧，不支持服务端项目，聊天只在本机分组。请升级 Hermes，以便在各设备间共享同一批项目。';
+
+  @override
+  String get compatModeTitle => '兼容模式';
+
+  @override
+  String get noSpacesOnDevice => '本机没有空格';
+
+  @override
+  String get noSpacesHint => '该网关的聊天尚未分组。在网关支持项目之前，分组只保留在本机。';
+
+  @override
+  String get onThisDevice => '本机';
+
+  @override
+  String get projectsOffline => '离线——显示上次已知的项目。';
+
+  @override
+  String get activeChip => '进行中';
+
+  @override
+  String get projectActions => '项目操作';
+
+  @override
+  String get renameProjectItem => '重命名项目';
+
+  @override
+  String get archiveProjectItem => '归档项目';
+
+  @override
+  String get restoreProjectItem => '恢复项目';
+
+  @override
+  String get deleteProjectItem => '删除项目';
+
+  @override
+  String get enterName => '输入名称';
+
+  @override
+  String get nameField => '名称';
+
+  @override
+  String get oneChat => '1 个聊天';
+
+  @override
+  String countChats(int count) {
+    return '$count 个聊天';
+  }
+
+  @override
+  String get createAction => '创建';
+
+  @override
+  String get moveConversation => '移动对话';
+
+  @override
+  String renameProjectTitle(String name) {
+    return '重命名 $name';
+  }
+
+  @override
+  String deleteProjectTitle(String name) {
+    return '删除 $name？';
+  }
+
+  @override
+  String get deleteHintDetail => '这将永久删除项目，其中的聊天不会被删除，会回到“未归档”。';
+
+  @override
+  String movedToProject(String label) {
+    return '已移到 $label';
+  }
+
+  @override
+  String get newProject => '新项目';
+
+  @override
+  String get spaceUnassigned => '未归档';
+
+  @override
+  String get moveToSpace => '移到 Space';
+
+  @override
+  String get moveChat => '移动聊天';
+
+  @override
+  String projectActionFailed(String action, String error) {
+    return '项目操作失败（$action）：$error';
+  }
+
+  @override
+  String get projectChatsUnavailable => '项目聊天不可用';
+
+  @override
+  String get projectChatsUnavailableHint =>
+      '该 Hermes 网关尚不支持在手机上打开项目，请升级服务端的 Hermes。';
+
+  @override
+  String get couldNotOpenProject => '无法打开该项目';
+
+  @override
+  String get couldNotOpenProjectHint => '请确认网关正在运行且可达，然后重试。';
+
+  @override
+  String get noChatsYet => '暂无聊天';
+
+  @override
+  String get noChatsYetHint => '在此项目发起的聊天会显示在这里，所有登录该 Hermes 的设备可见。';
+
+  @override
+  String get noMatches => '无匹配';
+
+  @override
+  String noMatchesHint(String query) {
+    return '该项目中没有聊天匹配“$query”。';
+  }
+
+  @override
+  String get chatsTab => '聊天';
+
+  @override
+  String get overviewTab => '概览';
+
+  @override
+  String get activityTab => '动态';
+
+  @override
+  String get conversationsInProject => '该项目中的对话';
+
+  @override
+  String get repositoriesHeader => '仓库';
+
+  @override
+  String get locationHeader => '位置';
+
+  @override
+  String get noFoldersYet => '暂无文件夹';
+
+  @override
+  String get noFoldersHint => '服务端尚未上报该项目的文件夹，可先去 More 用全局文件。';
+
+  @override
+  String get foldersHeader => '文件夹';
+
+  @override
+  String get assetsUnavailable => '素材不可用';
+
+  @override
+  String get assetsUnavailableHint => '需要 Hermes 网关提供 Assets 索引，才能按项目展示素材。';
+
+  @override
+  String get noActivityYet => '暂无动态';
+
+  @override
+  String get noActivityHint => '该项目中的聊天会在这里显示状态和上次动态。';
+
+  @override
+  String get runningStateLabel => '进行中';
+
+  @override
+  String get doneStateLabel => '已完成';
+
+  @override
+  String get chatsOffline => '离线——显示上次已知的聊天';
+
+  @override
+  String get clearSearch => '清除搜索';
+
+  @override
+  String get archiveAction => '归档';
+
+  @override
+  String get moveConversationFailed => '移动对话失败';
+
+  @override
+  String get deleteProjectFailed => '删除项目失败';
+
+  @override
+  String couldNotActionProject(String action) {
+    return '项目$action失败';
+  }
 }

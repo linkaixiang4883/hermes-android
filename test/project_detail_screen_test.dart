@@ -31,6 +31,8 @@ import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/project_detail_screen.dart';
 
+import 'support/l10n_test_utils.dart';
+
 Session _session({
   String id = 's1',
   String title = 'Ship the Files browser',
@@ -94,6 +96,8 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(Brightness.dark),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: ProjectDetailScreen(
         projectId: projectId,
         projectName: projectName,

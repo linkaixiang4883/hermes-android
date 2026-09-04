@@ -2443,6 +2443,402 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cron'**
   String get cronRowTitle;
+
+  /// No description provided for @archiveProjectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive {name}?'**
+  String archiveProjectTitle(String name);
+
+  /// No description provided for @archiveHintPane.
+  ///
+  /// In en, this message translates to:
+  /// **'The Project will move to Archived. Its chats and files stay intact, and you can restore it at any time.'**
+  String get archiveHintPane;
+
+  /// No description provided for @archiveHintDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'The Project will move to Archived. Its chats and files stay intact, and you can restore it later.'**
+  String get archiveHintDetail;
+
+  /// No description provided for @projectsUnreachableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check that the gateway is running and reachable, then try again.'**
+  String get projectsUnreachableHint;
+
+  /// No description provided for @noProjectsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No projects yet'**
+  String get noProjectsYet;
+
+  /// No description provided for @noProjectsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects group related chats, files, and activity, and stay in sync with Hermes on your computer.'**
+  String get noProjectsHint;
+
+  /// No description provided for @createProjectAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a project'**
+  String get createProjectAction;
+
+  /// No description provided for @projectsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects'**
+  String get projectsTitle;
+
+  /// No description provided for @reviewLocalSpaces.
+  ///
+  /// In en, this message translates to:
+  /// **'Review local spaces'**
+  String get reviewLocalSpaces;
+
+  /// No description provided for @archivedSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived'**
+  String get archivedSection;
+
+  /// No description provided for @compatExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'This Hermes gateway is older than server-side projects, so chats stay grouped on this device only. Update Hermes to share the same projects across your devices.'**
+  String get compatExplanation;
+
+  /// No description provided for @compatModeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Compatibility mode'**
+  String get compatModeTitle;
+
+  /// No description provided for @noSpacesOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'No spaces on this device'**
+  String get noSpacesOnDevice;
+
+  /// No description provided for @noSpacesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats from this gateway are not grouped yet. Grouping stays on this phone until the gateway can host projects.'**
+  String get noSpacesHint;
+
+  /// No description provided for @onThisDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'On this device'**
+  String get onThisDevice;
+
+  /// No description provided for @projectsOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing the last known projects.'**
+  String get projectsOffline;
+
+  /// No description provided for @activeChip.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get activeChip;
+
+  /// No description provided for @projectActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Project actions'**
+  String get projectActions;
+
+  /// No description provided for @renameProjectItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename project'**
+  String get renameProjectItem;
+
+  /// No description provided for @archiveProjectItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive project'**
+  String get archiveProjectItem;
+
+  /// No description provided for @restoreProjectItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore project'**
+  String get restoreProjectItem;
+
+  /// No description provided for @deleteProjectItem.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete project'**
+  String get deleteProjectItem;
+
+  /// No description provided for @enterName.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a name'**
+  String get enterName;
+
+  /// No description provided for @nameField.
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get nameField;
+
+  /// No description provided for @oneChat.
+  ///
+  /// In en, this message translates to:
+  /// **'1 chat'**
+  String get oneChat;
+
+  /// No description provided for @countChats.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} chats'**
+  String countChats(int count);
+
+  /// No description provided for @createAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get createAction;
+
+  /// No description provided for @moveConversation.
+  ///
+  /// In en, this message translates to:
+  /// **'Move conversation'**
+  String get moveConversation;
+
+  /// No description provided for @renameProjectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename {name}'**
+  String renameProjectTitle(String name);
+
+  /// No description provided for @deleteProjectTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete {name}?'**
+  String deleteProjectTitle(String name);
+
+  /// No description provided for @deleteHintDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently deletes the Project. Chats will not be deleted; they’ll return to Unassigned.'**
+  String get deleteHintDetail;
+
+  /// No description provided for @movedToProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved to {label}'**
+  String movedToProject(String label);
+
+  /// No description provided for @newProject.
+  ///
+  /// In en, this message translates to:
+  /// **'New project'**
+  String get newProject;
+
+  /// No description provided for @spaceUnassigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned'**
+  String get spaceUnassigned;
+
+  /// No description provided for @moveToSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to space'**
+  String get moveToSpace;
+
+  /// No description provided for @moveChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Move chat'**
+  String get moveChat;
+
+  /// No description provided for @projectActionFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not {action} the project: {error}'**
+  String projectActionFailed(String action, String error);
+
+  /// No description provided for @projectChatsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Project chats unavailable'**
+  String get projectChatsUnavailable;
+
+  /// No description provided for @projectChatsUnavailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This Hermes gateway does not support opening a project yet. Update Hermes on the server to browse a project from your phone.'**
+  String get projectChatsUnavailableHint;
+
+  /// No description provided for @couldNotOpenProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open this project'**
+  String get couldNotOpenProject;
+
+  /// No description provided for @couldNotOpenProjectHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Check that the gateway is running and reachable, then try again.'**
+  String get couldNotOpenProjectHint;
+
+  /// No description provided for @noChatsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats yet'**
+  String get noChatsYet;
+
+  /// No description provided for @noChatsYetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats you start in this project will appear here, on every device signed in to this Hermes.'**
+  String get noChatsYetHint;
+
+  /// No description provided for @noMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get noMatches;
+
+  /// No description provided for @noMatchesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats in this project match “{query}”.'**
+  String noMatchesHint(String query);
+
+  /// No description provided for @chatsTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats'**
+  String get chatsTab;
+
+  /// No description provided for @overviewTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get overviewTab;
+
+  /// No description provided for @activityTab.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get activityTab;
+
+  /// No description provided for @conversationsInProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Conversations in this project'**
+  String get conversationsInProject;
+
+  /// No description provided for @repositoriesHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Repositories'**
+  String get repositoriesHeader;
+
+  /// No description provided for @locationHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Location'**
+  String get locationHeader;
+
+  /// No description provided for @noFoldersYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No folders yet'**
+  String get noFoldersYet;
+
+  /// No description provided for @noFoldersHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The server has not reported folders for this project yet. Global Files stays available from More.'**
+  String get noFoldersHint;
+
+  /// No description provided for @foldersHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'Folders'**
+  String get foldersHeader;
+
+  /// No description provided for @assetsUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Assets unavailable'**
+  String get assetsUnavailable;
+
+  /// No description provided for @assetsUnavailableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Assets need a server-authoritative Assets index in the Hermes Gateway before they can be shown per project.'**
+  String get assetsUnavailableHint;
+
+  /// No description provided for @noActivityYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No activity yet'**
+  String get noActivityYet;
+
+  /// No description provided for @noActivityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats in this project will show their state and last activity here.'**
+  String get noActivityHint;
+
+  /// No description provided for @runningStateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get runningStateLabel;
+
+  /// No description provided for @doneStateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get doneStateLabel;
+
+  /// No description provided for @chatsOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing the last known chats'**
+  String get chatsOffline;
+
+  /// No description provided for @clearSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get clearSearch;
+
+  /// No description provided for @archiveAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive'**
+  String get archiveAction;
+
+  /// No description provided for @moveConversationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t move conversation'**
+  String get moveConversationFailed;
+
+  /// No description provided for @deleteProjectFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t delete project'**
+  String get deleteProjectFailed;
+
+  /// No description provided for @couldNotActionProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t {action} project'**
+  String couldNotActionProject(String action);
 }
 
 class _AppLocalizationsDelegate
