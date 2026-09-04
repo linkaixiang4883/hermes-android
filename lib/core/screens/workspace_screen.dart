@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/attachment_draft.dart';
 import '../models/hermes_project.dart';
 import '../services/android_share_intent_service.dart';
@@ -411,6 +412,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       journal: _journal ??= GatewayTurnJournal(),
       connectionId: connection.id,
       endpointDigest: endpointDigest,
+      l10n: context.l10n,
       sessionTitles: sessionTitles,
     );
   }
@@ -708,7 +710,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         );
       case HermesDestination.more:
         return MorePane(
-          sections: buildMoreSections(dashboardReachable: _dashboardReachable),
+          sections: buildMoreSections(
+            l10n: context.l10n,
+            dashboardReachable: _dashboardReachable,
+          ),
           onSelect: _openMoreEntry,
         );
     }

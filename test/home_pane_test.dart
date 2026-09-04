@@ -8,6 +8,8 @@ import 'package:hermes_android/core/utils/home_digest.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/home_pane.dart';
 
+import 'support/l10n_test_utils.dart';
+
 /// A fixed clock so the window boundaries the digest owns stay asserted
 /// rather than approximated.
 final _now = DateTime.utc(2026, 8, 27, 12, 0, 0);
@@ -51,6 +53,8 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(Brightness.dark),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: Scaffold(
         body: HomePane(
           loadSessions: loadSessions,

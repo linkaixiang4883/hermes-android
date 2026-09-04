@@ -1166,4 +1166,183 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get clarifyFallbackDescription =>
       'Hermes needs more information to continue.';
+
+  @override
+  String get homeUnreachable => 'Could not reach Hermes';
+
+  @override
+  String get homeUnreachableHint =>
+      'Home needs your recent chats to know what deserves your attention. Check that the gateway is reachable, then try again.';
+
+  @override
+  String get homeNothingNeedsYou => 'Nothing needs you';
+
+  @override
+  String get homeAllClearHint =>
+      'No chat is blocked, running, or waiting to be resumed. Start a new one whenever you are ready.';
+
+  @override
+  String get offlineShowingLastKnown =>
+      'Offline — showing the last known activity.';
+
+  @override
+  String get untitledChat => 'Untitled chat';
+
+  @override
+  String get activityUnreadable => 'Could not read activity';
+
+  @override
+  String get activityJournalHint =>
+      'Activity reads the durable turn journal to know what Hermes is doing. Check that the gateway is reachable, then try again.';
+
+  @override
+  String get inboxClear => 'Inbox is clear';
+
+  @override
+  String get activityNothingRunning => 'Nothing is running';
+
+  @override
+  String get activityNoAttention => 'No turn needs your input or has failed.';
+
+  @override
+  String get activityEmptyHint =>
+      'No turn is blocked, in flight, or recently finished. Work you start will show up here.';
+
+  @override
+  String andCountMore(int count) {
+    return 'and $count more';
+  }
+
+  @override
+  String get homeSectionNeedsYou => 'Needs you';
+
+  @override
+  String get homeSectionRunning => 'Running now';
+
+  @override
+  String get homeSectionWorking => 'Continue working';
+
+  @override
+  String get homeSectionCompleted => 'Recently completed';
+
+  @override
+  String get activityGroupFailed => 'Failed';
+
+  @override
+  String get activityGroupCompleted => 'Completed';
+
+  @override
+  String get turnRecoveryFailed => 'Turn recovery failed';
+
+  @override
+  String get turnWaitingInput => 'Waiting for your input';
+
+  @override
+  String get turnFailedState => 'The turn failed';
+
+  @override
+  String get turnStopped => 'Stopped';
+
+  @override
+  String get turnStalled => 'Stalled — no update from Hermes';
+
+  @override
+  String get turnSubmitted => 'Submitted, waiting for Hermes';
+
+  @override
+  String get turnRunningState => 'Running';
+
+  @override
+  String get moreSectionWorkspace => 'Workspace';
+
+  @override
+  String get unassignedChats => 'Unassigned chats';
+
+  @override
+  String get unassignedChatsDesc => 'Chats that are not assigned to a Project';
+
+  @override
+  String get archivedQuickChats => 'Archived quick chats';
+
+  @override
+  String get archivedQuickChatsDesc =>
+      'Review or promote quick chats past their retention period';
+
+  @override
+  String get files => 'Files';
+
+  @override
+  String get filesDesc => 'Browse the miniserver folders behind your projects';
+
+  @override
+  String get assets => 'Assets';
+
+  @override
+  String get assetsDesc => 'Artifacts, attachments, and generated media';
+
+  @override
+  String get moreSectionOrganization => 'Organization';
+
+  @override
+  String get pinBatchUndo => 'Pin, batch and undo';
+
+  @override
+  String get pinBatchUndoDesc =>
+      'Cross-device ordering and reversible bulk organization';
+
+  @override
+  String get aiFiling => 'AI-assisted filing';
+
+  @override
+  String get aiFilingDesc => 'Suggest Projects and learn from your corrections';
+
+  @override
+  String get moreSectionAutomation => 'Automation';
+
+  @override
+  String get cronDesc => 'Scheduled jobs and their last runs';
+
+  @override
+  String get skillsTools => 'Skills and tools';
+
+  @override
+  String get skillsToolsDesc => 'What Hermes knows how to do';
+
+  @override
+  String get memoryDesc => 'Durable facts Hermes keeps about you';
+
+  @override
+  String get moreSectionSystem => 'System';
+
+  @override
+  String get settingsDesc => 'Connection, appearance, and device preferences';
+
+  @override
+  String get openDashboard => 'Open the Hermes dashboard';
+
+  @override
+  String get openDashboardDesc =>
+      'Everything not yet native, in the authenticated web dashboard';
+
+  @override
+  String get comingNext => 'Coming next';
+
+  @override
+  String get moreNeedsDashboard =>
+      'Needs a reachable Hermes dashboard. Check the host, port, and credentials of this connection.';
+
+  @override
+  String get moreNeedsAssets =>
+      'Needs a server-authoritative Assets index in the Hermes Gateway.';
+
+  @override
+  String get moreNeedsPinUndo =>
+      'Needs durable pin ordering, batch mutation, and undo contracts in the Hermes Gateway.';
+
+  @override
+  String get moreNeedsFiling =>
+      'Needs a correction-aware filing contract in the Hermes Gateway.';
+
+  @override
+  String get cronRowTitle => 'Cron';
 }

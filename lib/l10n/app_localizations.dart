@@ -2113,6 +2113,336 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hermes needs more information to continue.'**
   String get clarifyFallbackDescription;
+
+  /// No description provided for @homeUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach Hermes'**
+  String get homeUnreachable;
+
+  /// No description provided for @homeUnreachableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Home needs your recent chats to know what deserves your attention. Check that the gateway is reachable, then try again.'**
+  String get homeUnreachableHint;
+
+  /// No description provided for @homeNothingNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing needs you'**
+  String get homeNothingNeedsYou;
+
+  /// No description provided for @homeAllClearHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No chat is blocked, running, or waiting to be resumed. Start a new one whenever you are ready.'**
+  String get homeAllClearHint;
+
+  /// No description provided for @offlineShowingLastKnown.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing the last known activity.'**
+  String get offlineShowingLastKnown;
+
+  /// No description provided for @untitledChat.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled chat'**
+  String get untitledChat;
+
+  /// No description provided for @activityUnreadable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read activity'**
+  String get activityUnreadable;
+
+  /// No description provided for @activityJournalHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Activity reads the durable turn journal to know what Hermes is doing. Check that the gateway is reachable, then try again.'**
+  String get activityJournalHint;
+
+  /// No description provided for @inboxClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Inbox is clear'**
+  String get inboxClear;
+
+  /// No description provided for @activityNothingRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing is running'**
+  String get activityNothingRunning;
+
+  /// No description provided for @activityNoAttention.
+  ///
+  /// In en, this message translates to:
+  /// **'No turn needs your input or has failed.'**
+  String get activityNoAttention;
+
+  /// No description provided for @activityEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No turn is blocked, in flight, or recently finished. Work you start will show up here.'**
+  String get activityEmptyHint;
+
+  /// No description provided for @andCountMore.
+  ///
+  /// In en, this message translates to:
+  /// **'and {count} more'**
+  String andCountMore(int count);
+
+  /// No description provided for @homeSectionNeedsYou.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs you'**
+  String get homeSectionNeedsYou;
+
+  /// No description provided for @homeSectionRunning.
+  ///
+  /// In en, this message translates to:
+  /// **'Running now'**
+  String get homeSectionRunning;
+
+  /// No description provided for @homeSectionWorking.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue working'**
+  String get homeSectionWorking;
+
+  /// No description provided for @homeSectionCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently completed'**
+  String get homeSectionCompleted;
+
+  /// No description provided for @activityGroupFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get activityGroupFailed;
+
+  /// No description provided for @activityGroupCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get activityGroupCompleted;
+
+  /// No description provided for @turnRecoveryFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn recovery failed'**
+  String get turnRecoveryFailed;
+
+  /// No description provided for @turnWaitingInput.
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for your input'**
+  String get turnWaitingInput;
+
+  /// No description provided for @turnFailedState.
+  ///
+  /// In en, this message translates to:
+  /// **'The turn failed'**
+  String get turnFailedState;
+
+  /// No description provided for @turnStopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Stopped'**
+  String get turnStopped;
+
+  /// No description provided for @turnStalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Stalled — no update from Hermes'**
+  String get turnStalled;
+
+  /// No description provided for @turnSubmitted.
+  ///
+  /// In en, this message translates to:
+  /// **'Submitted, waiting for Hermes'**
+  String get turnSubmitted;
+
+  /// No description provided for @turnRunningState.
+  ///
+  /// In en, this message translates to:
+  /// **'Running'**
+  String get turnRunningState;
+
+  /// No description provided for @moreSectionWorkspace.
+  ///
+  /// In en, this message translates to:
+  /// **'Workspace'**
+  String get moreSectionWorkspace;
+
+  /// No description provided for @unassignedChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Unassigned chats'**
+  String get unassignedChats;
+
+  /// No description provided for @unassignedChatsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Chats that are not assigned to a Project'**
+  String get unassignedChatsDesc;
+
+  /// No description provided for @archivedQuickChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Archived quick chats'**
+  String get archivedQuickChats;
+
+  /// No description provided for @archivedQuickChatsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Review or promote quick chats past their retention period'**
+  String get archivedQuickChatsDesc;
+
+  /// No description provided for @files.
+  ///
+  /// In en, this message translates to:
+  /// **'Files'**
+  String get files;
+
+  /// No description provided for @filesDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse the miniserver folders behind your projects'**
+  String get filesDesc;
+
+  /// No description provided for @assets.
+  ///
+  /// In en, this message translates to:
+  /// **'Assets'**
+  String get assets;
+
+  /// No description provided for @assetsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Artifacts, attachments, and generated media'**
+  String get assetsDesc;
+
+  /// No description provided for @moreSectionOrganization.
+  ///
+  /// In en, this message translates to:
+  /// **'Organization'**
+  String get moreSectionOrganization;
+
+  /// No description provided for @pinBatchUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin, batch and undo'**
+  String get pinBatchUndo;
+
+  /// No description provided for @pinBatchUndoDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Cross-device ordering and reversible bulk organization'**
+  String get pinBatchUndoDesc;
+
+  /// No description provided for @aiFiling.
+  ///
+  /// In en, this message translates to:
+  /// **'AI-assisted filing'**
+  String get aiFiling;
+
+  /// No description provided for @aiFilingDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Suggest Projects and learn from your corrections'**
+  String get aiFilingDesc;
+
+  /// No description provided for @moreSectionAutomation.
+  ///
+  /// In en, this message translates to:
+  /// **'Automation'**
+  String get moreSectionAutomation;
+
+  /// No description provided for @cronDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled jobs and their last runs'**
+  String get cronDesc;
+
+  /// No description provided for @skillsTools.
+  ///
+  /// In en, this message translates to:
+  /// **'Skills and tools'**
+  String get skillsTools;
+
+  /// No description provided for @skillsToolsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'What Hermes knows how to do'**
+  String get skillsToolsDesc;
+
+  /// No description provided for @memoryDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Durable facts Hermes keeps about you'**
+  String get memoryDesc;
+
+  /// No description provided for @moreSectionSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get moreSectionSystem;
+
+  /// No description provided for @settingsDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection, appearance, and device preferences'**
+  String get settingsDesc;
+
+  /// No description provided for @openDashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Open the Hermes dashboard'**
+  String get openDashboard;
+
+  /// No description provided for @openDashboardDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Everything not yet native, in the authenticated web dashboard'**
+  String get openDashboardDesc;
+
+  /// No description provided for @comingNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Coming next'**
+  String get comingNext;
+
+  /// No description provided for @moreNeedsDashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a reachable Hermes dashboard. Check the host, port, and credentials of this connection.'**
+  String get moreNeedsDashboard;
+
+  /// No description provided for @moreNeedsAssets.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a server-authoritative Assets index in the Hermes Gateway.'**
+  String get moreNeedsAssets;
+
+  /// No description provided for @moreNeedsPinUndo.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs durable pin ordering, batch mutation, and undo contracts in the Hermes Gateway.'**
+  String get moreNeedsPinUndo;
+
+  /// No description provided for @moreNeedsFiling.
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a correction-aware filing contract in the Hermes Gateway.'**
+  String get moreNeedsFiling;
+
+  /// No description provided for @cronRowTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron'**
+  String get cronRowTitle;
 }
 
 class _AppLocalizationsDelegate

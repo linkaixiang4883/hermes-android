@@ -1,9 +1,15 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_turn_contract.dart';
 import 'package:hermes_android/core/services/gateway_turn_journal.dart';
 import 'package:hermes_android/core/services/gateway_turn_recovery.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/utils/activity_feed.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
+/// English copy for feed-builder tests (mirrors the app wiring).
+AppLocalizations _enL10n() =>
+    lookupAppLocalizations(const Locale('en'));
 
 const _digestA =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -81,6 +87,7 @@ ActivityFeed _feed(
   return buildActivityFeed(
     snapshot: GatewayTurnJournalSnapshot(bindings: bindings, entries: entries),
     now: now ?? _now,
+    l10n: _enL10n(),
     connectionId: connectionId,
     endpointDigest: endpointDigest,
     sessionTitles: sessionTitles,
@@ -532,7 +539,7 @@ void main() {
       entries: entries,
     );
 
-    buildActivityFeed(snapshot: snapshot, now: _now);
+    buildActivityFeed(snapshot: snapshot, now: _now, l10n: _enL10n());
 
     expect(identical(snapshot.entries, entries), isTrue);
     expect(snapshot.entries, hasLength(1));

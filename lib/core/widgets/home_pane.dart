@@ -22,6 +22,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../models/session.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/home_digest.dart';
@@ -123,10 +124,8 @@ class HomePaneState extends State<HomePane> {
     if (sessions == null) {
       if (_error != null) {
         return ErrorState(
-          title: 'Could not reach Hermes',
-          message:
-              'Home needs your recent chats to know what deserves your '
-              'attention. Check that the gateway is reachable, then try again.',
+          title: context.l10n.homeUnreachable,
+          message: context.l10n.homeUnreachableHint,
           onRetry: _load,
         );
       }
@@ -157,12 +156,10 @@ class HomePaneState extends State<HomePane> {
               padding: EdgeInsets.only(
                 top: MediaQuery.sizeOf(context).height * 0.12,
               ),
-              child: const EmptyState(
+              child: EmptyState(
                 icon: Icons.check_circle_outline,
-                title: 'Nothing needs you',
-                message:
-                    'No chat is blocked, running, or waiting to be resumed. '
-                    'Start a new one whenever you are ready.',
+                title: context.l10n.homeNothingNeedsYou,
+                message: context.l10n.homeAllClearHint,
               ),
             )
           else
@@ -174,7 +171,10 @@ class HomePaneState extends State<HomePane> {
 
   List<Widget> _section(HomeSection section) {
     return [
-      SectionHeader(title: section.title, count: section.totalCount),
+      SectionHeader(
+        title: section.kind.titleLocalized(context.l10n),
+        count: section.totalCount,
+      ),
       for (final item in section.items)
         Padding(
           padding: const EdgeInsets.fromLTRB(
@@ -213,7 +213,7 @@ class _OverflowNote extends StatelessWidget {
         HermesSpacing.lg,
       ),
       child: Text(
-        'and $count more',
+        context.l10n.andCountMore(count),
         style: tokens.typography.label.copyWith(color: tokens.muted),
       ),
     );
@@ -243,7 +243,7 @@ class _OfflineBanner extends StatelessWidget {
             const SizedBox(width: HermesSpacing.sm),
             Expanded(
               child: Text(
-                'Offline — showing the last known activity.',
+                context.l10n.offlineShowingLastKnown,
                 style: tokens.typography.label.copyWith(color: tokens.muted),
               ),
             ),
@@ -264,7 +264,7 @@ class _HomeItemCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = HermesTokens.of(context);
     final title = item.session.title.trim().isEmpty
-        ? 'Untitled chat'
+        ? context.l10n.untitledChat
         : item.session.title;
     final project = item.projectName;
     final reason = item.attentionLabel;

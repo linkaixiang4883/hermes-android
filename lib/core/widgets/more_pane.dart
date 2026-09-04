@@ -18,6 +18,8 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
+import '../../l10n/l10n.dart';
 import '../theme/hermes_theme.dart';
 import 'hermes_components.dart';
 
@@ -73,106 +75,102 @@ class MoreSection {
   const MoreSection({required this.title, required this.entries});
 }
 
-const _dashboardRequired =
-    'Needs a reachable Hermes dashboard. Check the host, port, and '
-    'credentials of this connection.';
-const _gatewayAssetsRequired =
-    'Needs a server-authoritative Assets index in the Hermes Gateway.';
-const _gatewayOrganizationRequired =
-    'Needs durable pin ordering, batch mutation, and undo contracts in the '
-    'Hermes Gateway.';
-const _gatewayAiFilingRequired =
-    'Needs a correction-aware filing contract in the Hermes Gateway.';
-
 /// Builds the More menu for the current connection.
+///
+/// [l10n] supplies every visible string; the pure builders stay free of
+/// ambient localization so unit tests can pin the English copy.
 ///
 /// [dashboardReachable] gates the surfaces served by the Hermes Dashboard.
 /// Local device settings stay reachable regardless, so the user can always
 /// repair a broken connection from inside the app.
-List<MoreSection> buildMoreSections({required bool dashboardReachable}) {
+List<MoreSection> buildMoreSections({
+  required AppLocalizations l10n,
+  required bool dashboardReachable,
+}) {
   MoreEntryAvailability dashboardBacked() => dashboardReachable
       ? MoreEntryAvailability.available
       : MoreEntryAvailability.unavailable;
-  String? dashboardReason() => dashboardReachable ? null : _dashboardRequired;
+  String? dashboardReason() =>
+      dashboardReachable ? null : l10n.moreNeedsDashboard;
 
   return [
     MoreSection(
-      title: 'Workspace',
+      title: l10n.moreSectionWorkspace,
       entries: [
-        const MoreEntry(
+        MoreEntry(
           id: 'unassigned',
-          title: 'Unassigned chats',
-          subtitle: 'Chats that are not assigned to a Project',
+          title: l10n.unassignedChats,
+          subtitle: l10n.unassignedChatsDesc,
           icon: Icons.inbox_outlined,
         ),
-        const MoreEntry(
+        MoreEntry(
           id: 'archived-quick',
-          title: 'Archived quick chats',
-          subtitle: 'Review or promote quick chats past their retention period',
+          title: l10n.archivedQuickChats,
+          subtitle: l10n.archivedQuickChatsDesc,
           icon: Icons.archive_outlined,
         ),
         MoreEntry(
           id: 'files',
-          title: 'Files',
-          subtitle: 'Browse the miniserver folders behind your projects',
+          title: l10n.files,
+          subtitle: l10n.filesDesc,
           icon: Icons.folder_open_outlined,
           availability: dashboardBacked(),
           unavailableReason: dashboardReason(),
         ),
-        const MoreEntry(
+        MoreEntry(
           id: 'assets',
-          title: 'Assets',
-          subtitle: 'Artifacts, attachments, and generated media',
+          title: l10n.assets,
+          subtitle: l10n.assetsDesc,
           icon: Icons.image_outlined,
           availability: MoreEntryAvailability.unavailable,
-          unavailableReason: _gatewayAssetsRequired,
-        ),
-      ],
-    ),
-    const MoreSection(
-      title: 'Organization',
-      entries: [
-        MoreEntry(
-          id: 'pin-batch-undo',
-          title: 'Pin, batch and undo',
-          subtitle: 'Cross-device ordering and reversible bulk organization',
-          icon: Icons.push_pin_outlined,
-          availability: MoreEntryAvailability.unavailable,
-          unavailableReason: _gatewayOrganizationRequired,
-        ),
-        MoreEntry(
-          id: 'ai-filing',
-          title: 'AI-assisted filing',
-          subtitle: 'Suggest Projects and learn from your corrections',
-          icon: Icons.auto_fix_high_outlined,
-          availability: MoreEntryAvailability.unavailable,
-          unavailableReason: _gatewayAiFilingRequired,
+          unavailableReason: l10n.moreNeedsAssets,
         ),
       ],
     ),
     MoreSection(
-      title: 'Automation',
+      title: l10n.moreSectionOrganization,
+      entries: [
+        MoreEntry(
+          id: 'pin-batch-undo',
+          title: l10n.pinBatchUndo,
+          subtitle: l10n.pinBatchUndoDesc,
+          icon: Icons.push_pin_outlined,
+          availability: MoreEntryAvailability.unavailable,
+          unavailableReason: l10n.moreNeedsPinUndo,
+        ),
+        MoreEntry(
+          id: 'ai-filing',
+          title: l10n.aiFiling,
+          subtitle: l10n.aiFilingDesc,
+          icon: Icons.auto_fix_high_outlined,
+          availability: MoreEntryAvailability.unavailable,
+          unavailableReason: l10n.moreNeedsFiling,
+        ),
+      ],
+    ),
+    MoreSection(
+      title: l10n.moreSectionAutomation,
       entries: [
         MoreEntry(
           id: 'cron',
-          title: 'Cron',
-          subtitle: 'Scheduled jobs and their last runs',
+          title: l10n.cronRowTitle,
+          subtitle: l10n.cronDesc,
           icon: Icons.schedule_outlined,
           availability: dashboardBacked(),
           unavailableReason: dashboardReason(),
         ),
         MoreEntry(
           id: 'skills',
-          title: 'Skills and tools',
-          subtitle: 'What Hermes knows how to do',
+          title: l10n.skillsTools,
+          subtitle: l10n.skillsToolsDesc,
           icon: Icons.auto_awesome_outlined,
           availability: dashboardBacked(),
           unavailableReason: dashboardReason(),
         ),
         MoreEntry(
           id: 'memory',
-          title: 'Memory',
-          subtitle: 'Durable facts Hermes keeps about you',
+          title: l10n.memory,
+          subtitle: l10n.memoryDesc,
           icon: Icons.psychology_outlined,
           availability: dashboardBacked(),
           unavailableReason: dashboardReason(),
@@ -180,19 +178,18 @@ List<MoreSection> buildMoreSections({required bool dashboardReachable}) {
       ],
     ),
     MoreSection(
-      title: 'System',
+      title: l10n.moreSectionSystem,
       entries: [
-        const MoreEntry(
+        MoreEntry(
           id: 'settings',
-          title: 'Settings',
-          subtitle: 'Connection, appearance, and device preferences',
+          title: l10n.settingsTitle,
+          subtitle: l10n.settingsDesc,
           icon: Icons.settings_outlined,
         ),
         MoreEntry(
           id: 'dashboard',
-          title: 'Open the Hermes dashboard',
-          subtitle:
-              'Everything not yet native, in the authenticated web dashboard',
+          title: l10n.openDashboard,
+          subtitle: l10n.openDashboardDesc,
           icon: Icons.open_in_new,
           availability: dashboardBacked(),
           unavailableReason: dashboardReason(),
@@ -288,9 +285,9 @@ class _MoreEntryCard extends StatelessWidget {
                       ),
                       if (entry.availability ==
                           MoreEntryAvailability.comingSoon)
-                        const StatusChip(
+                        StatusChip(
                           status: HermesStatus.idle,
-                          label: 'Coming next',
+                          label: context.l10n.comingNext,
                         ),
                     ],
                   ),

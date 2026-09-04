@@ -15,6 +15,7 @@
 ///    the rest does not exist.
 library;
 
+import '../../l10n/app_localizations.dart';
 import '../models/session.dart';
 import '../theme/hermes_theme.dart';
 
@@ -43,6 +44,20 @@ enum HomeSectionKind {
         return 'Continue working';
       case HomeSectionKind.completedRecently:
         return 'Recently completed';
+    }
+  }
+
+  /// Localized variant of [title] for UI call sites.
+  String titleLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case HomeSectionKind.needsYou:
+        return l10n.homeSectionNeedsYou;
+      case HomeSectionKind.running:
+        return l10n.homeSectionRunning;
+      case HomeSectionKind.continueWorking:
+        return l10n.homeSectionWorking;
+      case HomeSectionKind.completedRecently:
+        return l10n.homeSectionCompleted;
     }
   }
 }

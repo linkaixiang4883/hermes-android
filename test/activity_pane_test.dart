@@ -7,6 +7,8 @@ import 'package:hermes_android/core/utils/activity_feed.dart';
 import 'package:hermes_android/core/widgets/activity_pane.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 
+import 'support/l10n_test_utils.dart';
+
 final _now = DateTime.utc(2026, 8, 28, 12, 0, 0);
 
 ActivityItem _item({
@@ -65,6 +67,8 @@ Future<void> _pump(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(Brightness.dark),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: Scaffold(
         body: ActivityPane(
           loadFeed: loadFeed,

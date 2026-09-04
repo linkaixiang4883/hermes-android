@@ -29,6 +29,7 @@
 ///    absent from the session list keeps its row but has no title.
 library;
 
+import '../../l10n/app_localizations.dart';
 import '../models/gateway_turn_contract.dart';
 import '../services/gateway_turn_journal.dart';
 import '../theme/hermes_theme.dart';
@@ -71,6 +72,20 @@ enum ActivityGroupKind {
         return 'Failed';
       case ActivityGroupKind.completed:
         return 'Completed';
+    }
+  }
+
+  /// Localized variant of [title] for UI call sites.
+  String titleLocalized(AppLocalizations l10n) {
+    switch (this) {
+      case ActivityGroupKind.needsYou:
+        return l10n.homeSectionNeedsYou;
+      case ActivityGroupKind.running:
+        return l10n.homeSectionRunning;
+      case ActivityGroupKind.failed:
+        return l10n.activityGroupFailed;
+      case ActivityGroupKind.completed:
+        return l10n.activityGroupCompleted;
     }
   }
 }
@@ -174,6 +189,7 @@ class _Classification {
 ActivityFeed buildActivityFeed({
   required GatewayTurnJournalSnapshot snapshot,
   required DateTime now,
+  required AppLocalizations l10n,
   String? connectionId,
   String? endpointDigest,
   Map<String, String> sessionTitles = const {},
@@ -217,6 +233,7 @@ ActivityFeed buildActivityFeed({
       entry,
       ageMs: nowMs - entry.updatedAtEpochMs,
       staleMs: staleMs,
+      l10n: l10n,
     );
 
     // Blocked work is never aged out — being stuck for a week is the strongest
@@ -269,41 +286,42 @@ _Classification _classify(
   GatewayTurnJournalEntry entry, {
   required int ageMs,
   required int staleMs,
+  required AppLocalizations l10n,
 }) {
   // A recovery failure outranks the reported status: the turn may well have
   // completed server-side, but the client could not reconcile it and the
   // composer stays blocked, which is what the timeline must state.
   if (entry.failure != null) {
-    return const _Classification(
+    return _Classification(
       ActivityGroupKind.failed,
-      'Turn recovery failed',
+      l10n.turnRecoveryFailed,
       HermesStatus.failed,
     );
   }
 
   switch (entry.status) {
     case GatewayRecoveryTurnStatus.waitingInput:
-      return const _Classification(
+      return _Classification(
         ActivityGroupKind.needsYou,
-        'Waiting for your input',
+        l10n.turnWaitingInput,
         HermesStatus.blocked,
       );
     case GatewayRecoveryTurnStatus.failed:
-      return const _Classification(
+      return _Classification(
         ActivityGroupKind.failed,
-        'The turn failed',
+        l10n.turnFailedState,
         HermesStatus.failed,
       );
     case GatewayRecoveryTurnStatus.completed:
-      return const _Classification(
+      return _Classification(
         ActivityGroupKind.completed,
-        'Completed',
+        l10n.activityGroupCompleted,
         HermesStatus.completed,
       );
     case GatewayRecoveryTurnStatus.interrupted:
-      return const _Classification(
+      return _Classification(
         ActivityGroupKind.completed,
-        'Stopped',
+        l10n.turnStopped,
         HermesStatus.idle,
       );
     case null:
@@ -312,9 +330,9 @@ _Classification _classify(
       // A negative age means the device clock is behind the journal; trust the
       // journal rather than converting live work into a fabricated failure.
       if (ageMs > staleMs) {
-        return const _Classification(
+        return _Classification(
           ActivityGroupKind.failed,
-          'Stalled — no update from Hermes',
+          l10n.turnStalled,
           HermesStatus.failed,
         );
       }
@@ -322,7 +340,7 @@ _Classification _classify(
       // but the gateway has not answered yet, so the work is outstanding.
       return _Classification(
         ActivityGroupKind.running,
-        entry.status == null ? 'Submitted, waiting for Hermes' : 'Running',
+        entry.status == null ? l10n.turnSubmitted : l10n.turnRunningState,
         HermesStatus.running,
       );
   }
@@ -337,6 +355,7 @@ Future<ActivityFeed> readActivityFeed({
   required GatewayTurnJournal journal,
   required String? connectionId,
   required String? endpointDigest,
+  required AppLocalizations l10n,
   Map<String, String> sessionTitles = const {},
   DateTime? now,
   Duration runningStaleAfter = kActivityRunningStaleAfter,
@@ -348,6 +367,7 @@ Future<ActivityFeed> readActivityFeed({
     return buildActivityFeed(
       snapshot: snapshot,
       now: now ?? DateTime.now(),
+      l10n: l10n,
       connectionId: connectionId,
       endpointDigest: endpointDigest,
       sessionTitles: sessionTitles,

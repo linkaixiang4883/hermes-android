@@ -1131,4 +1131,172 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get clarifyFallbackDescription => 'Hermes 需要更多信息才能继续。';
+
+  @override
+  String get homeUnreachable => '无法连接到 Hermes';
+
+  @override
+  String get homeUnreachableHint => 'Home 需要读取你的最近聊天来判断轻重缓急，请确认网关可达后重试。';
+
+  @override
+  String get homeNothingNeedsYou => '暂无待办';
+
+  @override
+  String get homeAllClearHint => '没有被阻塞、进行中或待恢复的聊天，随时可以新建一个。';
+
+  @override
+  String get offlineShowingLastKnown => '离线——显示上次已知的内容。';
+
+  @override
+  String get untitledChat => '未命名聊天';
+
+  @override
+  String get activityUnreadable => '活动记录读取失败';
+
+  @override
+  String get activityJournalHint =>
+      'Activity 通过持久化回合日志来掌握 Hermes 的动态，请确认网关可达后重试。';
+
+  @override
+  String get inboxClear => '暂无事项';
+
+  @override
+  String get activityNothingRunning => '没有正在运行的任务';
+
+  @override
+  String get activityNoAttention => '没有需要你处理或失败的回合。';
+
+  @override
+  String get activityEmptyHint => '没有被阻塞、进行中或刚完成的回合，你发起的任务会显示在这里。';
+
+  @override
+  String andCountMore(int count) {
+    return '还有 $count 项';
+  }
+
+  @override
+  String get homeSectionNeedsYou => '需要你处理';
+
+  @override
+  String get homeSectionRunning => '进行中';
+
+  @override
+  String get homeSectionWorking => '继续处理';
+
+  @override
+  String get homeSectionCompleted => '最近完成';
+
+  @override
+  String get activityGroupFailed => '失败';
+
+  @override
+  String get activityGroupCompleted => '已完成';
+
+  @override
+  String get turnRecoveryFailed => '回合恢复失败';
+
+  @override
+  String get turnWaitingInput => '等待你的输入';
+
+  @override
+  String get turnFailedState => '该回合失败了';
+
+  @override
+  String get turnStopped => '已停止';
+
+  @override
+  String get turnStalled => '停滞——Hermes 长时间无更新';
+
+  @override
+  String get turnSubmitted => '已提交，等待 Hermes 响应';
+
+  @override
+  String get turnRunningState => '进行中';
+
+  @override
+  String get moreSectionWorkspace => '工作区';
+
+  @override
+  String get unassignedChats => '未归档聊天';
+
+  @override
+  String get unassignedChatsDesc => '尚未归入任何项目的聊天';
+
+  @override
+  String get archivedQuickChats => '已归档的闪聊';
+
+  @override
+  String get archivedQuickChatsDesc => '查看或转正超过保留期的闪聊';
+
+  @override
+  String get files => '文件';
+
+  @override
+  String get filesDesc => '浏览项目背后的 miniserver 目录';
+
+  @override
+  String get assets => '素材';
+
+  @override
+  String get assetsDesc => '产物、附件与生成的媒体';
+
+  @override
+  String get moreSectionOrganization => '整理';
+
+  @override
+  String get pinBatchUndo => '置顶、批量与撤销';
+
+  @override
+  String get pinBatchUndoDesc => '跨设备排序与可撤销的批量整理';
+
+  @override
+  String get aiFiling => 'AI 辅助归档';
+
+  @override
+  String get aiFilingDesc => '推荐项目并从你的纠正中学习';
+
+  @override
+  String get moreSectionAutomation => '自动化';
+
+  @override
+  String get cronDesc => '计划任务及其上次运行';
+
+  @override
+  String get skillsTools => '技能与工具';
+
+  @override
+  String get skillsToolsDesc => 'Hermes 会的技能';
+
+  @override
+  String get memoryDesc => 'Hermes 记住的关于你的长期事实';
+
+  @override
+  String get moreSectionSystem => '系统';
+
+  @override
+  String get settingsDesc => '连接、外观与设备偏好';
+
+  @override
+  String get openDashboard => '打开 Hermes Dashboard';
+
+  @override
+  String get openDashboardDesc => '尚未原生化的功能都在已认证的网页 Dashboard 里';
+
+  @override
+  String get comingNext => '即将到来';
+
+  @override
+  String get moreNeedsDashboard => '需要可达的 Hermes Dashboard，请检查该连接的主机、端口和凭据。';
+
+  @override
+  String get moreNeedsAssets => '需要 Hermes 网关提供 Assets 索引。';
+
+  @override
+  String get moreNeedsPinUndo => '需要 Hermes 网关提供置顶排序、批量操作与撤销能力。';
+
+  @override
+  String get moreNeedsFiling => '需要 Hermes 网关提供归档学习能力。';
+
+  @override
+  String get cronRowTitle => '定时任务';
 }
