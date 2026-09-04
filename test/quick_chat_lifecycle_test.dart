@@ -18,6 +18,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/models/session.dart';
 import 'package:hermes_android/core/screens/workspace_screen.dart';
+
+import 'support/l10n_test_utils.dart';
 import 'package:hermes_android/core/services/projects_gateway_client.dart';
 import 'package:hermes_android/core/services/projects_repository.dart';
 import 'package:hermes_android/core/services/quick_chat_store.dart';
@@ -109,6 +111,8 @@ Future<void> _pumpWorkspace(
   await tester.pumpWidget(
     MaterialApp(
       theme: hermesTheme(Brightness.dark),
+      localizationsDelegates: l10nTestDelegates,
+      supportedLocales: l10nTestSupportedLocales,
       home: WorkspaceScreen(
         connection: connection,
         repositoryFactory: repository == null ? null : (_) => repository,
