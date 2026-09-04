@@ -2839,6 +2839,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn’t {action} project'**
   String couldNotActionProject(String action);
+
+  /// No description provided for @aiSearchModelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'AI search model'**
+  String get aiSearchModelTitle;
+
+  /// No description provided for @aiSearchModelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'The model only rewrites your question into a short full-text query. Hermes uses the provider credentials already configured on the host.'**
+  String get aiSearchModelHint;
+
+  /// No description provided for @chooseAiModelFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose an AI search model before using AI search.'**
+  String get chooseAiModelFirst;
+
+  /// No description provided for @searchFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Session search failed: {error}'**
+  String searchFailed(String error);
+
+  /// No description provided for @chooseDestinationSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose its destination space'**
+  String get chooseDestinationSpace;
+
+  /// No description provided for @spaceFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Space'**
+  String get spaceFallback;
+
+  /// No description provided for @useOnDevice.
+  ///
+  /// In en, this message translates to:
+  /// **'Use on-device'**
+  String get useOnDevice;
+
+  /// No description provided for @searchModeLocal.
+  ///
+  /// In en, this message translates to:
+  /// **'On-device'**
+  String get searchModeLocal;
+
+  /// No description provided for @searchModeLocalDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Titles, previews, and models'**
+  String get searchModeLocalDesc;
+
+  /// No description provided for @searchModeServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Full-text'**
+  String get searchModeServer;
+
+  /// No description provided for @searchModeServerDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'All stored message content'**
+  String get searchModeServerDesc;
+
+  /// No description provided for @searchModeAi.
+  ///
+  /// In en, this message translates to:
+  /// **'AI + full-text'**
+  String get searchModeAi;
+
+  /// No description provided for @searchModeAiDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a small model to rewrite queries'**
+  String get searchModeAiDesc;
+
+  /// No description provided for @changeAiSearchModel.
+  ///
+  /// In en, this message translates to:
+  /// **'Change AI search model'**
+  String get changeAiSearchModel;
+
+  /// No description provided for @searchMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Search mode'**
+  String get searchMode;
+
+  /// No description provided for @aiSearchedFor.
+  ///
+  /// In en, this message translates to:
+  /// **'AI searched for: {query}'**
+  String aiSearchedFor(String query);
+
+  /// No description provided for @spaceEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No chats in this space yet. Tap + to start one.'**
+  String get spaceEmptyHint;
+
+  /// No description provided for @unassignedEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'No unassigned chats.'**
+  String get unassignedEmptyHint;
+
+  /// No description provided for @searchNoContentMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No message-content matches'**
+  String get searchNoContentMatches;
+
+  /// No description provided for @spacesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Spaces'**
+  String get spacesTitle;
+
+  /// No description provided for @newSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'New space'**
+  String get newSpace;
+
+  /// No description provided for @renameSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename space'**
+  String get renameSpace;
+
+  /// No description provided for @chooseSpaceDestination.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose its destination space'**
+  String get chooseSpaceDestination;
+
+  /// No description provided for @spaceActions.
+  ///
+  /// In en, this message translates to:
+  /// **'Space actions'**
+  String get spaceActions;
+
+  /// No description provided for @createSpaceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a space to separate related conversations.'**
+  String get createSpaceHint;
+
+  /// No description provided for @lastActivityDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Last activity {month}/{day}/{year}'**
+  String lastActivityDate(int month, int day, int year);
+
+  /// No description provided for @workspaceNavHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Projects, Activity — new navigation'**
+  String get workspaceNavHint;
+
+  /// No description provided for @spaceAllChats.
+  ///
+  /// In en, this message translates to:
+  /// **'All chats'**
+  String get spaceAllChats;
+
+  /// No description provided for @aiModelsLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load AI search models: {error}'**
+  String aiModelsLoadFailed(String error);
 }
 
 class _AppLocalizationsDelegate

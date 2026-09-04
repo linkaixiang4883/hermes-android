@@ -936,5 +936,68 @@
         "type": "String"
       }
     }
+  },
+  "aiSearchModelTitle": "AI search model",
+  "aiSearchModelHint": "The model only rewrites your question into a short full-text query. Hermes uses the provider credentials already configured on the host.",
+  "chooseAiModelFirst": "Choose an AI search model before using AI search.",
+  "searchFailed": "Session search failed: {error}",
+  "@searchFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseDestinationSpace": "Choose its destination space",
+  "spaceFallback": "Space",
+  "useOnDevice": "Use on-device",
+  "searchModeLocal": "On-device",
+  "searchModeLocalDesc": "Titles, previews, and models",
+  "searchModeServer": "Full-text",
+  "searchModeServerDesc": "All stored message content",
+  "searchModeAi": "AI + full-text",
+  "searchModeAiDesc": "Choose a small model to rewrite queries",
+  "changeAiSearchModel": "Change AI search model",
+  "searchMode": "Search mode",
+  "aiSearchedFor": "AI searched for: {query}",
+  "@aiSearchedFor": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "spaceEmptyHint": "No chats in this space yet. Tap + to start one.",
+  "unassignedEmptyHint": "No unassigned chats.",
+  "searchNoContentMatches": "No message-content matches",
+  "spacesTitle": "Spaces",
+  "newSpace": "New space",
+  "renameSpace": "Rename space",
+  "chooseSpaceDestination": "Choose its destination space",
+  "spaceActions": "Space actions",
+  "createSpaceHint": "Create a space to separate related conversations.",
+  "lastActivityDate": "Last activity {month}/{day}/{year}",
+  "@lastActivityDate": {
+    "placeholders": {
+      "month": {
+        "type": "int"
+      },
+      "day": {
+        "type": "int"
+      },
+      "year": {
+        "type": "int"
+      }
+    }
+  },
+  "workspaceNavHint": "Projects, Activity — new navigation",
+  "spaceAllChats": "All chats",
+  "aiModelsLoadFailed": "Could not load AI search models: {error}",
+  "@aiModelsLoadFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

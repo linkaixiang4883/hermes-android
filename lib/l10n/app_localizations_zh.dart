@@ -1414,7 +1414,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get spaceUnassigned => '未归档';
 
   @override
-  String get moveToSpace => '移到 Space';
+  String get moveToSpace => '移到空间';
 
   @override
   String get moveChat => '移动聊天';
@@ -1514,5 +1514,100 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String couldNotActionProject(String action) {
     return '项目$action失败';
+  }
+
+  @override
+  String get aiSearchModelTitle => 'AI 搜索模型';
+
+  @override
+  String get aiSearchModelHint => '该模型只把你的问题改写为简短的全文查询，使用主机上已配置的 provider 凭据。';
+
+  @override
+  String get chooseAiModelFirst => '使用 AI 搜索前请先选择 AI 搜索模型。';
+
+  @override
+  String searchFailed(String error) {
+    return '会话搜索失败：$error';
+  }
+
+  @override
+  String get chooseDestinationSpace => '选择目标空间';
+
+  @override
+  String get spaceFallback => '空间';
+
+  @override
+  String get useOnDevice => '使用本机搜索';
+
+  @override
+  String get searchModeLocal => '本机';
+
+  @override
+  String get searchModeLocalDesc => '标题、预览和模型';
+
+  @override
+  String get searchModeServer => '全文';
+
+  @override
+  String get searchModeServerDesc => '全部已存消息内容';
+
+  @override
+  String get searchModeAi => 'AI+全文';
+
+  @override
+  String get searchModeAiDesc => '选一个小模型来改写查询';
+
+  @override
+  String get changeAiSearchModel => '更换 AI 搜索模型';
+
+  @override
+  String get searchMode => '搜索模式';
+
+  @override
+  String aiSearchedFor(String query) {
+    return 'AI 实际搜索：$query';
+  }
+
+  @override
+  String get spaceEmptyHint => '该空间还没有聊天，点 + 新建一个。';
+
+  @override
+  String get unassignedEmptyHint => '没有未归档聊天。';
+
+  @override
+  String get searchNoContentMatches => '没有匹配的消息内容';
+
+  @override
+  String get spacesTitle => '空间';
+
+  @override
+  String get newSpace => '新建空间';
+
+  @override
+  String get renameSpace => '重命名空间';
+
+  @override
+  String get chooseSpaceDestination => '选择目标空间';
+
+  @override
+  String get spaceActions => '空间操作';
+
+  @override
+  String get createSpaceHint => '新建空间，把相关的对话分开存放。';
+
+  @override
+  String lastActivityDate(int month, int day, int year) {
+    return '上次活跃 $month/$day/$year';
+  }
+
+  @override
+  String get workspaceNavHint => '项目、动态——新导航';
+
+  @override
+  String get spaceAllChats => '全部聊天';
+
+  @override
+  String aiModelsLoadFailed(String error) {
+    return 'AI 搜索模型加载失败：$error';
   }
 }

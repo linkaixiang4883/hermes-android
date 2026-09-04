@@ -274,14 +274,12 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'AI search model',
+                        context.l10n.aiSearchModelTitle,
                         style: Theme.of(sheetContext).textTheme.titleLarge,
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'The model only rewrites your question into a short '
-                        'full-text query. Hermes uses the provider credentials '
-                        'already configured on the host.',
+                      Text(
+                        context.l10n.aiSearchModelHint,
                       ),
                     ],
                   ),
@@ -334,7 +332,9 @@ class _SessionListScreenState extends State<SessionListScreen> {
     } catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not load AI search models: $error')),
+          SnackBar(
+            content: Text(context.l10n.aiModelsLoadFailed('$error')),
+          ),
         );
       }
       return null;
@@ -382,10 +382,10 @@ class _SessionListScreenState extends State<SessionListScreen> {
             : null;
         _searching = false;
       });
-    } on AiSearchRewriteException catch (error) {
+    } on AiSearchRewriteException {
       if (!requestIsCurrent()) return;
       setState(() {
-        _searchError = error.message;
+        _searchError = context.l10n.chooseAiModelFirst;
         _serverResults = null;
         _searching = false;
       });
@@ -399,7 +399,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
     } catch (error) {
       if (!requestIsCurrent()) return;
       setState(() {
-        _searchError = 'Session search failed: $error';
+        _searchError = context.l10n.searchFailed('$error');
         _serverResults = null;
         _searching = false;
       });
@@ -603,13 +603,13 @@ class _SessionListScreenState extends State<SessionListScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('Move chat'),
-              subtitle: Text('Choose its destination space'),
+            ListTile(
+              title: Text(context.l10n.moveChat),
+              subtitle: Text(context.l10n.chooseDestinationSpace),
             ),
             ListTile(
               leading: const Icon(Icons.inbox_outlined),
-              title: const Text('Unassigned'),
+              title: Text(context.l10n.spaceUnassigned),
               onTap: () => Navigator.pop(sheetContext, ''),
             ),
             for (final space in _spaceState.spaces)
@@ -773,14 +773,14 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
   String get _spaceScopeLabel {
     return switch (_spaceScope.kind) {
-      ChatSpaceScopeKind.all => 'All chats',
-      ChatSpaceScopeKind.unassigned => 'Unassigned',
+      ChatSpaceScopeKind.all => context.l10n.spaceAllChats,
+      ChatSpaceScopeKind.unassigned => context.l10n.spaceUnassigned,
       ChatSpaceScopeKind.space =>
         _spaceState.spaces
                 .where((space) => space.id == _spaceScope.spaceId)
                 .map((space) => space.name)
                 .firstOrNull ??
-            'Space',
+            context.l10n.spaceFallback,
     };
   }
 
@@ -875,7 +875,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
             ListTile(
               key: const Key('open-spaces'),
               leading: const Icon(Icons.folder_copy_outlined),
-              title: const Text('Spaces'),
+              title: Text(context.l10n.spacesTitle),
               subtitle: Text(_spaceScopeLabel),
               enabled: _spaceStore != null,
               onTap: () => _openSpaces(closeDrawer: true),
@@ -883,8 +883,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
             ListTile(
               key: const Key('open-workspace'),
               leading: const Icon(Icons.dashboard_outlined),
-              title: const Text('Workspace'),
-              subtitle: const Text('Projects, Activity — new navigation'),
+              title: Text(context.l10n.moreSectionWorkspace),
+              subtitle: Text(context.l10n.workspaceNavHint),
               onTap: () {
                 Navigator.pop(context);
                 _openScreen(
@@ -1083,7 +1083,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     trailing: [
                       if (rawQuery.isNotEmpty)
                         IconButton(
-                          tooltip: 'Clear search',
+                          tooltip: context.l10n.clearSearch,
                           icon: const Icon(Icons.close),
                           onPressed: () {
                             _searchDebounceTimer?.cancel();
@@ -1100,7 +1100,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                         ),
                       if (aiMode)
                         IconButton(
-                          tooltip: 'Change AI search model',
+                          tooltip: context.l10n.changeAiSearchModel,
                           icon: _loadingAiModels
                               ? const SizedBox.square(
                                   dimension: 18,
@@ -1114,7 +1114,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                               : _showAiModelSelector,
                         ),
                       PopupMenuButton<SessionSearchMode>(
-                        tooltip: 'Search mode',
+                        tooltip: context.l10n.searchMode,
                         icon: Icon(
                           aiMode
                               ? Icons.auto_awesome
@@ -1127,22 +1127,26 @@ class _SessionListScreenState extends State<SessionListScreen> {
                           CheckedPopupMenuItem(
                             value: SessionSearchMode.local,
                             checked: !serverMode,
-                            child: const ListTile(
+                            child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(Icons.phone_android),
-                              title: Text('On-device'),
-                              subtitle: Text('Titles, previews, and models'),
+                              title: Text(context.l10n.searchModeLocal),
+                              subtitle: Text(
+                                context.l10n.searchModeLocalDesc,
+                              ),
                             ),
                           ),
                           CheckedPopupMenuItem(
                             value: SessionSearchMode.server,
                             enabled: _serverSearchAvailable,
                             checked: _searchMode == SessionSearchMode.server,
-                            child: const ListTile(
+                            child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: Icon(Icons.manage_search),
-                              title: Text('Full-text'),
-                              subtitle: Text('All stored message content'),
+                              title: Text(context.l10n.searchModeServer),
+                              subtitle: Text(
+                                context.l10n.searchModeServerDesc,
+                              ),
                             ),
                           ),
                           CheckedPopupMenuItem(
@@ -1152,10 +1156,10 @@ class _SessionListScreenState extends State<SessionListScreen> {
                             child: ListTile(
                               contentPadding: EdgeInsets.zero,
                               leading: const Icon(Icons.auto_awesome),
-                              title: const Text('AI + full-text'),
+                              title: Text(context.l10n.searchModeAi),
                               subtitle: Text(
                                 _aiSearchModel == null
-                                    ? 'Choose a small model to rewrite queries'
+                                    ? context.l10n.searchModeAiDesc
                                     : '${_aiSearchModel!.provider} • ${_aiSearchModel!.model}',
                               ),
                             ),
@@ -1179,7 +1183,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                         const SizedBox(width: 6),
                         Expanded(
                           child: Text(
-                            'AI searched for: $_aiRewrittenQuery',
+                            context.l10n.aiSearchedFor(_aiRewrittenQuery!),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall,
@@ -1218,7 +1222,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                             TextButton(
                               onPressed: () =>
                                   _setSearchMode(SessionSearchMode.local),
-                              child: const Text('Use on-device'),
+                              child: Text(context.l10n.useOnDevice),
                             ),
                           ],
                         ),
@@ -1230,8 +1234,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     Center(
                       child: Text(
                         _spaceScope.kind == ChatSpaceScopeKind.space
-                            ? 'No chats in this space yet. Tap + to start one.'
-                            : 'No unassigned chats.',
+                            ? context.l10n.spaceEmptyHint
+                            : context.l10n.unassignedEmptyHint,
                         textAlign: TextAlign.center,
                       ),
                     ),
@@ -1243,7 +1247,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                       serverHitsCurrent != null &&
                       serverHitsCurrent.isEmpty) ...[
                     const SizedBox(height: 16),
-                    const Center(child: Text('No message-content matches')),
+                    Center(child: Text(context.l10n.searchNoContentMatches)),
                   ],
                 ],
               ),
@@ -1272,11 +1276,11 @@ class _SessionListScreenState extends State<SessionListScreen> {
                       onSelected: (action) =>
                           _handleSessionAction(action, session),
                       itemBuilder: (_) => [
-                        const PopupMenuItem(
+                        PopupMenuItem(
                           value: 'move',
                           child: ListTile(
                             leading: Icon(Icons.drive_file_move_outline),
-                            title: Text('Move to space'),
+                            title: Text(context.l10n.moveToSpace),
                           ),
                         ),
                         if (_desktopGateway != null)

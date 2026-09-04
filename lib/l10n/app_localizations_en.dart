@@ -1572,4 +1572,103 @@ class AppLocalizationsEn extends AppLocalizations {
   String couldNotActionProject(String action) {
     return 'Couldn’t $action project';
   }
+
+  @override
+  String get aiSearchModelTitle => 'AI search model';
+
+  @override
+  String get aiSearchModelHint =>
+      'The model only rewrites your question into a short full-text query. Hermes uses the provider credentials already configured on the host.';
+
+  @override
+  String get chooseAiModelFirst =>
+      'Choose an AI search model before using AI search.';
+
+  @override
+  String searchFailed(String error) {
+    return 'Session search failed: $error';
+  }
+
+  @override
+  String get chooseDestinationSpace => 'Choose its destination space';
+
+  @override
+  String get spaceFallback => 'Space';
+
+  @override
+  String get useOnDevice => 'Use on-device';
+
+  @override
+  String get searchModeLocal => 'On-device';
+
+  @override
+  String get searchModeLocalDesc => 'Titles, previews, and models';
+
+  @override
+  String get searchModeServer => 'Full-text';
+
+  @override
+  String get searchModeServerDesc => 'All stored message content';
+
+  @override
+  String get searchModeAi => 'AI + full-text';
+
+  @override
+  String get searchModeAiDesc => 'Choose a small model to rewrite queries';
+
+  @override
+  String get changeAiSearchModel => 'Change AI search model';
+
+  @override
+  String get searchMode => 'Search mode';
+
+  @override
+  String aiSearchedFor(String query) {
+    return 'AI searched for: $query';
+  }
+
+  @override
+  String get spaceEmptyHint =>
+      'No chats in this space yet. Tap + to start one.';
+
+  @override
+  String get unassignedEmptyHint => 'No unassigned chats.';
+
+  @override
+  String get searchNoContentMatches => 'No message-content matches';
+
+  @override
+  String get spacesTitle => 'Spaces';
+
+  @override
+  String get newSpace => 'New space';
+
+  @override
+  String get renameSpace => 'Rename space';
+
+  @override
+  String get chooseSpaceDestination => 'Choose its destination space';
+
+  @override
+  String get spaceActions => 'Space actions';
+
+  @override
+  String get createSpaceHint =>
+      'Create a space to separate related conversations.';
+
+  @override
+  String lastActivityDate(int month, int day, int year) {
+    return 'Last activity $month/$day/$year';
+  }
+
+  @override
+  String get workspaceNavHint => 'Projects, Activity — new navigation';
+
+  @override
+  String get spaceAllChats => 'All chats';
+
+  @override
+  String aiModelsLoadFailed(String error) {
+    return 'Could not load AI search models: $error';
+  }
 }
