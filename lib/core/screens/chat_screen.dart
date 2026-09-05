@@ -35,6 +35,8 @@ import '../models/gateway_clarify.dart';
 import '../models/gateway_insight.dart';
 import '../models/gateway_sensitive_prompt.dart';
 import '../models/gateway_turn_contract.dart';
+import '../models/session_context.dart';
+import '../models/turn_usage.dart';
 import '../utils/chat_display_items.dart';
 import '../utils/chat_history_scroll.dart';
 import '../utils/message_content.dart';
@@ -101,6 +103,12 @@ typedef TestRemoteAttachmentUpload =
       required String dataUrl,
     });
 
+/// Injectable breakdown fetcher so usage refresh runs under test doubles
+/// without a live Desktop gateway socket.
+@visibleForTesting
+typedef TestContextUsageFetcher =
+    Future<Map<String, dynamic>?> Function({required String sessionId});
+
 class _PendingSensitivePrompt {
   final GatewaySensitivePromptRequest request;
   final int responseGeneration;
@@ -161,6 +169,10 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final TurnNotificationService? testTurnNotifications;
 
+  /// Overrides the WS breakdown fetch in tests (see [_refreshContextUsage]).
+  @visibleForTesting
+  final TestContextUsageFetcher? testContextUsageFetcher;
+
   const ChatScreen({
     required this.connection,
     required this.session,
@@ -177,6 +189,7 @@ class ChatScreen extends StatefulWidget {
     this.testInitialAttachmentDrafts = const [],
     this.testVoiceComposerAdapter,
     this.testTurnNotifications,
+    this.testContextUsageFetcher,
     super.key,
   });
 
@@ -204,6 +217,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   DesktopConnectionState _desktopConnectionState =
       DesktopConnectionState.disconnected;
   bool _appInBackground = false;
+
+  // Context usage display (Task 2): the WS breakdown snapshot and the
+  // REST stream-tail fallback for the current turn. Never persisted;
+  // [_usageSessionId] tracks which session they belong to.
+  TurnUsage? _lastTurnUsage;
+  SessionContext? _contextUsage;
+  String? _usageSessionId;
 
   // Chat sending state
   final _textController = TextEditingController();
@@ -410,7 +430,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _initializeChat() async {
     await _fetchMessages();
     if (!mounted) return;
+    unawaited(_refreshContextUsage());
     await _recoverPendingTurn(allowLegacyFallback: true);
+  }
+
+  /// Pulls the WS breakdown snapshot into [_contextUsage].
+  ///
+  /// A session switch clears both usage fields first. A failed or empty
+  /// fetch keeps the previous breakdown (stale beats blank mid-stream);
+  /// only a parsed all-zero breakdown hides it.
+  Future<void> _refreshContextUsage() async {
+    final sessionId = widget.session.id;
+    if (_usageSessionId != sessionId) {
+      setState(() {
+        _usageSessionId = sessionId;
+        _contextUsage = null;
+        _lastTurnUsage = null;
+      });
+    }
+    final fetcher = widget.testContextUsageFetcher;
+    final Map<String, dynamic>? raw;
+    try {
+      raw = fetcher != null
+          ? await fetcher(sessionId: sessionId)
+          : await _desktopGateway?.getContextUsage(sessionId: sessionId);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || raw == null) return;
+    final parsed = SessionContext.fromBreakdown(raw);
+    if (!mounted) return;
+    setState(() => _contextUsage = parsed);
+  }
+
+  // TODO(usage-hint, Task 3): wire to the composer hint bar tap.
+  // ignore: unused_element
+  void _showUsageDialog() {
+    final contextUsage = _contextUsage;
+    final lastTurn = _lastTurnUsage;
+    if (contextUsage == null && lastTurn == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        final dialogL10n = dialogContext.l10n;
+        return AlertDialog(
+          title: Text(dialogL10n.usageTitle),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (contextUsage != null) ...[
+                Text(
+                  dialogL10n.usageBarSummary(
+                    TurnUsage.formatCompact(contextUsage.used),
+                    TurnUsage.formatCompact(contextUsage.max),
+                    contextUsage.percent.round(),
+                  ),
+                ),
+                if (contextUsage.model.isNotEmpty)
+                  Text(dialogL10n.usageModelName(contextUsage.model)),
+              ] else if (lastTurn != null)
+                Text(
+                  dialogL10n.usageThisTurn(
+                    TurnUsage.formatCompact(lastTurn.totalTokens),
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(dialogL10n.dismiss),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _ensureDesktopSession() async {
@@ -1650,8 +1745,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         if (!mounted || responseGeneration != _responseGeneration) return;
         _upsertToolProgress(progress);
       },
+      onUsage: (usage) {
+        final turnUsage = TurnUsage.fromJson(usage);
+        if (turnUsage == null || !mounted) return;
+        setState(() => _lastTurnUsage = turnUsage);
+      },
       onDone: () async {
         if (!mounted || responseGeneration != _responseGeneration) return;
+        unawaited(_refreshContextUsage());
         // Refresh messages to get the final server-side state
         try {
           final messages = await _client.getMessages(widget.session.id);
@@ -2005,6 +2106,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       releaseAcceptedAttachmentCache(state);
       if (!mounted || responseGeneration != _responseGeneration) return;
       _applyGatewayTurnState(state);
+      unawaited(_refreshContextUsage());
     } catch (error) {
       if (!mounted || responseGeneration != _responseGeneration) return;
       if (gatewayTurnSubmissionWasDefinitelyRejected(error)) {
@@ -2137,6 +2239,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
         _scheduleStreamingFollow();
       }
+      unawaited(_refreshContextUsage());
       return;
     }
     if (event.type.startsWith('tool.')) {

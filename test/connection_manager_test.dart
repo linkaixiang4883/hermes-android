@@ -631,6 +631,34 @@ void main() {
       expect(progress!['status'], 'running');
     });
 
+    test('delivers top-level usage via onUsage without touching tokens', () {
+      Map<String, dynamic>? usage;
+      final token = GatewayChatClient.parseSseFrame(
+        'data: {"choices":[{"delta":{"content":"hi"}}],'
+        '"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165}}',
+        onUsage: (u) => usage = u,
+      );
+
+      expect(token, 'hi');
+      expect(usage, isNotNull);
+      expect(usage!['total_tokens'], 165);
+    });
+
+    test('ignores empty or missing usage without calling back', () {
+      var calls = 0;
+      var token = GatewayChatClient.parseSseFrame(
+        'data: {"choices":[{"delta":{"content":"hi"}}],"usage":{}}',
+        onUsage: (_) => calls++,
+      );
+      expect(token, 'hi');
+      token = GatewayChatClient.parseSseFrame(
+        'data: {"choices":[{"delta":{"content":"hi"}}]}',
+        onUsage: (_) => calls++,
+      );
+      expect(token, 'hi');
+      expect(calls, 0);
+    });
+
     test(
       'cancels the active SSE request without reporting completion',
       () async {
@@ -670,6 +698,25 @@ void main() {
         api.close();
       },
     );
+  });
+
+  group('DesktopGatewayClient.getContextUsage', () {
+    test('returns null without a mapped session instead of throwing', () async {
+      final client = DesktopGatewayClient.fromConnection(
+        SavedConnection(
+          id: 'usage-fixture',
+          label: 'Usage fixture',
+          host: 'usage.fixture',
+          port: 8642,
+          apiKey: 'test-key',
+        ),
+      );
+      try {
+        expect(await client.getContextUsage(sessionId: 'unknown'), isNull);
+      } finally {
+        client.close();
+      }
+    });
   });
 
   group('Desktop gateway URL derivation', () {

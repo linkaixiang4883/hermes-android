@@ -816,6 +816,9 @@ class ApiClient {
 
 typedef ToolProgressCallback = void Function(Map<String, dynamic> progress);
 
+/// Per-turn token usage delivered alongside a streamed response.
+typedef UsageCallback = void Function(Map<String, dynamic> usage);
+
 /// SSE streaming chat client for the Gateway API Server.
 class GatewayChatClient {
   final ApiClient _api;
@@ -874,10 +877,12 @@ class GatewayChatClient {
   }
 
   /// Parse one SSE frame. Returns streamed text token, or null for non-token
-  /// frames. Hermes tool progress frames are delivered via [onToolProgress].
+  /// frames. Hermes tool progress frames are delivered via [onToolProgress];
+  /// per-turn token usage frames via [onUsage].
   static String? parseSseFrame(
     String frame, {
     ToolProgressCallback? onToolProgress,
+    UsageCallback? onUsage,
   }) {
     String eventType = '';
     final dataLines = <String>[];
@@ -904,6 +909,12 @@ class GatewayChatClient {
       }
 
       if (parsed is Map<String, dynamic>) {
+        final usage = parsed['usage'];
+        if (usage is Map<String, dynamic> && usage.isNotEmpty) {
+          onUsage?.call(usage);
+        } else if (usage is Map && usage.isNotEmpty) {
+          onUsage?.call(Map<String, dynamic>.from(usage));
+        }
         final choices = parsed['choices'] as List?;
         if (choices != null && choices.isNotEmpty && choices.first is Map) {
           final first = choices.first as Map;
@@ -931,6 +942,7 @@ class GatewayChatClient {
     String? imageDataUrl,
     required void Function(String token) onToken,
     ToolProgressCallback? onToolProgress,
+    UsageCallback? onUsage,
     required void Function() onDone,
     required void Function(String error) onError,
   }) async {
@@ -999,6 +1011,7 @@ class GatewayChatClient {
                 final token = parseSseFrame(
                   frame,
                   onToolProgress: onToolProgress,
+                  onUsage: onUsage,
                 );
                 if (token != null && token.isNotEmpty) onToken(token);
               }

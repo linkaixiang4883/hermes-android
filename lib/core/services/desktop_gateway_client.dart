@@ -358,6 +358,32 @@ class DesktopGatewayClient {
     return true;
   }
 
+  /// Fetches the live context-window breakdown for usage display.
+  ///
+  /// Returns `null` when there is no mapped/connected gateway session or
+  /// the RPC fails, so callers can fall back to the REST stream triple.
+  /// Never throws.
+  Future<Map<String, dynamic>?> getContextUsage({
+    required String sessionId,
+  }) async {
+    final gatewaySessionId = _gatewaySessionIds[sessionId];
+    final client = _ws;
+    if (gatewaySessionId == null || client == null || !client.isConnected) {
+      return null;
+    }
+    try {
+      final response = await client.send('session.context_breakdown', {
+        'session_id': gatewaySessionId,
+      });
+      final result = response['result'];
+      if (result is Map<String, dynamic>) return result;
+      if (result is Map) return Map<String, dynamic>.from(result);
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Resolves an approval against the gateway session mapped to this mobile
   /// chat. Approval requests are session-keyed and do not carry a request ID.
   Future<void> respondToApproval({
