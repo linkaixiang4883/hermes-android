@@ -3004,31 +3004,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       .withValues(alpha: 0.55),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: InkWell(
-                  key: const Key('usage-hint-bar'),
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: _showUsageDialog,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _hintLabel(),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
+                child: Semantics(
+                  label: context.l10n.usageTitle,
+                  value: _hintLabel(),
+                  button: true,
+                  excludeSemantics: true,
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(minHeight: 48),
+                    child: InkWell(
+                      key: const Key('usage-hint-bar'),
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: _showUsageDialog,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _hintLabel(),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            Icon(
+                              Icons.chevron_right,
+                              size: 14,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onSurfaceVariant,
+                            ),
+                            // TODO(compress): slot reserved for compress button.
+                            // WARNING: never drop a button directly into this
+                            // Row — a tappable nested inside this InkWell
+                            // breaks Semantics and touch handling. When landing
+                            // compress, split into a text-zone InkWell plus a
+                            // separate button zone outside of it.
+                          ],
                         ),
-                        Icon(
-                          Icons.chevron_right,
-                          size: 14,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant,
-                        ),
-                        // TODO(compress): slot reserved for compress button.
-                      ],
+                      ),
                     ),
                   ),
                 ),
