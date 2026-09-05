@@ -34,7 +34,8 @@
 - voice_composer_controller 注入 `AppLocalizations? l10n`（null 时保持英文，测试兼容）
 - main.dart：`HermesApp.getLocale/setLocale` + 设置页语言切换器（System/English/中文，prefs key `app_locale`，默认跟随系统）
 - 35 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加）+ `test/arb_parity_test.dart`（en/zh key 对等 + 占位符元数据）+ `test/zh_smoke_test.dart`（zh 真泵冒烟）
-- 门禁：`analyze --fatal-infos` 0 + `flutter test` 961 全绿，已推 fork main
+- 门禁：`analyze --fatal-infos` 0 + `flutter test` 961 全绿，已推 fork main（以上均为 main 状态）
+- **实验分支 `exp/context-usage-display`（未合未推）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616，测试 961→996，小米 8 真机实数验证通过；plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`
 - **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段
 - **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）
 
