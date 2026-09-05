@@ -118,5 +118,50 @@ void main() {
       expect(ctx!.used, 0);
       expect(ctx.percent, 6.0);
     });
+
+    test('negative used returns null', () {
+      expect(
+        SessionContext.fromBreakdown({
+          'context_used': -100,
+          'context_max': 200000,
+          'context_percent': 5.0,
+          'model': 'test-model',
+        }),
+        isNull,
+      );
+    });
+
+    test('negative percent falls back to derived used/max', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 10000,
+        'context_max': 200000,
+        'context_percent': -3.0,
+        'model': 'test-model',
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.percent, closeTo(5.0, 1e-9));
+    });
+
+    test('NaN percent falls back to derived used/max', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 10000,
+        'context_max': 200000,
+        'context_percent': double.nan,
+        'model': 'test-model',
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.percent, closeTo(5.0, 1e-9));
+    });
+
+    test('infinite percent falls back to derived used/max', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 10000,
+        'context_max': 200000,
+        'context_percent': double.infinity,
+        'model': 'test-model',
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.percent, closeTo(5.0, 1e-9));
+    });
   });
 }

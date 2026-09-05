@@ -19,13 +19,15 @@ class SessionContext {
   });
 
   /// Returns `null` when the breakdown carries no usable data:
-  /// missing/non-numeric `max`, non-positive `max` (fail-closed), or
-  /// zero usage with zero percent.
+  /// missing/non-numeric `max`, non-positive `max` (fail-closed),
+  /// negative `used`, or zero usage with zero percent.
   static SessionContext? fromBreakdown(Map<String, dynamic> json) {
     final usedRaw = json['context_used'];
-    final used = usedRaw is num ? usedRaw.toInt() : 0;
+    final used =
+        usedRaw is num && usedRaw.isFinite ? usedRaw.toInt() : 0;
+    if (used < 0) return null;
     final maxRaw = json['context_max'];
-    if (maxRaw is! num) return null;
+    if (maxRaw is! num || !maxRaw.isFinite) return null;
     final max = maxRaw.toInt();
     // Fail closed: a non-positive window cannot host any usage, so a
     // `max: 0` breakdown with `used > 0` is corrupt data, not 0%.
@@ -33,9 +35,17 @@ class SessionContext {
     final percentRaw = json['context_percent'];
     // A missing percent is derived from used/max; the dialog rounds it,
     // so float dust here never reaches the UI.
-    final percent = percentRaw is num
-        ? percentRaw.toDouble()
-        : used / max * 100;
+    // A non-finite (NaN/Infinity) or negative percent is corrupt data:
+    // guard before any round() (NaN.round() throws) and fall back to
+    // the derived value (0 when max is unusable, unreachable here).
+    final double percent;
+    if (percentRaw is num &&
+        percentRaw.isFinite &&
+        percentRaw.toDouble() >= 0) {
+      percent = percentRaw.toDouble();
+    } else {
+      percent = max > 0 ? used / max * 100 : 0;
+    }
     if (used == 0 && percent == 0) return null;
     final model = json['model']?.toString() ?? '';
     return SessionContext(
