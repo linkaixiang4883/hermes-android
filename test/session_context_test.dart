@@ -62,5 +62,61 @@ void main() {
       expect(ctx, isNotNull);
       expect(ctx!.model, '');
     });
+
+    test('zero max with nonzero used returns null (fail-closed)', () {
+      expect(
+        SessionContext.fromBreakdown({
+          'context_used': 12000,
+          'context_max': 0,
+          'context_percent': 0,
+          'model': 'test-model',
+        }),
+        isNull,
+      );
+    });
+
+    test('missing percent derives from used/max', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 10000,
+        'context_max': 200000,
+        'model': 'test-model',
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.percent, closeTo(5.0, 1e-9));
+    });
+
+    test('non-string model coerces via toString', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 500,
+        'context_max': 100000,
+        'context_percent': 0.5,
+        'model': 123,
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.model, '123');
+    });
+
+    test('string numbers fall back without throwing', () {
+      // A string max is unusable data, not zero.
+      expect(
+        SessionContext.fromBreakdown({
+          'context_used': 12000,
+          'context_max': '200000',
+          'context_percent': 6.0,
+          'model': 'test-model',
+        }),
+        isNull,
+      );
+      // A string used falls back to 0 while a numeric percent still holds.
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': '12000',
+        'context_max': 200000,
+        'context_percent': 6.0,
+        'model': 'test-model',
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.used, 0);
+      expect(ctx.percent, 6.0);
+    });
   });
 }

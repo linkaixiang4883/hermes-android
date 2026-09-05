@@ -29,11 +29,14 @@ class TurnUsage {
     } else {
       return null;
     }
-    final total = (usage['total_tokens'] as num?)?.toInt();
+    final totalRaw = usage['total_tokens'];
+    final total = totalRaw is num ? totalRaw.toInt() : null;
     if (total == null) return null;
+    final inputRaw = usage['prompt_tokens'];
+    final outputRaw = usage['completion_tokens'];
     return TurnUsage(
-      inputTokens: (usage['prompt_tokens'] as num?)?.toInt() ?? 0,
-      outputTokens: (usage['completion_tokens'] as num?)?.toInt() ?? 0,
+      inputTokens: inputRaw is num ? inputRaw.toInt() : 0,
+      outputTokens: outputRaw is num ? outputRaw.toInt() : 0,
       totalTokens: total,
     );
   }

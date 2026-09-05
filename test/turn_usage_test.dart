@@ -32,6 +32,46 @@ void main() {
     test('missing usage map returns null', () {
       expect(TurnUsage.fromJson({}), isNull);
     });
+
+    test('parses a bare usage map without the wrapper', () {
+      final usage = TurnUsage.fromJson({
+        'prompt_tokens': 120,
+        'completion_tokens': 45,
+        'total_tokens': 165,
+      });
+      expect(usage, isNotNull);
+      expect(usage!.inputTokens, 120);
+      expect(usage.outputTokens, 45);
+      expect(usage.totalTokens, 165);
+    });
+
+    test('string token values fall back without throwing', () {
+      // A string total is unusable data.
+      expect(
+        TurnUsage.fromJson({
+          'usage': {
+            'prompt_tokens': '1500',
+            'completion_tokens': '800',
+            'total_tokens': '2300',
+          },
+        }),
+        isNull,
+      );
+      // A string input falls back to 0 while numeric siblings still hold.
+      final usage = TurnUsage.fromJson({
+        'usage': {
+          'prompt_tokens': '1500',
+          'completion_tokens': 800,
+          'total_tokens': 2300,
+        },
+      });
+      expect(usage, isNotNull);
+      expect(usage!.inputTokens, 0);
+      expect(usage.outputTokens, 800);
+      expect(usage.totalTokens, 2300);
+      // A non-map usage payload carries no triple.
+      expect(TurnUsage.fromJson({'usage': 'nope'}), isNull);
+    });
   });
 
   group('TurnUsage.formatCompact', () {

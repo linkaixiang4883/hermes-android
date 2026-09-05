@@ -3,8 +3,8 @@
 /// Breakdown shape (server `tui_gateway/methods_session.py`):
 /// `{context_used, context_max, context_percent, model, categories?, estimated_total?}`
 ///
-/// Numbers may arrive as `int` or `double`, so all numeric reads go
-/// through `(x as num?)` conversion.
+/// Numbers may arrive as `int` or `double` (never strings), so all numeric
+/// reads use `is num` guards and fall back when the type is unexpected.
 class SessionContext {
   final int used;
   final int max;
@@ -19,15 +19,25 @@ class SessionContext {
   });
 
   /// Returns `null` when the breakdown carries no usable data:
-  /// all-zero (`used == 0 && max == 0 && percent == 0`) or missing `max`.
+  /// missing/non-numeric `max`, non-positive `max` (fail-closed), or
+  /// zero usage with zero percent.
   static SessionContext? fromBreakdown(Map<String, dynamic> json) {
-    final used = (json['context_used'] as num?)?.toInt() ?? 0;
-    final maxNum = json['context_max'] as num?;
-    if (maxNum == null) return null;
-    final max = maxNum.toInt();
-    final percent = (json['context_percent'] as num?)?.toDouble() ?? 0;
-    if (used == 0 && max == 0 && percent == 0) return null;
-    final model = json['model'] as String? ?? '';
+    final usedRaw = json['context_used'];
+    final used = usedRaw is num ? usedRaw.toInt() : 0;
+    final maxRaw = json['context_max'];
+    if (maxRaw is! num) return null;
+    final max = maxRaw.toInt();
+    // Fail closed: a non-positive window cannot host any usage, so a
+    // `max: 0` breakdown with `used > 0` is corrupt data, not 0%.
+    if (max <= 0) return null;
+    final percentRaw = json['context_percent'];
+    // A missing percent is derived from used/max; the dialog rounds it,
+    // so float dust here never reaches the UI.
+    final percent = percentRaw is num
+        ? percentRaw.toDouble()
+        : used / max * 100;
+    if (used == 0 && percent == 0) return null;
+    final model = json['model']?.toString() ?? '';
     return SessionContext(
       used: used,
       max: max,
