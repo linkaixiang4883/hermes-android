@@ -2098,4 +2098,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String downloadFailed(String error) {
     return 'Download failed: $error';
   }
+
+  @override
+  String usageBarSummary(String used, String max, int percent) {
+    return '$used of $max · $percent%';
+  }
+
+  @override
+  String usageThisTurn(String value) {
+    return 'This turn: $value tokens';
+  }
+
+  @override
+  String usageModelName(String model) {
+    return 'Model: $model';
+  }
+
+  @override
+  String get usageTitle => 'Token usage';
 }

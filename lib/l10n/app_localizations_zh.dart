@@ -2022,4 +2022,22 @@ class AppLocalizationsZh extends AppLocalizations {
   String downloadFailed(String error) {
     return '下载失败：$error';
   }
+
+  @override
+  String usageBarSummary(String used, String max, int percent) {
+    return '已用 $used/$max · $percent%';
+  }
+
+  @override
+  String usageThisTurn(String value) {
+    return '本轮 $value tokens';
+  }
+
+  @override
+  String usageModelName(String model) {
+    return '模型 $model';
+  }
+
+  @override
+  String get usageTitle => '用量统计';
 }

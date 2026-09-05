@@ -3769,6 +3769,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Download failed: {error}'**
   String downloadFailed(String error);
+
+  /// No description provided for @usageBarSummary.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {max} · {percent}%'**
+  String usageBarSummary(String used, String max, int percent);
+
+  /// No description provided for @usageThisTurn.
+  ///
+  /// In en, this message translates to:
+  /// **'This turn: {value} tokens'**
+  String usageThisTurn(String value);
+
+  /// No description provided for @usageModelName.
+  ///
+  /// In en, this message translates to:
+  /// **'Model: {model}'**
+  String usageModelName(String model);
+
+  /// No description provided for @usageTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Token usage'**
+  String get usageTitle;
 }
 
 class _AppLocalizationsDelegate

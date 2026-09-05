@@ -611,5 +611,9 @@
   "recentFilterEmpty": "过去七天没有任何变化。",
   "loadFilesFailed": "文件加载失败",
   "prepareSharedFilesFailed": "分享文件准备失败",
-  "downloadFailed": "下载失败：{error}"
+  "downloadFailed": "下载失败：{error}",
+  "usageBarSummary": "已用 {used}/{max} · {percent}%",
+  "usageThisTurn": "本轮 {value} tokens",
+  "usageModelName": "模型 {model}",
+  "usageTitle": "用量统计"
 }

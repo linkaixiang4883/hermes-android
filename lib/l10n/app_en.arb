@@ -1243,5 +1243,36 @@
         "type": "String"
       }
     }
-  }
+  },
+  "usageBarSummary": "{used} of {max} · {percent}%",
+  "@usageBarSummary": {
+    "placeholders": {
+      "used": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "usageThisTurn": "This turn: {value} tokens",
+  "@usageThisTurn": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "usageModelName": "Model: {model}",
+  "@usageModelName": {
+    "placeholders": {
+      "model": {
+        "type": "String"
+      }
+    }
+  },
+  "usageTitle": "Token usage"
 }
