@@ -910,10 +910,14 @@ class GatewayChatClient {
 
       if (parsed is Map<String, dynamic>) {
         final usage = parsed['usage'];
-        if (usage is Map<String, dynamic> && usage.isNotEmpty) {
-          onUsage?.call(usage);
-        } else if (usage is Map && usage.isNotEmpty) {
-          onUsage?.call(Map<String, dynamic>.from(usage));
+        try {
+          if (usage is Map<String, dynamic> && usage.isNotEmpty) {
+            onUsage?.call(usage);
+          } else if (usage is Map && usage.isNotEmpty) {
+            onUsage?.call(Map<String, dynamic>.from(usage));
+          }
+        } catch (_) {
+          // Ignore usage-callback errors so the same frame's token survives.
         }
         final choices = parsed['choices'] as List?;
         if (choices != null && choices.isNotEmpty && choices.first is Map) {

@@ -659,6 +659,16 @@ void main() {
       expect(calls, 0);
     });
 
+    test('throwing onUsage does not swallow the same-frame token', () {
+      final token = GatewayChatClient.parseSseFrame(
+        'data: {"choices":[{"delta":{"content":"hi"}}],'
+        '"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165}}',
+        onUsage: (_) => throw StateError('boom'),
+      );
+
+      expect(token, 'hi');
+    });
+
     test(
       'cancels the active SSE request without reporting completion',
       () async {
