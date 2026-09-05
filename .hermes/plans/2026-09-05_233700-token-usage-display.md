@@ -1,5 +1,7 @@
 # 会话 Token 用量显示 Implementation Plan
 
+> ✅ 已完成（2026-09-06）：exp/context-usage-display 全绿（analyze 0 + 996 测试）+ 小米 8 真机验证通过（breakdown 实数 `已用 103.3k/1.0M · 10%`，布局无溢出）。未推 fork，等合并指令。
+
 > **For Hermes:** Use subagent-driven-development skill to implement this plan task-by-task.
 
 **Goal:** 聊天输入框上方显示上下文用量（当前占用 used/max/percent；无 breakdown 时 REST fallback 显示本轮），数据源以服务端实发为准、无数据不撒谎、不持久化。
