@@ -476,8 +476,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => _contextUsage = parsed);
   }
 
-  // TODO(usage-hint, Task 3): wire to the composer hint bar tap.
-  // ignore: unused_element
+  String _hintLabel() {
+    final contextUsage = _contextUsage;
+    if (contextUsage != null) {
+      return context.l10n.usageBarSummary(
+        TurnUsage.formatCompact(contextUsage.used),
+        TurnUsage.formatCompact(contextUsage.max),
+        contextUsage.percent.round(),
+      );
+    }
+    final lastTurn = _lastTurnUsage;
+    if (lastTurn != null) {
+      return context.l10n.usageThisTurn(
+        TurnUsage.formatCompact(lastTurn.totalTokens),
+      );
+    }
+    return '';
+  }
+
   void _showUsageDialog() {
     if (!mounted) return;
     final contextUsage = _contextUsage;
@@ -2979,6 +2995,44 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               ),
             ),
+            if (_contextUsage != null || _lastTurnUsage != null)
+              Container(
+                width: double.infinity,
+                margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHighest
+                      .withValues(alpha: 0.55),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: InkWell(
+                  key: const Key('usage-hint-bar'),
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: _showUsageDialog,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _hintLabel(),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                        Icon(
+                          Icons.chevron_right,
+                          size: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant,
+                        ),
+                        // TODO(compress): slot reserved for compress button.
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             if (_attachmentDrafts.isNotEmpty)
               Container(
                 width: double.infinity,
