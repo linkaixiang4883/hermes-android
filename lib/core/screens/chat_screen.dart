@@ -103,6 +103,12 @@ typedef TestRemoteAttachmentUpload =
       required String dataUrl,
     });
 
+/// Repeat usage frames share the incoming total; skipping them avoids a
+/// redundant rebuild for the same turn snapshot.
+@visibleForTesting
+bool isRepeatTurnUsage(TurnUsage? current, TurnUsage next) =>
+    current?.totalTokens == next.totalTokens;
+
 /// Injectable breakdown fetcher so usage refresh runs under test doubles
 /// without a live Desktop gateway socket.
 @visibleForTesting
@@ -473,6 +479,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   // TODO(usage-hint, Task 3): wire to the composer hint bar tap.
   // ignore: unused_element
   void _showUsageDialog() {
+    if (!mounted) return;
     final contextUsage = _contextUsage;
     final lastTurn = _lastTurnUsage;
     if (contextUsage == null && lastTurn == null) return;
@@ -1717,6 +1724,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() {
       _sending = true;
       _streaming = true;
+      _lastTurnUsage = null;
       _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'starting',
         text: context.l10n.startingHermes,
@@ -1753,8 +1761,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _upsertToolProgress(progress);
       },
       onUsage: (usage) {
+        if (!mounted || responseGeneration != _responseGeneration) return;
         final turnUsage = TurnUsage.fromJson(usage);
-        if (turnUsage == null || !mounted) return;
+        if (turnUsage == null) return;
+        if (isRepeatTurnUsage(_lastTurnUsage, turnUsage)) return;
         setState(() => _lastTurnUsage = turnUsage);
       },
       onDone: () async {

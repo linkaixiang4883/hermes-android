@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hermes_android/core/models/turn_usage.dart';
 import 'package:hermes_android/core/screens/chat_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:http/http.dart' as http;
@@ -100,6 +101,39 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
 
     expect(tester.takeException(), isNull);
+  });
+
+  group('onUsage dedupe (isRepeatTurnUsage)', () {
+    const first = TurnUsage(
+      inputTokens: 120,
+      outputTokens: 45,
+      totalTokens: 165,
+    );
+
+    test('first usage of a turn always applies', () {
+      expect(isRepeatTurnUsage(null, first), isFalse);
+    });
+
+    test('repeat frame with the same total is skipped', () {
+      // Same parse path the onUsage callback runs before the setState.
+      final repeat = TurnUsage.fromJson({
+        'usage': {
+          'prompt_tokens': 120,
+          'completion_tokens': 45,
+          'total_tokens': 165,
+        },
+      })!;
+      expect(isRepeatTurnUsage(first, repeat), isTrue);
+    });
+
+    test('advanced total applies again', () {
+      const advanced = TurnUsage(
+        inputTokens: 120,
+        outputTokens: 60,
+        totalTokens: 180,
+      );
+      expect(isRepeatTurnUsage(first, advanced), isFalse);
+    });
   });
 }
 
