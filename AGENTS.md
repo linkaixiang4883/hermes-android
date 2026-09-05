@@ -5,7 +5,7 @@
 ## 本地化基础设施
 
 - `l10n.yaml` — gen-l10n 配置（生成文件输出到 `lib/l10n/`，**必须提交**，CI 的 analyze 用 `--no-pub`）
-- `lib/l10n/app_en.arb` — 英文模板（612 条 key，含 `@key` placeholder 元数据）
+- `lib/l10n/app_en.arb` — 英文模板（616 条 key：main 基线 612 + exp 用量条 4，含 `@key` placeholder 元数据）
 - `lib/l10n/app_zh.arb` — 中文翻译
 - `lib/l10n/l10n.dart` — `context.l10n` 扩展（`AppLocalizations.of(this)` 的便捷封装）
 - `lib/l10n/app_localizations*.dart` — 生成文件，改 ARB 后运行 `flutter gen-l10n` 重新生成
@@ -35,7 +35,7 @@
 - main.dart：`HermesApp.getLocale/setLocale` + 设置页语言切换器（System/English/中文，prefs key `app_locale`，默认跟随系统）
 - 35 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加）+ `test/arb_parity_test.dart`（en/zh key 对等 + 占位符元数据）+ `test/zh_smoke_test.dart`（zh 真泵冒烟）
 - 门禁：`analyze --fatal-infos` 0 + `flutter test` 961 全绿，已推 fork main（以上均为 main 状态）
-- **实验分支 `exp/context-usage-display`（未合未推）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616，测试 961→996，小米 8 真机实数验证通过；plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`
+- **实验分支 `exp/context-usage-display`（未合未推）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616，测试 961→996，小米 8 真机实数验证通过；plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`。压缩按钮曾落地 6 commit，真机端到端走通过（确认框→执行→轮换→摘要核对），后因复杂度超支整段回退（`acad605`，reflog 可捞 90 天），结论归档于 `.hermes/plans/2026-09-06_024500-compress-button.md` 尾部"调研结论归档"（要点：slash.exec 等待默认 45s 超时只掐等待不杀压缩；忙拒绝藏成功包 `warning` 字段；压缩可轮换 session id；`sessions.changed` 广播方案因上游耦合否决）；分支现仅保留用量条
 - **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段
 - **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）
 
