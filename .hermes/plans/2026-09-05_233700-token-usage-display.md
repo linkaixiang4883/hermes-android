@@ -71,6 +71,8 @@
 
 **Gate:** 暂停仅此一处；有数则 Task 2 按选定 RPC 落码。
 
+**结论（静态验证完成，无需真机，2026-09-06）：选 `session.context_breakdown`。** 证据链：桌面端 `use-context-breakdown.ts:41` 天天调它（参数 `{session_id}`，忙时不刷、按 session key 旧数、失败吞掉）；返回形 `UsageStats{context_used/max/percent 可选，calls/input/output/total 必需}`（`apps/desktop/src/types/hermes.ts:737-750`）+ breakdown `{categories, context_max/percent/used, estimated_total, model}`（`methods_session.py:1136-1152`）；无 agent 回全零（`:1138-1145`，即“重启 GUI 不显示”的机制）。`session.usage` 降为纯备选。
+
 ---
 
 ### Task 1: 用量模型（TDD）
