@@ -440,6 +440,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// fetch keeps the previous breakdown (stale beats blank mid-stream);
   /// only a parsed all-zero breakdown hides it.
   Future<void> _refreshContextUsage() async {
+    if (!mounted) return;
     final sessionId = widget.session.id;
     if (_usageSessionId != sessionId) {
       setState(() {
@@ -457,9 +458,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     } catch (_) {
       return;
     }
-    if (!mounted || raw == null) return;
-    final parsed = SessionContext.fromBreakdown(raw);
-    if (!mounted) return;
+    if (!mounted || widget.session.id != sessionId) return;
+    if (raw == null) return;
+    final SessionContext? parsed;
+    try {
+      parsed = SessionContext.fromBreakdown(raw);
+    } catch (_) {
+      return;
+    }
+    if (!mounted || widget.session.id != sessionId) return;
     setState(() => _contextUsage = parsed);
   }
 
