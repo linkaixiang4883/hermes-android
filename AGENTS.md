@@ -34,8 +34,8 @@
 - voice_composer_controller 注入 `AppLocalizations? l10n`（null 时保持英文，测试兼容）
 - main.dart：`HermesApp.getLocale/setLocale` + 设置页语言切换器（System/English/中文，prefs key `app_locale`，默认跟随系统）
 - 35 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加）+ `test/arb_parity_test.dart`（en/zh key 对等 + 占位符元数据）+ `test/zh_smoke_test.dart`（zh 真泵冒烟）
-- 门禁：`analyze --fatal-infos` 0 + `flutter test` 961 全绿，已推 fork main（以上均为 main 状态）
-- **实验分支 `exp/context-usage-display`（未合未推）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616，测试 961→996，小米 8 真机实数验证通过；plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`。压缩按钮曾落地 6 commit，真机端到端走通过（确认框→执行→轮换→摘要核对），后因复杂度超支整段回退（`acad605`，reflog 可捞 90 天），结论归档于 `.hermes/plans/2026-09-06_024500-compress-button.md` 尾部"调研结论归档"（要点：slash.exec 等待默认 45s 超时只掐等待不杀压缩；忙拒绝藏成功包 `warning` 字段；压缩可轮换 session id；`sessions.changed` 广播方案因上游耦合否决）；分支现仅保留用量条
+- 门禁：`analyze --fatal-infos` 0 + `flutter test` 1002 全绿（main：用量条 616 已合 + 上游 v2.1.1 #95/#96 零冲突）
+- **实验分支 `exp/context-usage-display`（已合并到 main，`803c7bd`）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616；压缩按钮曾落地 6 commit，真机端到端走通过，后因复杂度超支整段回退（`acad605`，reflog 可捞 90 天），结论归档于 `.hermes/plans/2026-09-06_024500-compress-button.md` 尾部"调研结论归档"；分支现仅保留用量条，用量 plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`
 - **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段
 - **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）
 
@@ -59,7 +59,7 @@ git merge upstream/main
 - 冲突集中在屏幕/组件文件的"英文串 vs l10n 调用"区域（机械冲突，保留 l10n 调用即可）
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（当前要求 base=2140，`pubspec.yaml` 的 `2.1.0+2140` 别动；release.yml 只在打 tag 时跑签名构建）
+- CI 另有 versionCode 门禁（当前要求 base=2141，`pubspec.yaml` 的 `2.1.1+2141` 别动；release.yml 只在打 tag 时跑签名构建，#96 起无 signing block 直接失败）
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）
