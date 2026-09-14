@@ -129,6 +129,25 @@ class _PendingClarifyPrompt {
   const _PendingClarifyPrompt(this.request, this.responseGeneration);
 }
 
+/// The project a freshly opened chat must be filed into, and the folder that
+/// project owns.
+///
+/// Hermes derives a chat's project from its working directory, so a project
+/// chat is filed by being CREATED in [folder]: that directory is what the first
+/// system prompt reads the project's context files from and what the project
+/// tree groups the chat by.
+class ProjectChatAssignment {
+  final String projectId;
+  final String folder;
+  final String? projectName;
+
+  const ProjectChatAssignment({
+    required this.projectId,
+    required this.folder,
+    this.projectName,
+  });
+}
+
 class ChatScreen extends StatefulWidget {
   final SavedConnection connection;
   final Session session;
@@ -136,6 +155,11 @@ class ChatScreen extends StatefulWidget {
   /// The server-owned Project this chat was opened from, when known.
   /// `null` stays explicit as Unassigned in the sticky context header.
   final String? projectName;
+
+  /// Set by the workspace when this chat is a NEW project chat: its gateway
+  /// session is created inside that project's folder, and a gateway that cannot
+  /// do it says so once instead of holding the chat back.
+  final ProjectChatAssignment? projectAssignment;
 
   /// Optional text supplied by Android's share sheet. It only prefills the
   /// composer; sending remains an explicit user action.
@@ -183,6 +207,7 @@ class ChatScreen extends StatefulWidget {
     required this.connection,
     required this.session,
     this.projectName,
+    this.projectAssignment,
     this.initialComposerText,
     this.initialAttachmentDrafts = const [],
     this.turnApplicationController,
@@ -220,6 +245,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   late final Future<void> _sessionModelRestore;
   DesktopGatewayClient? _desktopGateway;
   GatewayTurnApplicationSession? _turnApplicationSession;
+
+  /// Pending project binding for a chat whose gateway session does not exist
+  /// yet. Applied once (at session creation) and then cleared, so a reconnect
+  /// never re-homes a chat the user has since worked in.
+  ProjectChatAssignment? _projectAssignment;
+  bool _projectAssignmentNotified = false;
   DesktopConnectionState _desktopConnectionState =
       DesktopConnectionState.disconnected;
   bool _appInBackground = false;
@@ -322,6 +353,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _savedGatewayNotices[_gatewayNoticeIdentity] ?? const [],
     );
     _chatModelStore = ChatModelOverrideStore.open();
+    _projectAssignment = widget.projectAssignment;
     _sessionModelRestore = _restoreSessionModelOverride();
     final hasDashboardAuth =
         widget.connection.dashboardProxied ||
@@ -541,12 +573,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _ensureDesktopSession() async {
     final gateway = _desktopGateway;
     if (gateway == null) return;
-    try {
-      await gateway.ensureSession(widget.session.id);
-    } catch (_) {
-      // The composer remains available. The next send retries with a fresh
-      // single-use ticket and surfaces an actionable error if it still fails.
+    final assignment = _projectAssignment;
+    if (assignment == null) {
+      try {
+        await gateway.ensureSession(widget.session.id);
+      } catch (_) {
+        // The composer remains available. The next send retries with a fresh
+        // single-use ticket and surfaces an actionable error if it still fails.
+      }
+      return;
     }
+    try {
+      // A project chat is filed by being CREATED in its project's folder: the
+      // folder is what gives the session the project's context files and its
+      // place in the project tree. An existing chat keeps its own workspace.
+      await gateway.ensureSession(widget.session.id, cwd: assignment.folder);
+      _projectAssignment = null;
+    } catch (_) {
+      // Never hold the chat back: it opens either way, says once that the
+      // gateway could not file it, and keeps the intent so a later reconnect
+      // inside this chat still gets a chance to apply it.
+      _reportProjectAssignmentFailure();
+    }
+  }
+
+  /// Says once that the chat could not be filed into its project, so a gateway
+  /// without folder-anchored sessions does not read as a silent failure.
+  void _reportProjectAssignmentFailure() {
+    if (!mounted || _projectAssignmentNotified) return;
+    _projectAssignmentNotified = true;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(content: Text(context.l10n.projectChatUnfiled)),
+    );
   }
 
   void _editAndResend(String text) {

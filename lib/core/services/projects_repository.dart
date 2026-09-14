@@ -23,6 +23,18 @@ import '../models/projects_tree_overview.dart';
 import '../models/session.dart';
 import 'chat_space_store.dart';
 import 'projects_gateway_client.dart';
+import 'ws_client.dart';
+
+/// Re-homes one stored session's workspace folder on the gateway
+/// (`session.workspace.move`).
+///
+/// Injected rather than owned so the repository stays transport-agnostic and
+/// tests can drive the write without a socket.
+typedef ProjectSessionWorkspaceMove =
+    Future<String> Function({required String sessionKey, required String cwd});
+
+/// The gateway's default (no-project) workspace folder, or `null`.
+typedef DefaultWorkspaceCwdResolver = Future<String?> Function();
 
 /// Whether this gateway offers the native `projects.*` family.
 enum ProjectsSupport {
@@ -189,11 +201,39 @@ class ProjectSessionsView {
   bool get isEmpty => sessions.isEmpty;
 }
 
+/// What a "move this conversation into that project" write actually did.
+///
+/// The gateway derives a chat's project from its working directory, so the
+/// write is a workspace move; every distinct outcome is reported here rather
+/// than thrown, because the UI says something different for each.
+enum ProjectChatMoveOutcome {
+  /// The chat now works inside the target project's folder.
+  moved,
+
+  /// The chat moved to the gateway's default folder: it is in no project.
+  unassigned,
+
+  /// The target project carries no folder to move into.
+  noFolder,
+
+  /// This gateway cannot re-home a stored session (or none is connected).
+  unsupported,
+
+  /// The gateway rejected the write.
+  failed,
+}
+
 /// Repository over the gateway Projects family.
 class ProjectsRepository {
   final ProjectsGatewayClient client;
   final SharedPreferences preferences;
   final String connectionId;
+
+  /// Moves a stored chat's workspace; `null` on a transport that cannot.
+  final ProjectSessionWorkspaceMove? moveSession;
+
+  /// Resolves the gateway's no-project workspace folder.
+  final DefaultWorkspaceCwdResolver? defaultWorkspace;
 
   final _controller = StreamController<ProjectsView>.broadcast();
   ProjectsView _current = ProjectsView.empty;
@@ -214,6 +254,8 @@ class ProjectsRepository {
     required this.client,
     required this.preferences,
     required this.connectionId,
+    this.moveSession,
+    this.defaultWorkspace,
   });
 
   /// Emits after every state change, including optimistic ones.
@@ -402,14 +444,73 @@ class ProjectsRepository {
     }
   }
 
-  /// Persists the authoritative server-side Project for one conversation.
+  /// The folder the gateway must anchor [projectId]'s chats to, or `null` when
+  /// the project carries none.
   ///
-  /// Callers must complete this before opening a newly drafted Project chat;
-  /// otherwise the chat would initially exist under Unassigned and the user's
-  /// selection would be silently lost.
-  Future<void> assignSession(String sessionId, String? projectId) async {
+  /// Projects own chats by directory (`project_for_path`), so this is both the
+  /// target of a move and the directory a new project chat is born in.
+  String? folderPathFor(String projectId) {
+    final id = projectId.trim();
+    if (id.isEmpty) return null;
+    for (final project in [..._current.projects, ..._current.archived]) {
+      if (project.id != id) continue;
+      final folder = project.workingDirectory?.trim() ?? '';
+      return folder.isEmpty ? null : folder;
+    }
+    return null;
+  }
+
+  /// Moves one conversation into [projectId] — or out of every project when
+  /// [projectId] is null — using the gateway's directory-based association.
+  ///
+  /// Previously this called `projects.assign_session`, which the Hermes gateway
+  /// never implemented: a chat's project is derived from its working directory,
+  /// so the write is `session.workspace.move`. A moved chat gets the new
+  /// project's context files at its next compression or rebuilt runtime, not
+  /// immediately — a live agent's system prompt is already built.
+  Future<ProjectChatMoveOutcome> moveSessionToProject({
+    required String sessionId,
+    required String? projectId,
+  }) async {
     _requireSupported();
-    await client.assignSession(sessionId: sessionId, projectId: projectId);
+    final mover = moveSession;
+    if (mover == null) return ProjectChatMoveOutcome.unsupported;
+    final id = sessionId.trim();
+    if (id.isEmpty) return ProjectChatMoveOutcome.failed;
+
+    final movingOut = projectId == null;
+    final target = movingOut
+        ? (await defaultWorkspace?.call())
+        : folderPathFor(projectId);
+    final folder = target?.trim() ?? '';
+    if (folder.isEmpty) {
+      return movingOut
+          ? ProjectChatMoveOutcome.unsupported
+          : ProjectChatMoveOutcome.noFolder;
+    }
+
+    try {
+      await mover(sessionKey: id, cwd: folder);
+      return movingOut
+          ? ProjectChatMoveOutcome.unassigned
+          : ProjectChatMoveOutcome.moved;
+    } on ProjectsUnsupportedException {
+      return ProjectChatMoveOutcome.unsupported;
+    } on JsonRpcError catch (error) {
+      // A gateway that predates session.workspace.move says -32601: that is a
+      // capability answer, not a failure, so callers stop probing instead of
+      // reporting every chat as broken.
+      final message = error.message.toLowerCase();
+      final unknownMethod =
+          error.code == -32601 ||
+          message.contains('unknown method') ||
+          message.contains('method not found');
+      return unknownMethod
+          ? ProjectChatMoveOutcome.unsupported
+          : ProjectChatMoveOutcome.failed;
+    } catch (_) {
+      return ProjectChatMoveOutcome.failed;
+    }
   }
 
   Future<void> setActive(String? id) async {
@@ -517,22 +618,29 @@ class ProjectsRepository {
           unlinkedSessions++;
           continue;
         }
-        try {
-          await client.assignSession(
-            sessionId: sessionId,
-            projectId: target.id,
-          );
-          linkedSessions++;
-        } on ProjectsUnsupportedException catch (error) {
-          // A gateway can support the Projects family but predate this sibling.
-          // Stop probing after the first definitive answer and leave all local
-          // Spaces intact so nothing is lost.
-          assignmentsSupported = false;
-          unlinkedSessions++;
-          failures['${entry.space.name}/$sessionId'] = error;
-        } catch (error) {
-          unlinkedSessions++;
-          failures['${entry.space.name}/$sessionId'] = error;
+        final outcome = await moveSessionToProject(
+          sessionId: sessionId,
+          projectId: target.id,
+        );
+        switch (outcome) {
+          case ProjectChatMoveOutcome.moved:
+            linkedSessions++;
+          case ProjectChatMoveOutcome.unsupported:
+            // The gateway cannot re-home a stored conversation at all. Stop
+            // probing after the first definitive answer and leave every local
+            // Space intact so nothing is lost.
+            assignmentsSupported = false;
+            unlinkedSessions++;
+            failures['${entry.space.name}/$sessionId'] =
+                const ProjectsUnsupportedException(
+                  'session.workspace.move',
+                  'This gateway cannot move an existing conversation into a project',
+                );
+          default:
+            unlinkedSessions++;
+            failures['${entry.space.name}/$sessionId'] = StateError(
+              'Move did not complete: ${outcome.name}',
+            );
         }
       }
     }

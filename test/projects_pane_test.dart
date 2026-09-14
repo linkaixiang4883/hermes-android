@@ -24,6 +24,7 @@ Map<String, dynamic> _projectJson({
   'name': name,
   'archived': archived,
   'created_at': 1750000000,
+  'primary_path': '/srv/$id',
   'folders': const [],
 };
 
@@ -103,12 +104,9 @@ class _FakeGateway {
               project,
         ];
         return _ok({'projects': projects, 'active_id': activeId});
-      case 'projects.assign_session':
+      case 'session.workspace.move':
         assignments.add(Map<String, dynamic>.from(params));
-        return _ok({
-          'session_id': params['session_id'],
-          'project_id': params['project_id'],
-        });
+        return _ok({'cwd': params['cwd'], 'branch': null});
       case 'projects.set_active':
         activeId = params['id'] as String?;
         return _ok({'active_id': activeId});
@@ -132,6 +130,13 @@ Future<ProjectsRepository> _repo(
     client: ProjectsGatewayClient(gateway.call),
     preferences: await SharedPreferences.getInstance(),
     connectionId: connectionId,
+    moveSession: ({required String sessionKey, required String cwd}) async {
+      await gateway.call('session.workspace.move', {
+        'session_key': sessionKey,
+        'cwd': cwd,
+      });
+      return cwd;
+    },
   );
 }
 
@@ -546,7 +551,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.assignments, [
-      {'session_id': 'chat-1', 'project_id': 'p1'},
+      {'session_key': 'chat-1', 'cwd': '/srv/p1'},
     ]);
     expect(find.text('Migration complete'), findsOneWidget);
   });

@@ -28,6 +28,9 @@ Map<String, dynamic> _projectJson({
   'name': name,
   'archived': archived,
   'created_at': 1750000000,
+  // The gateway derives a chat's project from its working directory, so a
+  // project a chat can actually be filed into owns a folder.
+  'primary_path': '/srv/$id',
   'folders': const [],
 };
 
@@ -87,12 +90,9 @@ class _FakeGateway {
         projects = [...projects, created];
         if (params['use'] == true) activeId = created['id'] as String;
         return _ok({'project': created});
-      case 'projects.assign_session':
+      case 'session.workspace.move':
         assignmentParams.add(Map<String, dynamic>.from(params));
-        return _ok({
-          'session_id': params['session_id'],
-          'project_id': params['project_id'],
-        });
+        return _ok({'cwd': params['cwd'], 'branch': null});
       case 'projects.set_active':
         activeId = params['id'] as String?;
         return _ok({'active_id': activeId});
@@ -116,6 +116,23 @@ ProjectsRepository _repository(_FakeGateway gateway, SharedPreferences prefs) =>
       client: ProjectsGatewayClient(gateway.call),
       preferences: prefs,
       connectionId: 'gateway-a',
+      // Mirrors WsClient.moveSessionWorkspace: an error envelope becomes a
+      // JsonRpcError, so an older gateway's -32601 reads as "unsupported".
+      moveSession: ({required String sessionKey, required String cwd}) async {
+        final response = await gateway.call('session.workspace.move', {
+          'session_key': sessionKey,
+          'cwd': cwd,
+        });
+        final error = response['error'];
+        if (error is Map) {
+          throw JsonRpcError(
+            'session.workspace.move',
+            error['message']?.toString() ?? 'move failed',
+            code: error['code'] is int ? error['code'] as int : null,
+          );
+        }
+        return cwd;
+      },
     );
 
 /// Builds a local Spaces store holding [names], each with [chatsPerSpace] chats.
@@ -275,10 +292,10 @@ void main() {
         expect(
           gateway.assignmentParams,
           containsAll([
-            {'session_id': 'chat-0', 'project_id': 'p-existing'},
-            {'session_id': 'chat-1', 'project_id': 'p-existing'},
-            {'session_id': 'chat-2', 'project_id': 'srv-2'},
-            {'session_id': 'chat-3', 'project_id': 'srv-2'},
+            {'session_key': 'chat-0', 'cwd': '/srv/p-existing'},
+            {'session_key': 'chat-1', 'cwd': '/srv/p-existing'},
+            {'session_key': 'chat-2', 'cwd': '/srv/srv-2'},
+            {'session_key': 'chat-3', 'cwd': '/srv/srv-2'},
           ]),
         );
       },
@@ -289,7 +306,7 @@ void main() {
       () async {
         final prefs = await SharedPreferences.getInstance();
         final gateway = _FakeGateway();
-        gateway.unknownMethods.add('projects.assign_session');
+        gateway.unknownMethods.add('session.workspace.move');
         final repo = _repository(gateway, prefs);
         await repo.refresh();
         final store = await _storeWith(prefs, ['Alpha'], chatsPerSpace: 2);

@@ -1641,6 +1641,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get createProjectChatFailed => '项目聊天创建失败';
 
   @override
+  String get projectChatUnfiled => '未能把此聊天归入项目，已按普通聊天打开';
+
+  @override
+  String get projectMoveContextPending => '项目文档将在该会话下次压缩上下文或重新打开后加载';
+
+  @override
   String get loadConversationsFailed => '对话加载失败';
 
   @override

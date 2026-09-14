@@ -2062,7 +2062,9 @@ void main() {
 
       try {
         await client.connect();
-        expect(await client.resumeSession('stored-123'), 'runtime-123');
+        final resumed = await client.resumeSession('stored-123');
+        expect(resumed.sessionId, 'runtime-123');
+        expect(resumed.storedSessionId, isNull);
         final request = await requestSeen.future;
         expect(request['method'], 'session.resume');
         expect(request['params'], {'session_id': 'stored-123'});

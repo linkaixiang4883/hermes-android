@@ -58,15 +58,19 @@ SavedConnection _connection({
   );
 }
 
-Map<String, dynamic> _projectJson({required String id, required String name}) =>
-    {
-      'id': id,
-      'slug': name.toLowerCase(),
-      'name': name,
-      'archived': false,
-      'created_at': 1750000000,
-      'folders': const [],
-    };
+Map<String, dynamic> _projectJson({
+  required String id,
+  required String name,
+  String? primaryPath,
+}) => {
+  'id': id,
+  'slug': name.toLowerCase(),
+  'name': name,
+  'archived': false,
+  'created_at': 1750000000,
+  'primary_path': primaryPath ?? '/srv/$id',
+  'folders': const [],
+};
 
 Future<ProjectsRepository> _repository(
   List<Map<String, dynamic>> projects, {
@@ -132,7 +136,7 @@ Future<ProjectsRepository> _repository(
           'result': {'projects': serverProjects, 'active_id': null},
         };
       }
-      if (method == 'projects.assign_session') {
+      if (method == 'session.workspace.move') {
         if (failuresLeft > 0) {
           failuresLeft--;
           throw Exception('gateway offline');
@@ -141,10 +145,7 @@ Future<ProjectsRepository> _repository(
         return {
           'jsonrpc': '2.0',
           'id': 1,
-          'result': {
-            'session_id': params['session_id'],
-            'project_id': params['project_id'],
-          },
+          'result': {'cwd': params['cwd'], 'branch': null},
         };
       }
       return {'jsonrpc': '2.0', 'id': 1, 'result': const {}};
@@ -488,10 +489,10 @@ void main() {
     await tester.tap(find.byKey(kProjectNewChatButtonKey));
     await tester.pumpAndSettle();
 
-    expect(assignments, [
-      {'session_id': 'project-detail-chat', 'project_id': 'p1'},
-    ]);
     expect(opened.single.projectId, 'p1');
+    // Nothing is written when the chat opens: the project rides along to the
+    // chat, which anchors its gateway session to the project's folder.
+    expect(assignments, isEmpty);
   });
 
   testWidgets('a host callback suppresses the built-in project route', (
@@ -1355,13 +1356,11 @@ void main() {
       expect(opened, hasLength(1));
       expect(opened.single.isQuick, isFalse);
       expect(opened.single.projectId, 'p2');
-      expect(assignments, [
-        {'session_id': opened.single.session.id, 'project_id': 'p2'},
-      ]);
+      expect(assignments, isEmpty);
     });
 
     testWidgets(
-      'a failed Project assignment offers a safe retry before opening',
+      'a Project with no folder still opens the chat and says it stayed unfiled',
       (tester) async {
         final opened = <NewChatDraft>[];
         final assignments = <Map<String, dynamic>>[];
@@ -1369,9 +1368,8 @@ void main() {
           tester,
           connection: _connection(desktopGatewayUrl: 'https://host:8642'),
           repository: await _repository(
-            [_projectJson(id: 'p1', name: 'Hermes Android')],
+            [_projectJson(id: 'p1', name: 'Hermes Android', primaryPath: '')],
             assignments: assignments,
-            assignmentFailures: 1,
           ),
           sessions: const [],
           onNewChat: opened.add,
@@ -1384,18 +1382,17 @@ void main() {
         await tester.tap(find.text(NewChatMode.projectChat.label));
         await tester.pumpAndSettle();
 
-        expect(opened, isEmpty);
-        expect(find.text('Couldn’t create Project chat'), findsOneWidget);
-        expect(find.text('Retry'), findsOneWidget);
-
-        await tester.tap(find.text('Retry'));
-        await tester.pumpAndSettle();
-
-        expect(assignments, [
-          {'session_id': 'new-project-chat', 'project_id': 'p1'},
-        ]);
+        // The chat is never held back by a project the gateway cannot host it
+        // in; the user is told instead.
+        expect(
+          find.text(
+            'Opened as a normal chat — couldn’t file it into a project',
+          ),
+          findsOneWidget,
+        );
         expect(opened.single.session.id, 'new-project-chat');
         expect(opened.single.projectId, 'p1');
+        expect(assignments, isEmpty);
       },
     );
 
@@ -1541,9 +1538,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(opened.single.projectId, 'p1');
-      expect(assignments, [
-        {'session_id': 'shared-project-chat', 'project_id': 'p1'},
-      ]);
+      expect(assignments, isEmpty);
     });
     testWidgets('shared files arrive as confirmed composer attachments', (
       tester,
@@ -1811,63 +1806,33 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(MorePane), findsOneWidget);
     });
-    testWidgets('a project chat is re-assigned with its stored id once the '
-        'turn binding exists', (tester) async {
-      // The server stores sessions under their durable id, but commit-before-
-      // open assigns the draft id (mob-...). Once session.open binds the draft
-      // to a stored id, the workspace must reconcile so the Project actually
-      // shows the chat.
-      final assignments = <Map<String, dynamic>>[];
-      final repository = await _repository([
-        _projectJson(id: 'p1', name: 'Hermes Android'),
-      ], assignments: assignments);
-      final turnSession = _ControllableTurnSession();
-      final controller = GatewayTurnApplicationController(
-        sessionFactory: (_) => turnSession,
-      );
-      addTearDown(controller.close);
-
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: repository,
-        sessions: const [],
-        turnApplicationController: controller,
-        newChatSessionIdFactory: () => 'new-project-chat',
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.projectChat.label));
-      await tester.pumpAndSettle();
-
-      // A single Project skips the picker and opens the chat directly.
-      expect(find.textContaining('New chat · Hermes Android'), findsOneWidget);
-
-      // Commit-before-open wrote the intent with the draft id.
-      expect(assignments, [
-        {'session_id': 'new-project-chat', 'project_id': 'p1'},
-      ]);
-
-      // The turn binding lands with the server's stored id.
-      turnSession.fireSessionBound('new-project-chat', '20260829_stored_42');
-      await tester.pumpAndSettle();
-
-      expect(
-        assignments.any(
-          (a) =>
-              a['session_id'] == '20260829_stored_42' &&
-              a['project_id'] == 'p1',
-        ),
-        isTrue,
-        reason: 'assignments: $assignments',
-      );
-    });
-
-    testWidgets('an unrelated turn binding never touches a project chat', (
+    testWidgets('the workspace hands the project folder to the chat it opens', (
       tester,
     ) async {
+      // The project rides along to the chat, which anchors its gateway session
+      // to the folder: that is what files the chat into the project and gives
+      // its first prompt the project's context files.
+      final widget = buildWorkspaceChatScreen(
+        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
+        session: _session(id: 'chat-1', title: 'Chat'),
+        projectName: 'Hermes Android',
+        projectAssignment: const ProjectChatAssignment(
+          projectId: 'p1',
+          folder: '/srv/p1',
+          projectName: 'Hermes Android',
+        ),
+      );
+
+      final chat = widget as ChatScreen;
+      expect(chat.projectAssignment?.projectId, 'p1');
+      expect(chat.projectAssignment?.folder, '/srv/p1');
+    });
+
+    testWidgets('a turn binding never writes a project assignment', (
+      tester,
+    ) async {
+      // Nothing files a chat after it opens: the write happens once, when the
+      // session is created. A later turn binding must not re-home the chat.
       final assignments = <Map<String, dynamic>>[];
       final repository = await _repository([
         _projectJson(id: 'p1', name: 'Hermes Android'),
@@ -1896,13 +1861,11 @@ void main() {
       // A single Project skips the picker and opens the chat directly.
       expect(find.textContaining('New chat · Hermes Android'), findsOneWidget);
 
+      turnSession.fireSessionBound('new-project-chat', '20260829_stored_42');
       turnSession.fireSessionBound('some-other-chat', 'other-stored');
       await tester.pumpAndSettle();
 
-      expect(
-        assignments.where((a) => a['session_id'] != 'new-project-chat'),
-        isEmpty,
-      );
+      expect(assignments, isEmpty);
     });
   });
 }

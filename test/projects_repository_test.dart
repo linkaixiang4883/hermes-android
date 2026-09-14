@@ -9,6 +9,7 @@ Map<String, dynamic> _projectJson({
   required String id,
   required String name,
   String? slug,
+  String? primaryPath,
   bool archived = false,
 }) => {
   'id': id,
@@ -16,6 +17,7 @@ Map<String, dynamic> _projectJson({
   'name': name,
   'archived': archived,
   'created_at': 1750000000,
+  'primary_path': primaryPath ?? '/srv/$id',
   'folders': const [],
 };
 
@@ -98,11 +100,15 @@ ProjectsRepository _repository(
   _FakeGateway gateway,
   SharedPreferences prefs, {
   String connectionId = 'gateway-a',
+  ProjectSessionWorkspaceMove? moveSession,
+  DefaultWorkspaceCwdResolver? defaultWorkspace,
 }) {
   return ProjectsRepository(
     client: ProjectsGatewayClient(gateway.call),
     preferences: prefs,
     connectionId: connectionId,
+    moveSession: moveSession,
+    defaultWorkspace: defaultWorkspace,
   );
 }
 
@@ -483,6 +489,162 @@ void main() {
       expect(plan.entries, isEmpty);
       expect(plan.isEmpty, isTrue);
       expect(plan.projectsToCreate, 0);
+    });
+  });
+
+  group('moving a conversation into a project', () {
+    test('resolves the folder the gateway anchors chats to', () async {
+      final gateway = _FakeGateway(
+        projects: [
+          _projectJson(id: 'p1', name: 'Hermes Android'),
+          _projectJson(id: 'p2', name: 'No folder', primaryPath: ''),
+        ],
+      );
+      final repo = _repository(gateway, await SharedPreferences.getInstance());
+      await repo.refresh();
+
+      expect(repo.folderPathFor('p1'), '/srv/p1');
+      expect(repo.folderPathFor('p2'), isNull);
+      expect(repo.folderPathFor('missing'), isNull);
+      expect(repo.folderPathFor('  '), isNull);
+    });
+
+    test('moves the chat by its working directory', () async {
+      final calls = <Map<String, dynamic>>[];
+      final repo = _repository(
+        _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async {
+          calls.add({'session_key': sessionKey, 'cwd': cwd});
+          return cwd;
+        },
+      );
+      await repo.refresh();
+
+      final outcome = await repo.moveSessionToProject(
+        sessionId: 'chat-1',
+        projectId: 'p1',
+      );
+
+      expect(outcome, ProjectChatMoveOutcome.moved);
+      expect(calls, [
+        {'session_key': 'chat-1', 'cwd': '/srv/p1'},
+      ]);
+    });
+
+    test('reports a project with no folder instead of moving anywhere', () async {
+      var moved = 0;
+      final repo = _repository(
+        _FakeGateway(
+          projects: [_projectJson(id: 'p2', name: 'No folder', primaryPath: '')],
+        ),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async {
+          moved++;
+          return cwd;
+        },
+      );
+      await repo.refresh();
+
+      final outcome = await repo.moveSessionToProject(
+        sessionId: 'chat-1',
+        projectId: 'p2',
+      );
+
+      expect(outcome, ProjectChatMoveOutcome.noFolder);
+      expect(moved, 0);
+    });
+
+    test('an Unassigned target moves the chat to the default workspace', () async {
+      final calls = <Map<String, dynamic>>[];
+      final repo = _repository(
+        _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async {
+          calls.add({'session_key': sessionKey, 'cwd': cwd});
+          return cwd;
+        },
+        defaultWorkspace: () async => '/home/dev',
+      );
+      await repo.refresh();
+
+      final outcome = await repo.moveSessionToProject(
+        sessionId: 'chat-1',
+        projectId: null,
+      );
+
+      expect(outcome, ProjectChatMoveOutcome.unassigned);
+      expect(calls, [
+        {'session_key': 'chat-1', 'cwd': '/home/dev'},
+      ]);
+    });
+
+    test('a gateway without a move primitive is unsupported, not failed', () async {
+      final repo = _repository(
+        _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async {
+          throw JsonRpcError(
+            'session.workspace.move',
+            'unknown method: session.workspace.move',
+            code: -32601,
+          );
+        },
+      );
+      await repo.refresh();
+
+      expect(
+        await repo.moveSessionToProject(sessionId: 'chat-1', projectId: 'p1'),
+        ProjectChatMoveOutcome.unsupported,
+      );
+      // No move transport at all reads the same way.
+      expect(
+        await _repository(
+          _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+          await SharedPreferences.getInstance(),
+        ).moveSessionToProject(sessionId: 'chat-1', projectId: 'p1'),
+        ProjectChatMoveOutcome.unsupported,
+      );
+    });
+
+    test('an Unassigned target without a default workspace is unsupported', () async {
+      final repo = _repository(
+        _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async =>
+            cwd,
+        defaultWorkspace: () async => null,
+      );
+      await repo.refresh();
+
+      expect(
+        await repo.moveSessionToProject(sessionId: 'chat-1', projectId: null),
+        ProjectChatMoveOutcome.unsupported,
+      );
+    });
+
+    test('a rejected write is reported as a failure', () async {
+      final repo = _repository(
+        _FakeGateway(projects: [_projectJson(id: 'p1', name: 'Android')]),
+        await SharedPreferences.getInstance(),
+        moveSession: ({required String sessionKey, required String cwd}) async {
+          throw JsonRpcError(
+            'session.workspace.move',
+            'working directory does not exist: /srv/p1',
+            code: 4017,
+          );
+        },
+      );
+      await repo.refresh();
+
+      expect(
+        await repo.moveSessionToProject(sessionId: 'chat-1', projectId: 'p1'),
+        ProjectChatMoveOutcome.failed,
+      );
+      expect(
+        await repo.moveSessionToProject(sessionId: ' ', projectId: 'p1'),
+        ProjectChatMoveOutcome.failed,
+      );
     });
   });
 }

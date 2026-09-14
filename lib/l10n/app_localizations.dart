@@ -3062,6 +3062,18 @@ abstract class AppLocalizations {
   /// **'Couldn’t create Project chat'**
   String get createProjectChatFailed;
 
+  /// No description provided for @projectChatUnfiled.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened as a normal chat — couldn’t file it into a project'**
+  String get projectChatUnfiled;
+
+  /// No description provided for @projectMoveContextPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Project files will load after this chat next compresses its context or reopens'**
+  String get projectMoveContextPending;
+
   /// No description provided for @loadConversationsFailed.
   ///
   /// In en, this message translates to:

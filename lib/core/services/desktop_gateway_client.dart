@@ -148,16 +148,23 @@ class DesktopGatewayClient {
     );
   }
 
-  Future<_DesktopGatewaySession> _connect(String mobileSessionId) async {
+  Future<_DesktopGatewaySession> _connect(
+    String mobileSessionId, {
+    String? cwd,
+  }) async {
     final existing = _ws;
     if (existing != null && existing.isConnected) {
       final mappedSessionId = _gatewaySessionIds[mobileSessionId];
       if (mappedSessionId != null) {
         return _DesktopGatewaySession(existing, mappedSessionId);
       }
-      final gatewaySessionId = await _resumeOrCreate(existing, mobileSessionId);
-      _gatewaySessionIds[mobileSessionId] = gatewaySessionId;
-      return _DesktopGatewaySession(existing, gatewaySessionId);
+      final gatewaySession = await _resumeOrCreate(
+        existing,
+        mobileSessionId,
+        cwd: cwd,
+      );
+      _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
+      return gatewaySession;
     }
 
     _connectionListener?.call(
@@ -181,9 +188,13 @@ class DesktopGatewayClient {
     try {
       await client.connect();
       _ws = client;
-      final gatewaySessionId = await _resumeOrCreate(client, mobileSessionId);
-      _gatewaySessionIds[mobileSessionId] = gatewaySessionId;
-      return _DesktopGatewaySession(client, gatewaySessionId);
+      final gatewaySession = await _resumeOrCreate(
+        client,
+        mobileSessionId,
+        cwd: cwd,
+      );
+      _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
+      return gatewaySession;
     } catch (_) {
       client.close();
       if (identical(_ws, client)) _ws = null;
@@ -192,12 +203,20 @@ class DesktopGatewayClient {
     }
   }
 
-  Future<String> _resumeOrCreate(
+  /// Opens the gateway runtime for one mobile chat.
+  ///
+  /// [cwd] is applied only when this call CREATES the session: an existing chat
+  /// keeps the workspace it already has, so merely opening a chat can never
+  /// re-home it. A created session is born anchored to [cwd] — that is what
+  /// gives a project chat its project, and its project context files.
+  Future<_DesktopGatewaySession> _resumeOrCreate(
     WsClient client,
-    String mobileSessionId,
-  ) async {
+    String mobileSessionId, {
+    String? cwd,
+  }) async {
     try {
-      return await client.resumeSession(mobileSessionId);
+      final resumed = await client.resumeSession(mobileSessionId);
+      return _DesktopGatewaySession(client, resumed.sessionId);
     } on JsonRpcError catch (error) {
       if (error.code != 4007 &&
           !error.message.toLowerCase().contains('session not found')) {
@@ -206,12 +225,56 @@ class DesktopGatewayClient {
       // New mobile chats do not exist in Hermes yet. Create them with the
       // mobile-generated ID so REST history and the Desktop runtime share one
       // stable identity. Existing sessions always take the resume path.
-      return client.createOrResumeSession(mobileSessionId);
+      final created = await client.createOrResumeSession(
+        mobileSessionId,
+        cwd: cwd,
+      );
+      return _DesktopGatewaySession(
+        client,
+        created.sessionId,
+        storedSessionId: created.storedSessionId,
+      );
     }
   }
 
-  Future<void> ensureSession(String sessionId) async {
-    await _connect(sessionId);
+  /// Opens (or reuses) this chat's gateway runtime.
+  ///
+  /// [cwd] anchors a newly created session to a workspace folder: the project
+  /// chat path hands over the project's directory so the session is born inside
+  /// the project. An already-existing chat is left exactly as it is.
+  Future<GatewaySessionHandle?> ensureSession(
+    String sessionId, {
+    String? cwd,
+  }) async {
+    final session = await _connect(sessionId, cwd: cwd);
+    return session.handle;
+  }
+
+  /// Re-files one stored chat into a project's folder
+  /// (`session.workspace.move`).
+  ///
+  /// A chat belongs to the project whose folders cover its working directory,
+  /// so moving the directory is the write that moves the chat: the gateway
+  /// re-anchors a live agent's terminal, the database row and the project tree.
+  /// The new project's context files load at the next compression or rebuilt
+  /// runtime — a live agent's system prompt is already built.
+  Future<String> moveSessionToProject({
+    required String sessionKey,
+    required String cwd,
+  }) async {
+    final client = await _connectControl();
+    return client.moveSessionWorkspace(sessionKey: sessionKey, cwd: cwd);
+  }
+
+  /// The gateway's default (no-project) workspace folder, or `null` when this
+  /// gateway cannot name one.
+  Future<String?> defaultWorkspaceCwd() async {
+    try {
+      final client = await _connectControl();
+      return await client.defaultWorkspaceCwd();
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Server-owned Hermes Projects for this gateway.
@@ -525,5 +588,16 @@ class _DesktopGatewaySession {
   final WsClient client;
   final String sessionId;
 
-  const _DesktopGatewaySession(this.client, this.sessionId);
+  /// The durable row id when this open created the session; `null` for a
+  /// reattached session whose row is already keyed by [sessionId].
+  final String? storedSessionId;
+
+  const _DesktopGatewaySession(
+    this.client,
+    this.sessionId, {
+    this.storedSessionId,
+  });
+
+  GatewaySessionHandle get handle =>
+      GatewaySessionHandle(sessionId, storedSessionId);
 }

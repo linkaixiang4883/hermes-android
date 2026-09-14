@@ -35,8 +35,11 @@ import 'hermes_components.dart';
 /// the screen can be driven by a fake in tests without a gateway.
 typedef ProjectSessionsLoader =
     Future<ProjectSessionsView> Function({required bool refresh});
+/// Moves a conversation to a project (`projectId`) or out of every project
+/// (`null`); the outcome drives the message the sheet shows, so failures stay
+/// distinguishable from "moved, no project".
 typedef ProjectSessionMover =
-    Future<void> Function(Session session, String? projectId);
+    Future<ProjectChatMoveOutcome> Function(Session session, String? projectId);
 typedef ProjectRenamer = Future<void> Function(String name);
 typedef ProjectArchiver = Future<void> Function();
 typedef ProjectDeleter = Future<void> Function();
@@ -189,25 +192,51 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
 
   Future<void> _moveSession(Session session, _MoveTarget target) async {
     try {
-      await widget.onMoveSession!(session, target.projectId);
+      final outcome = await widget.onMoveSession!(session, target.projectId);
       if (!mounted) return;
+      if (outcome != ProjectChatMoveOutcome.moved &&
+          outcome != ProjectChatMoveOutcome.unassigned) {
+        // A gateway that cannot re-home a conversation (or a project with no
+        // folder) must not read as success.
+        await _showMoveFailure(session, target);
+        return;
+      }
       await _load(refresh: true);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(context.l10n.movedToProject(target.label))));
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      final messenger = ScaffoldMessenger.of(context);
+      messenger.hideCurrentSnackBar();
+      // One card, two facts: the move landed, and the project's own context
+      // files arrive at the chat's next compression or rebuilt runtime — the
+      // user deserves to know before wondering where the project rules went.
+      messenger.showSnackBar(
         SnackBar(
-          content: Text(context.l10n.moveConversationFailed),
-          action: SnackBarAction(
-            label: context.l10n.retry,
-            onPressed: () => _moveSession(session, target),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(context.l10n.movedToProject(target.label)),
+              Text(context.l10n.projectMoveContextPending),
+            ],
           ),
         ),
       );
+    } catch (_) {
+      if (!mounted) return;
+      await _showMoveFailure(session, target);
     }
+  }
+
+  Future<void> _showMoveFailure(Session session, _MoveTarget target) async {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(context.l10n.moveConversationFailed),
+        action: SnackBarAction(
+          label: context.l10n.retry,
+          onPressed: () => _moveSession(session, target),
+        ),
+      ),
+    );
   }
 
   Future<void> _renameProject() async {

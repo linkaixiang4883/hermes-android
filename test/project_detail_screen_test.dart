@@ -403,6 +403,7 @@ void main() {
       onMoveSession: (session, projectId) async {
         expect(session.id, 's-42');
         moves.add(projectId);
+        return ProjectChatMoveOutcome.moved;
       },
     );
     await tester.pumpAndSettle();
@@ -421,6 +422,49 @@ void main() {
     expect(moves, ['p2']);
     expect(refreshes, [false, true]);
     expect(find.text('Moved to ScriptHive'), findsOneWidget);
+    // The moved chat's own context files arrive at its next compression or
+    // rebuilt runtime, and the user is told rather than left guessing.
+    expect(
+      find.text(
+        'Project files will load after this chat next compresses its context or reopens',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a move the gateway cannot perform reports failure', (
+    tester,
+  ) async {
+    final moves = <String?>[];
+    await _pump(
+      tester,
+      load: ({required refresh}) async {
+        return ProjectSessionsView(
+          projectId: 'p1',
+          tree: _tree(sessions: [_session(id: 's-42')]),
+          sessions: [_session(id: 's-42')],
+          support: ProjectsSupport.native,
+        );
+      },
+      projects: const [
+        HermesProject(id: 'p1', slug: 'android', name: 'Hermes Android'),
+        HermesProject(id: 'p2', slug: 'scripthive', name: 'ScriptHive'),
+      ],
+      onMoveSession: (session, projectId) async {
+        moves.add(projectId);
+        return ProjectChatMoveOutcome.unsupported;
+      },
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('move-session-s-42')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ScriptHive'));
+    await tester.pumpAndSettle();
+
+    expect(moves, ['p2']);
+    expect(find.text('Couldn’t move conversation'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
   });
 
   testWidgets('project actions rename and archive through explicit flows', (

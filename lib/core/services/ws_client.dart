@@ -148,6 +148,29 @@ typedef StreamCallback = void Function(StreamEvent event);
 typedef ConnectionCallback = void Function(bool connected);
 typedef GatewayReadyCallback = void Function(Map<String, dynamic> frame);
 
+/// One gateway session: the runtime id chat turns are addressed by, plus the
+/// durable stored id the session's database row is keyed by.
+///
+/// Hermes mints its own runtime id and ignores a client-supplied one, so a
+/// caller that needs the durable row (`session.workspace.move`, REST history)
+/// has to read it back from this handle.
+class GatewaySessionHandle {
+  final String sessionId;
+  final String? storedSessionId;
+
+  const GatewaySessionHandle(this.sessionId, this.storedSessionId);
+
+  factory GatewaySessionHandle.fromResult(Object? result, String fallbackId) {
+    final map = result is Map ? result : const <String, dynamic>{};
+    final sessionId = map['session_id']?.toString().trim() ?? '';
+    final storedSessionId = map['stored_session_id']?.toString().trim() ?? '';
+    return GatewaySessionHandle(
+      sessionId.isEmpty ? fallbackId : sessionId,
+      storedSessionId.isEmpty ? null : storedSessionId,
+    );
+  }
+}
+
 /// WebSocket client for the Hermes JSON-RPC gateway.
 class WsClient {
   final String baseUrl;
@@ -804,7 +827,11 @@ class WsClient {
   }
 
   /// Resume an existing session.
-  Future<String> resumeSession(String sessionId) async {
+  ///
+  /// Returns the gateway runtime id together with the durable stored id the
+  /// session's database row is keyed by (`stored_session_id`); project writes
+  /// address the row, chat turns address the runtime.
+  Future<GatewaySessionHandle> resumeSession(String sessionId) async {
     final result = await send('session.resume', {'session_id': sessionId});
     if (result['error'] != null) {
       throw _gatewayResponseError(
@@ -813,7 +840,58 @@ class WsClient {
         fallbackMessage: 'Unknown error',
       );
     }
-    return result['result']?['session_id'] as String? ?? sessionId;
+    return GatewaySessionHandle.fromResult(result['result'], sessionId);
+  }
+
+  /// Re-homes one stored session's workspace folder
+  /// (`session.workspace.move`).
+  ///
+  /// This is the gateway's own "move this chat into that project" write: a
+  /// chat belongs to the project whose folders cover its working directory
+  /// (`project_for_path`), so moving the directory is what moves the chat —
+  /// including its terminal cwd, its database row and the project tree.
+  ///
+  /// A live agent keeps the system prompt it already built, so a project's
+  /// context files load at the next compression or rebuilt runtime, not here.
+  Future<String> moveSessionWorkspace({
+    required String sessionKey,
+    required String cwd,
+  }) async {
+    final result = await send('session.workspace.move', {
+      'session_key': sessionKey,
+      'cwd': cwd,
+    });
+    if (result['error'] != null) {
+      throw _gatewayResponseError(
+        'session.workspace.move',
+        result['error'],
+        fallbackMessage: 'Unknown error',
+      );
+    }
+    final payload = result['result'];
+    if (payload is Map && payload['cwd']?.toString().trim().isNotEmpty == true) {
+      return payload['cwd'].toString().trim();
+    }
+    return cwd;
+  }
+
+  /// The gateway's own default workspace folder, or `null` when it cannot say.
+  ///
+  /// `config.get {key: 'project'}` resolves the configured working directory —
+  /// the directory a fresh detached chat would run in. Moving a chat there is
+  /// the gateway's notion of “not in any project”.
+  Future<String?> defaultWorkspaceCwd() async {
+    try {
+      final result = await send('config.get', {'key': 'project'});
+      if (result['error'] != null) return null;
+      final payload = result['result'];
+      if (payload is! Map) return null;
+      final cwd = payload['cwd']?.toString().trim() ?? '';
+      return cwd.isEmpty ? null : cwd;
+    } catch (_) {
+      // A gateway that predates this getter simply has no unassigned target.
+      return null;
+    }
   }
 
   Future<void> setSessionTitle(String sessionId, String title) async {
@@ -949,8 +1027,21 @@ class WsClient {
   /// Resume an existing session via session.create (which starts a new
   /// agent process for the given session ID). This works for sessions
   /// that exist in the REST API but aren't active in the gateway.
-  Future<String> createOrResumeSession(String sessionId) async {
-    final result = await send('session.create', {'session_id': sessionId});
+  ///
+  /// [cwd] anchors a NEWLY created session to a workspace folder. Hermes
+  /// ignores the client session id and mints its own, so the caller records the
+  /// returned handle. Project chats pass their project's folder here: the first
+  /// turn's system prompt reads the project's AGENTS.md chain from that
+  /// directory, and the project tree groups the chat by it.
+  Future<GatewaySessionHandle> createOrResumeSession(
+    String sessionId, {
+    String? cwd,
+  }) async {
+    final trimmedCwd = cwd?.trim() ?? '';
+    final result = await send('session.create', {
+      'session_id': sessionId,
+      if (trimmedCwd.isNotEmpty) 'cwd': trimmedCwd,
+    });
     if (result['error'] != null) {
       throw _gatewayResponseError(
         'session.create',
@@ -958,7 +1049,7 @@ class WsClient {
         fallbackMessage: 'Unknown error',
       );
     }
-    return result['result']?['session_id'] as String? ?? sessionId;
+    return GatewaySessionHandle.fromResult(result['result'], sessionId);
   }
 
   /// Applies a model only to one live gateway session.  Hermes interprets the

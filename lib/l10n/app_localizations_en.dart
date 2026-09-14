@@ -1703,6 +1703,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get createProjectChatFailed => 'Couldn’t create Project chat';
 
   @override
+  String get projectChatUnfiled =>
+      'Opened as a normal chat — couldn’t file it into a project';
+
+  @override
+  String get projectMoveContextPending =>
+      'Project files will load after this chat next compresses its context or reopens';
+
+  @override
   String get loadConversationsFailed => 'Could not load conversations';
 
   @override

@@ -1015,6 +1015,8 @@
   "projectsUnavailable": "Projects unavailable",
   "projectsNeedDesktopHint": "Projects need a Desktop Gateway connection. Add the Desktop Gateway URL to this connection to organize chats across your devices.",
   "createProjectChatFailed": "Couldn’t create Project chat",
+  "projectChatUnfiled": "Opened as a normal chat — couldn’t file it into a project",
+  "projectMoveContextPending": "Project files will load after this chat next compresses its context or reopens",
   "loadConversationsFailed": "Could not load conversations",
   "loadConversationsHint": "Check the connection and try again.",
   "searchConversations": "Search conversations",
