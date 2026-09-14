@@ -35,6 +35,15 @@ void main() {
     app.main();
     await _settle(tester, seconds: 8);
 
+    // A fresh launch can land on the saved-connection list; enter the first
+    // connection (its host:port chip) so the workspace shell comes up.
+    if (!tester.any(find.text('Projects'))) {
+      final savedConnection = find.textContaining(RegExp(r':\d{2,5}'));
+      if (await _tapWhenFound(tester, savedConnection, seconds: 20)) {
+        await _settle(tester, seconds: 8);
+      }
+    }
+
     // The shell renders the five fixed destinations; a missing one means the
     // app never reached Home (no connection), which this test cannot judge.
     if (!await _tapWhenFound(tester, find.text('Projects'), seconds: 15)) {

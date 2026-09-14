@@ -399,6 +399,9 @@ rg -n '_projects_method\("projects\.' tui_gateway/methods_projects.py      # 官
 | 归组规则（服务端按 cwd 归属，非交互） | ✅ | 用 Hermes 自带 `hermes_cli.projects_db.project_for_path` 对用户真实 `projects.db` 副本实跑：`D:\work\app\flutter\hermes-android → p_3bc0abd4 hermes-android`；`D:\work\hermes_work → No project`（= Unassigned 目标语义） |
 | A1–A3 真机（新建项目聊天打开 / 会话 cwd=项目目录 / 项目树可见） | ⛔ **被本机环境挡住（需用户交互）** | 真机安装被 MIUI 拦截：`INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`，锁屏通知「应用安装拦截 · 已拦截通过USB安装的 Hermes Agent Dev」；本机 `adb shell input` 注入同样被系统禁用，无法代为点「继续安装」 |
 | B1–B3 真机（移动会话 / 快聊提升 / 迁移） | ⛔ 同上 | 同上 |
+| 真机（非交互）：新版代码在真机上启动运行 | ✅ | `flutter run -d f9b1e800` 起来后 dart MCP `get_runtime_errors` → **No runtime errors found**（KeyStore code 7 是全新安装还没存密钥的正常告警） |
+
+**真机集成测试的跑法坑（2026-09-14 实测）**：`flutter test integration_test/<file>.dart -d <device>` **每次都会先卸载再安装** dev 包（结束时再卸载一次）→ **App 数据被清空**（连接配置与密钥一起没了），App 起来停在「添加网关连接」/「恢复配置」页，测试因找不到 Projects 标签而自动跳过（本次两次尝试均如此，第 3 次兜底点击误点了「恢复配置」）。且该命令要求手机放行一次 USB 安装（MIUI 锁屏时静默拦截）。**结论**：这套集成测试适合"设备上有已配置连接"的场景；本机要么先手动重建连接、要么走"用户手点 + 宿主端查库"的人工验收。恢复 App：`flutter run`（只装不卸）或重新授权后重装。
 
 **处置（用户 2026-09-14 明确）**：需要交互才通的 QA 不纳入本次 goal，留待后续会话完成。
 
