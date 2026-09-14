@@ -2186,6 +2186,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _gatewayTurnStatus = null;
         final assistant = _lastAssistantMessage();
         if (assistant == null) return;
+        // `reasoning.available` carries the reply's own opening, not thinking
+        // (see GatewayReasoningUpdate.isAnswerPreview); replacing the streamed
+        // reasoning with it is the reported "thinking turns into the answer"
+        // bug, so that one payload is dropped.
+        if (reasoning.mode == GatewayReasoningEventMode.replace &&
+            GatewayReasoningUpdate.isAnswerPreview(
+              reasoning.text,
+              assistant['content']?.toString() ?? '',
+            )) {
+          return;
+        }
         final current = assistant['_gateway_reasoning']?.toString() ?? '';
         assistant['_gateway_reasoning'] = reasoning.applyTo(current);
         assistant['_gateway_reasoning_verbose'] = reasoning.verbose;

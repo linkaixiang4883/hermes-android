@@ -41,6 +41,31 @@ class GatewayReasoningUpdate {
     return '${combined.substring(0, _maxTextLength - 1)}…';
   }
 
+  /// Whether a `reasoning.available` payload is really an answer preview.
+  ///
+  /// Hermes broadcasts `reasoning.available` at the end of every assistant
+  /// message carrying the first 500 characters of the REPLY text, not the
+  /// model's thinking (`agent/turn_response_intake.py` `_relay_thinking`).
+  /// Applying that as a replacement wipes the streamed [reasoning.delta]
+  /// content with an echo of the answer, so callers drop it instead.
+  ///
+  /// Only a positive match counts: with nothing streamed yet, or with text
+  /// that is not the reply's own opening, the update keeps its normal
+  /// replacement behaviour.
+  static bool isAnswerPreview(String text, String assistantText) {
+    final preview = _normalizeForComparison(text);
+    if (preview.isEmpty) return false;
+    final content = _normalizeForComparison(assistantText);
+    if (content.isEmpty) return false;
+    return content == preview || content.startsWith(preview);
+  }
+
+  /// Whitespace-insensitive comparison key: the gateway builds its preview
+  /// from the same reply the client assembled out of streamed deltas, but the
+  /// two can differ in insignificant spacing.
+  static String _normalizeForComparison(String value) =>
+      value.replaceAll(RegExp(r'\s+'), ' ').trim();
+
   static String? _safeText(String? value, int maxLength) {
     if (value == null) return null;
     final safe = value.replaceAll('\u0000', '');

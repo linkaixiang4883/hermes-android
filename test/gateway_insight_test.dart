@@ -44,6 +44,47 @@ void main() {
     });
   });
 
+  group('GatewayReasoningUpdate.isAnswerPreview', () {
+    test('flags the reply opening the gateway relays as reasoning', () {
+      const answer = 'The gateway groups chats by the session cwd.';
+      expect(GatewayReasoningUpdate.isAnswerPreview(answer, answer), isTrue);
+      expect(
+        GatewayReasoningUpdate.isAnswerPreview(
+          'The gateway groups chats by the session cwd.',
+          '$answer And it keeps the streamed thinking.',
+        ),
+        isTrue,
+      );
+      // The gateway truncates its echo at 500 characters: still a prefix.
+      expect(
+        GatewayReasoningUpdate.isAnswerPreview('Ver', 'Verified the contract.'),
+        isTrue,
+      );
+    });
+
+    test('ignores insignificant whitespace differences', () {
+      expect(
+        GatewayReasoningUpdate.isAnswerPreview(
+          'Verified  the\ncontract.',
+          'Verified the contract. Plus more.',
+        ),
+        isTrue,
+      );
+    });
+
+    test('does not flag real thinking, an empty reply, or blank payloads', () {
+      expect(
+        GatewayReasoningUpdate.isAnswerPreview(
+          'Check the gateway contract first.',
+          'Verified the contract.',
+        ),
+        isFalse,
+      );
+      expect(GatewayReasoningUpdate.isAnswerPreview('Verified', ''), isFalse);
+      expect(GatewayReasoningUpdate.isAnswerPreview('   ', 'Verified'), isFalse);
+    });
+  });
+
   group('GatewayNotice', () {
     test('parses background completion and review summary', () {
       final background = GatewayNotice.fromGatewayEvent('background.complete', {
