@@ -397,13 +397,13 @@ rg -n '_projects_method\("projects\.' tui_gateway/methods_projects.py      # 官
 | 本地门禁 | ✅ | analyze 0 issue；1019 tests（基线 1002 + 新增） |
 | WS 载荷 = App 真实发出的 JSON-RPC | ✅ | `test/ws_client_workspace_move_test.dart` 对真 loopback WebSocket 断言 `session.create`（带 cwd / 不带 cwd）、`session.workspace.move`、`config.get{key:'project'}` 的方法名与参数 |
 | 归组规则（服务端按 cwd 归属，非交互） | ✅ | 用 Hermes 自带 `hermes_cli.projects_db.project_for_path` 对用户真实 `projects.db` 副本实跑：`D:\work\app\flutter\hermes-android → p_3bc0abd4 hermes-android`；`D:\work\hermes_work → No project`（= Unassigned 目标语义） |
-| A1–A3 真机（新建项目聊天打开 / 会话 cwd=项目目录 / 项目树可见） | ⛔ **被本机环境挡住（需用户交互）** | 真机安装被 MIUI 拦截：`INSTALL_FAILED_USER_RESTRICTED: Install canceled by user`，锁屏通知「应用安装拦截 · 已拦截通过USB安装的 Hermes Agent Dev」；本机 `adb shell input` 注入同样被系统禁用，无法代为点「继续安装」 |
-| B1–B3 真机（移动会话 / 快聊提升 / 迁移） | ⛔ 同上 | 同上 |
+| A1–A3 真机（新建项目聊天打开 / 会话 cwd=项目目录 / 项目树可见） | ✅ **已通过（用户手动重建连接后实机走通）** | 用户 2026-09-14 实机操作确认可用；宿主端只读查库取证：新会话 `20260914_104521_b038fb`（2 条消息）`cwd = D:\work\app\flutter\hermes-android` = 项目目录，即"建会话时锚定项目目录"按设计生效；项目树按 `project_for_path` 归组（同规则已单独实测 `D:\work\app\flutter\hermes-android → p_3bc0abd4 hermes-android`） |
+| B1–B3 真机（移动会话 / 快聊提升 / 迁移） | ⚠️ 未单独实机复验 | 与新建同一机制（`session.workspace.move`），由 `projects_repository_test` / `projects_pane_test` / `space_migration_write_test` / `project_detail_screen_test` 覆盖；如需实机复验，按下面第 2 步点项目详情里的「移动会话」即可 |
 | 真机（非交互）：新版代码在真机上启动运行 | ✅ | `flutter run -d f9b1e800` 起来后 dart MCP `get_runtime_errors` → **No runtime errors found**（KeyStore code 7 是全新安装还没存密钥的正常告警） |
 
 **真机集成测试的跑法坑（2026-09-14 实测）**：`flutter test integration_test/<file>.dart -d <device>` **每次都会先卸载再安装** dev 包（结束时再卸载一次）→ **App 数据被清空**（连接配置与密钥一起没了），App 起来停在「添加网关连接」/「恢复配置」页，测试因找不到 Projects 标签而自动跳过（本次两次尝试均如此，第 3 次兜底点击误点了「恢复配置」）。且该命令要求手机放行一次 USB 安装（MIUI 锁屏时静默拦截）。**结论**：这套集成测试适合"设备上有已配置连接"的场景；本机要么先手动重建连接、要么走"用户手点 + 宿主端查库"的人工验收。恢复 App：`flutter run`（只装不卸）或重新授权后重装。
 
-**处置（用户 2026-09-14 明确）**：需要交互才通的 QA 不纳入本次 goal，留待后续会话完成。
+**处置（用户 2026-09-14 明确）**：需要交互才通的 QA 不纳入本次 goal，留待后续会话完成。**结局**：用户在本次会话内手动重建连接后实机走通了 A1–A3（见上表取证），排除项随之闭环；B1–B3 未单独实机复验（单测覆盖，机制相同）。
 
 ### 后续会话收尾步骤（用户放行一次安装 + 一条命令）
 
