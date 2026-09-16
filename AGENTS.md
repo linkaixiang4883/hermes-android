@@ -58,6 +58,33 @@
 
 **QA / 门禁**：`analyze --no-pub --fatal-infos` 0 + `flutter test --no-pub` 1019 全绿。真机验收两种：① 手点三步（Projects → 项目 → 新建聊天 → 发消息）后查库 `SELECT id,cwd FROM sessions ORDER BY started_at DESC LIMIT 3`，**cwd 必须等于项目目录**；② `flutter test integration_test/project_chat_filing_test.dart -d <id>`（自动点完整个流程），但**该命令每次都卸载重装 dev 包 → App 数据（连接+密钥）被清空**，跑完需重建连接，且 MIUI 锁屏时会静默拦截 USB 安装。完整记录见 `.hermes/plans/2026-09-13_122432-reasoning-and-project-chat-fix.md`（含机制证据、实施记录、收尾步骤）。
 
+## Hermes 0.21.3 兼容性（2026-09-16，commit `aadea14` + `b4247a3`）
+
+**背景**：v2026.9.14 窗口（#110521/#110522）把网关改成「严格契约 + 服务端反问客户端」，两处都曾让手机端功能整段失效，均已修复并真机验收。改协议/UI 前先读本节；机制细节与证据见技能 `hermes-android-client` → `references/server-requests-0.21.3.md`。
+
+### 1) 交互提示改走 server→client 请求（手机端曾完全收不到）
+
+| 维度 | 事实 |
+|---|---|
+| 帧 | 服务端发 `{"id":"srq-<12hex>","method":"approval/clarify/sudo/secret/vault.*","params":{…}}`；客户端用**同 id 响应帧**回答（**不能带 method 字段**） |
+| 回包 | approval→`{choice}`；clarify 单题→`{answer}`、批量→逐题 `clarify.lock`；sudo/secret/vault→`{value}`（''=跳过） |
+| 撤回/重连 | `request.cancel {id,method,reason}` → 撤卡；`session.resume` 响应里的 `open_requests[]` → 重投递卡片 |
+| 超时 | 审批 `approvals.timeout`（默认 300s，超时 fail-closed）；clarify 默认 3600s |
+| 实现 | `ws_client`（`GatewayServerRequest`/`respondToServerRequest`/`lockClarifyAnswer`/`open_requests` 重放）→ `desktop_gateway_client`（按会话路由）→ `chat_screen`（四类接现有对话框；**vault/桌面桥回 error 帧**快速失败；`request.cancel` 撤卡）；旧 `*.respond` 线保留兼容 ≤0.21.2 |
+
+**判读坑**：成功路径**零日志**——别用「日志没痕迹」推断「没弹卡」；服务端判据：`tool clarify completed (600.01s)` = 没答上、**秒级完成 = 答上了**；审批看 tool 耗时（含审批往返 ≥3s vs 普通 <1s）+ 落盘结果。
+
+### 2) 严格参数契约（未知字段直接报错）
+
+- 症状：`invalid params for session.create: session_id: Extra inputs are not permitted` → 新建聊天（项目/闪聊）全失败 + 聊天页顶部**误报红「离线」**（实为 `_connect` 失败时连带关 socket，非真离线）
+- 已修：`session.create` **不带 `session_id`**（服务端自己铸 id；用返回的 `session_id`/`stored_session_id`）；`file.attach` **不带 `source_channel`/`source_profile`**
+- **改协议调用前做参数级审计**（只看「方法存在」不够）：允许字段 = `$LOCALAPPDATA/hermes/hermes-agent/tui_gateway/contracts/*.py` 里 `method("x", params=Cls)` 的 Cls **及其基类**字段（继承链要接上）；App 侧每个 `send('x', {...})` 的键必须 ⊆ 允许集
+- 已知遗留（stock 网关不触发，勿误判）：turn coordinator 的 `prompt.submit` 会带 `version/client_turn_id/attachments`（仅在 turn_recovery 能力存在时启用，官方主线无此能力）；`GatewayActivityCard` 有 setState-during-build 断言（仅 debug 包出现，上游遗留）
+
+### 3) 本仓库新基线
+
+- 测试 **1027**（1019 + srq 新通路 8 条：`test/ws_client_server_requests_test.dart`）；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测
+
 ## 拉取上游 / Merge 流程
 
 ```bash
