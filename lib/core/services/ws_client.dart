@@ -1104,18 +1104,15 @@ class WsClient {
     String? sourceChannel,
     String? sourceProfile,
   }) async {
+    // `source_channel` / `source_profile` are NOT part of Hermes'
+    // `file.attach` contract: 0.21.3 validates params strictly and rejects
+    // extra inputs, so the provenance stays local instead of riding the wire.
     final params = <String, dynamic>{
       'session_id': sessionId,
       'name': name,
       'path': path,
       'data_url': dataUrl,
     };
-    if (sourceChannel?.isNotEmpty == true) {
-      params['source_channel'] = sourceChannel;
-    }
-    if (sourceProfile?.isNotEmpty == true) {
-      params['source_profile'] = sourceProfile;
-    }
     final response = await send('file.attach', params);
     final error = response['error'];
     if (error != null) {
@@ -1166,22 +1163,25 @@ class WsClient {
     return result['result']?['session_id'] as String? ?? '';
   }
 
-  /// Resume an existing session via session.create (which starts a new
-  /// agent process for the given session ID). This works for sessions
-  /// that exist in the REST API but aren't active in the gateway.
+  /// Mint a chat session through `session.create`, anchored to [cwd] when one
+  /// is given.
   ///
-  /// [cwd] anchors a NEWLY created session to a workspace folder. Hermes
-  /// ignores the client session id and mints its own, so the caller records the
-  /// returned handle. Project chats pass their project's folder here: the first
-  /// turn's system prompt reads the project's AGENTS.md chain from that
-  /// directory, and the project tree groups the chat by it.
+  /// The client id is deliberately not sent: Hermes mints the runtime id
+  /// itself, and its 0.21.3 wire contract rejects `session_id` on
+  /// `session.create` ("Extra inputs are not permitted") — a mobile id can
+  /// only ever be a local handle. The reply's `session_id` /
+  /// `stored_session_id` are the ids every later call must address.
+  ///
+  /// [cwd] anchors the new session to a workspace folder. Project chats pass
+  /// their project's folder here: the first turn's system prompt reads the
+  /// project's AGENTS.md chain from that directory, and the project tree
+  /// groups the chat by it.
   Future<GatewaySessionHandle> createOrResumeSession(
     String sessionId, {
     String? cwd,
   }) async {
     final trimmedCwd = cwd?.trim() ?? '';
     final result = await send('session.create', {
-      'session_id': sessionId,
       if (trimmedCwd.isNotEmpty) 'cwd': trimmedCwd,
     });
     if (result['error'] != null) {

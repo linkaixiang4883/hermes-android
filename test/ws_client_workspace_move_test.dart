@@ -104,10 +104,14 @@ void main() {
       expect(handle.sessionId, 'runtime-9');
       expect(handle.storedSessionId, '20260913_120000_abcdef');
       expect(gateway.requests.single['method'], 'session.create');
-      expect(gateway.params.single, {
-        'session_id': 'mob-1757000000000',
-        'cwd': '/srv/p1',
-      });
+      expect(gateway.params.single, {'cwd': '/srv/p1'});
+      expect(
+        gateway.params.single.containsKey('session_id'),
+        isFalse,
+        reason:
+            'Hermes 0.21.3 rejects extra inputs on session.create: the client '
+            'id must never ride the wire',
+      );
     } finally {
       client.close();
     }
@@ -126,7 +130,7 @@ void main() {
 
       expect(handle.sessionId, 'runtime-9');
       expect(handle.storedSessionId, isNull);
-      expect(gateway.params.single, {'session_id': 'mob-1'});
+      expect(gateway.params.single, isEmpty);
     } finally {
       client.close();
     }

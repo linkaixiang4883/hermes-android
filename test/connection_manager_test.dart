@@ -1989,7 +1989,7 @@ void main() {
       }
     });
 
-    test('preserves mobile source_profile on generic file.attach', () async {
+    test('keeps file.attach on the official contract (no source fields)', () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       final requestSeen = Completer<Map<String, dynamic>>();
       final socketSubscription = server
@@ -2030,9 +2030,14 @@ void main() {
           'name': 'fixture.txt',
           'path': '',
           'data_url': 'data:application/octet-stream;base64,ZmFrZQ==',
-          'source_channel': 'hermes_mobile',
-          'source_profile': 'pro',
         });
+        expect(
+          (request['params'] as Map).containsKey('source_channel'),
+          isFalse,
+          reason:
+              'Hermes 0.21.3 rejects extra inputs on file.attach: provenance '
+              'stays local',
+        );
       } finally {
         client.close();
         await socketSubscription.cancel();
