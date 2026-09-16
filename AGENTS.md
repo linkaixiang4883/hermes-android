@@ -81,9 +81,15 @@
 - **改协议调用前做参数级审计**（只看「方法存在」不够）：允许字段 = `$LOCALAPPDATA/hermes/hermes-agent/tui_gateway/contracts/*.py` 里 `method("x", params=Cls)` 的 Cls **及其基类**字段（继承链要接上）；App 侧每个 `send('x', {...})` 的键必须 ⊆ 允许集
 - 已知遗留（stock 网关不触发，勿误判）：turn coordinator 的 `prompt.submit` 会带 `version/client_turn_id/attachments`（仅在 turn_recovery 能力存在时启用，官方主线无此能力）；`GatewayActivityCard` 有 setState-during-build 断言（仅 debug 包出现，上游遗留）
 
-### 3) 本仓库新基线
+### 3) 项目归组的 cwd 持久化（2026-09-16，`b26ac7d`）
 
-- 测试 **1027**（1019 + srq 新通路 8 条：`test/ws_client_server_requests_test.dart`）；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测
+- **问题**：项目文件夹（`session.create {cwd}`）此前只挂开屏 preflight，`submitPrompt`/`attachFile`/`setSessionModel` 等创建路径都不带 → preflight 失败或与首条动作竞态时会话以**无 cwd** 建成、项目静默丢失（= 上游 #102 被自动 review 打回的 gap②；gap①「无文件夹项目」我们同样已按 review 认可方式做：诚实提示一次 + 头部不贴项目标签）
+- **修复**：`DesktopGatewayClient` 按 mobile session 记住 desired cwd（`_desiredCwd`），任何创建路径都带上，**仅在创建时生效**（resume 不换房）；`workspace_screen._finishNewChat` 无文件夹时不再把项目名传给聊天头
+- **回归测试**：`test/desktop_gateway_cwd_binding_test.dart`（摘掉修复即 `Actual: {}` 必挂）+ workspace 的 folderless 用例；写该类假网关测试的坑（9119 回退）见技能
+
+### 4) 本仓库新基线
+
+- 测试 **1030**（1027 + 项目归组持久化 3 条）；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测
 
 ## 拉取上游 / Merge 流程
 
