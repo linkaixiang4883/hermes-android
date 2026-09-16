@@ -11,17 +11,25 @@ class GatewaySensitivePromptRequest {
   final String description;
   final String fieldLabel;
 
+  /// The backend request id (`srq-…`) when this prompt arrived as a
+  /// server→client request (Hermes 0.21.3+). Answers go back as a response
+  /// frame (`{value}`, '' = skipped) for that id; `null` for the legacy
+  /// `sudo.request` / `secret.request` events.
+  final String? serverRequestId;
+
   const GatewaySensitivePromptRequest({
     required this.kind,
     required this.requestId,
     required this.title,
     required this.description,
     required this.fieldLabel,
+    this.serverRequestId,
   });
 
   static GatewaySensitivePromptRequest? fromEventData({
     required GatewaySensitivePromptKind kind,
     required Map<String, dynamic> data,
+    String? serverRequestId,
   }) {
     final requestId = data['request_id']?.toString().trim() ?? '';
     if (requestId.isEmpty) return null;
@@ -34,6 +42,7 @@ class GatewaySensitivePromptRequest {
         description:
             'Hermes needs a sudo password for the pending terminal command.',
         fieldLabel: 'Sudo password',
+        serverRequestId: serverRequestId,
       );
     }
 
@@ -47,6 +56,7 @@ class GatewaySensitivePromptRequest {
           ? 'Hermes needs a secret for the pending skill.'
           : prompt,
       fieldLabel: envVar.isEmpty ? 'Secret value' : envVar,
+      serverRequestId: serverRequestId,
     );
   }
 }

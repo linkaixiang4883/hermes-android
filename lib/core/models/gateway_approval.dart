@@ -28,15 +28,24 @@ class GatewayApprovalRequest {
   final bool smartDenied;
   final List<GatewayApprovalChoice> choices;
 
+  /// The backend request id (`srq-…`) when this approval arrived as a
+  /// server→client request (Hermes 0.21.3+). Answers go back as a response
+  /// frame for that id; `null` for the legacy `approval.request` event.
+  final String? serverRequestId;
+
   const GatewayApprovalRequest({
     required this.command,
     required this.description,
     required this.allowPermanent,
     required this.smartDenied,
     required this.choices,
+    this.serverRequestId,
   });
 
-  factory GatewayApprovalRequest.fromEventData(Map<String, dynamic> data) {
+  factory GatewayApprovalRequest.fromEventData(
+    Map<String, dynamic> data, {
+    String? serverRequestId,
+  }) {
     final smartDenied = data['smart_denied'] == true;
     final allowPermanent = data['allow_permanent'] != false && !smartDenied;
     final rawChoices = data['choices'];
@@ -94,6 +103,7 @@ class GatewayApprovalRequest {
       allowPermanent: allowPermanent,
       smartDenied: smartDenied,
       choices: List.unmodifiable(choices),
+      serverRequestId: serverRequestId,
     );
   }
 }

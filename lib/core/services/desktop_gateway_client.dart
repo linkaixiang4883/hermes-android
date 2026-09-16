@@ -12,6 +12,8 @@ import 'ws_client.dart';
 
 typedef DesktopAsyncEventCallback =
     void Function(String mobileSessionId, StreamEvent event);
+typedef DesktopServerRequestCallback =
+    void Function(String mobileSessionId, GatewayServerRequest request);
 typedef DesktopConnectionCallback =
     void Function(DesktopConnectionState connectionState);
 
@@ -35,6 +37,7 @@ class DesktopGatewayClient {
   WsClient? _ws;
   final Map<String, String> _gatewaySessionIds = {};
   DesktopAsyncEventCallback? _asyncEventListener;
+  DesktopServerRequestCallback? _serverRequestListener;
   DesktopConnectionCallback? _connectionListener;
   GatewayTurnCoordinatorRegistry? _turnCoordinatorRegistry;
   ProjectsGatewayClient? _projects;
@@ -45,6 +48,7 @@ class DesktopGatewayClient {
     'review.summary',
     'notification.show',
     'notification.clear',
+    'request.cancel',
     'subagent.spawn_requested',
     'subagent.start',
     'subagent.thinking',
@@ -387,27 +391,51 @@ class DesktopGatewayClient {
     _asyncEventListener = listener;
   }
 
+  /// Receives backend-initiated requests (approval / clarify / sudo / secret /
+  /// vault) for the chat that owns the request's gateway session.
+  void setServerRequestListener(DesktopServerRequestCallback? listener) {
+    _serverRequestListener = listener;
+  }
+
   void _installAsyncEventBridge(WsClient client) {
     // Every socket greets us with gateway.ready; that greeting is where the
     // capability registry learns what this Hermes instance offers.
     _capabilities.bindTo(client);
     client.onStreamEvent = (event) {
       if (!_asyncEventTypes.contains(event.type)) return;
-      final gatewaySessionId = event.data['session_id']?.toString();
-      String? mobileSessionId;
-      if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {
-        for (final entry in _gatewaySessionIds.entries) {
-          if (entry.value == gatewaySessionId) {
-            mobileSessionId = entry.key;
-            break;
-          }
-        }
-      } else if (_gatewaySessionIds.length == 1) {
-        mobileSessionId = _gatewaySessionIds.keys.single;
-      }
+      final mobileSessionId = _mobileSessionFor(
+        event.data['session_id']?.toString(),
+      );
       if (mobileSessionId == null) return;
       _asyncEventListener?.call(mobileSessionId, event);
     };
+    // Hermes 0.21.3+ asks interactive questions (approval / clarify / sudo /
+    // secret / vault) as server→client requests instead of `*.request`
+    // events. Route each one to the chat that owns the gateway session so it
+    // can show its card and answer with a response frame.
+    client.onServerRequest = (request) {
+      final mobileSessionId = _mobileSessionFor(
+        request.params['session_id']?.toString(),
+      );
+      if (mobileSessionId == null) return;
+      _serverRequestListener?.call(mobileSessionId, request);
+    };
+  }
+
+  /// The mobile chat a gateway session id belongs to, or `null` when this
+  /// connection has not mapped it — a request for an unknown session has no
+  /// card to show.
+  String? _mobileSessionFor(String? gatewaySessionId) {
+    if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {
+      for (final entry in _gatewaySessionIds.entries) {
+        if (entry.value == gatewaySessionId) return entry.key;
+      }
+      return null;
+    }
+    if (_gatewaySessionIds.length == 1) {
+      return _gatewaySessionIds.keys.single;
+    }
+    return null;
   }
 
   /// Interrupts the active turn in the Desktop gateway runtime.
@@ -487,6 +515,34 @@ class DesktopGatewayClient {
       requestId: requestId,
       answer: answer,
       questionId: questionId,
+    );
+  }
+
+  /// Answers one backend-initiated request by its `srq-…` id (Hermes 0.21.3+).
+  Future<void> respondToServerRequest(
+    String requestId, {
+    Map<String, dynamic>? result,
+    String? errorMessage,
+  }) async {
+    final client = _connectedClient();
+    await client.respondToServerRequest(
+      requestId,
+      result: result,
+      errorMessage: errorMessage,
+    );
+  }
+
+  /// Locks one answer of a batch clarify request (`clarify.lock`).
+  Future<void> lockClarifyAnswer({
+    required String requestId,
+    required String questionId,
+    required String answer,
+  }) async {
+    final client = _connectedClient();
+    await client.lockClarifyAnswer(
+      requestId: requestId,
+      questionId: questionId,
+      answer: answer,
     );
   }
 

@@ -19,12 +19,19 @@ class GatewayClarifyRequest {
   final List<String> choices;
   final bool multiSelect;
 
+  /// The backend request id (`srq-…`) when this prompt arrived as a
+  /// server→client request (Hermes 0.21.3+). Answers go back as a response
+  /// frame (flat) or `clarify.lock` calls (batch) for that id; `null` for the
+  /// legacy `clarify.request` event.
+  final String? serverRequestId;
+
   const GatewayClarifyRequest({
     required this.requestId,
     required this.question,
     required this.choices,
     required this.multiSelect,
     this.questionId,
+    this.serverRequestId,
   });
 
   bool get hasChoices => choices.isNotEmpty;
@@ -36,8 +43,9 @@ class GatewayClarifyRequest {
   /// `questionId`. Questions missing a usable `qid` in a batch are dropped,
   /// since the gateway cannot correlate an answer without one.
   static List<GatewayClarifyRequest> fromEventDataList(
-    Map<String, dynamic> data,
-  ) {
+    Map<String, dynamic> data, {
+    String? serverRequestId,
+  }) {
     final requestId = data['request_id']?.toString().trim() ?? '';
     if (requestId.isEmpty) return const [];
 
@@ -59,18 +67,22 @@ class GatewayClarifyRequest {
             choices: choices,
             multiSelect:
                 rawQuestion['multi_select'] == true && choices.isNotEmpty,
+            serverRequestId: serverRequestId,
           ),
         );
       }
       return requests;
     }
 
-    final flat = fromEventData(data);
+    final flat = fromEventData(data, serverRequestId: serverRequestId);
     return flat == null ? const [] : [flat];
   }
 
   /// Parses the legacy flat single-question payload.
-  static GatewayClarifyRequest? fromEventData(Map<String, dynamic> data) {
+  static GatewayClarifyRequest? fromEventData(
+    Map<String, dynamic> data, {
+    String? serverRequestId,
+  }) {
     final requestId = data['request_id']?.toString().trim() ?? '';
     if (requestId.isEmpty) return null;
 
@@ -84,6 +96,7 @@ class GatewayClarifyRequest {
           : question,
       choices: choices,
       multiSelect: data['multi_select'] == true && choices.isNotEmpty,
+      serverRequestId: serverRequestId,
     );
   }
 

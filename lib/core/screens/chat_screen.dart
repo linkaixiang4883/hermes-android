@@ -283,6 +283,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _legacyHistoryResyncing = false;
   int _responseGeneration = 0;
   bool _approvalDialogOpen = false;
+
+  /// The `srq-…` id of the approval card currently on screen (Hermes 0.21.3+
+  /// server→client requests), so a `request.cancel` can take it down.
+  String? _activeApprovalServerRequestId;
   final List<_PendingSensitivePrompt> _sensitivePromptQueue = [];
   final Set<String> _expiredSensitivePromptIds = {};
   _PendingSensitivePrompt? _activeSensitivePrompt;
@@ -366,6 +370,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           widget.connection,
         );
         _desktopGateway!.setAsyncEventListener(_handleDesktopAsyncEvent);
+        _desktopGateway!.setServerRequestListener(_handleDesktopServerRequest);
         _desktopGateway!.setConnectionListener((state) {
           if (mounted) setState(() => _desktopConnectionState = state);
         });
@@ -439,6 +444,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ),
     );
     _desktopGateway?.setAsyncEventListener(null);
+    _desktopGateway?.setServerRequestListener(null);
     _desktopGateway?.close();
     _textController.dispose();
     _scrollController.removeListener(_onScroll);
@@ -2282,11 +2288,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     if (event.type == 'sudo.request' || event.type == 'secret.request') {
-      _queueSensitivePrompt(event, responseGeneration);
+      _queueSensitivePrompt(
+        kind: event.type == 'sudo.request'
+            ? GatewaySensitivePromptKind.sudo
+            : GatewaySensitivePromptKind.secret,
+        data: event.data,
+        responseGeneration: responseGeneration,
+      );
       return;
     }
     if (event.type == 'sudo.expire' || event.type == 'secret.expire') {
       _expireSensitivePrompt(event);
+      return;
+    }
+    if (event.type == 'request.cancel') {
+      _cancelServerRequest(event.data);
       return;
     }
     if (event.type == 'message.delta') {
@@ -2355,6 +2371,150 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  /// A backend-initiated request (Hermes 0.21.3+): an approval, a clarify
+  /// prompt, a sudo/secret value, or a desktop-only bridge this client cannot
+  /// answer. Unsupported methods are answered with an error frame so the
+  /// backend moves on instead of waiting out its full timeout.
+  void _handleDesktopServerRequest(
+    String mobileSessionId,
+    GatewayServerRequest request,
+  ) {
+    if (!mounted || mobileSessionId != widget.session.id) return;
+    final params = Map<String, dynamic>.from(request.params)
+      ..remove('session_id');
+    switch (request.method) {
+      case 'approval':
+        _showGatewayApproval(
+          params,
+          _responseGeneration,
+          serverRequestId: request.id,
+        );
+        return;
+      case 'clarify':
+        _queueClarifyPrompt(
+          {...params, 'request_id': request.id},
+          _responseGeneration,
+          serverRequestId: request.id,
+        );
+        return;
+      case 'sudo':
+        _queueSensitivePrompt(
+          kind: GatewaySensitivePromptKind.sudo,
+          data: params,
+          responseGeneration: _responseGeneration,
+          serverRequestId: request.id,
+        );
+        return;
+      case 'secret':
+        _queueSensitivePrompt(
+          kind: GatewaySensitivePromptKind.secret,
+          data: params,
+          responseGeneration: _responseGeneration,
+          serverRequestId: request.id,
+        );
+        return;
+      default:
+        // vault.* and the desktop GUI bridges (terminal.read, preview.*,
+        // window.read, tour) have no Android surface: fail fast so the backend
+        // does not block on a card that can never appear here.
+        final gateway = _desktopGateway;
+        if (gateway == null) return;
+        unawaited(() async {
+          try {
+            await gateway.respondToServerRequest(
+              request.id,
+              errorMessage: 'not supported on Hermes Android',
+            );
+          } catch (_) {
+            // The transport may already be gone; nothing left to answer.
+          }
+        }());
+    }
+  }
+
+  /// A `request.cancel` event withdrew an open backend request: take its card
+  /// down (or drop it from a queue) so nobody answers a dead request.
+  void _cancelServerRequest(Map<String, dynamic> data) {
+    final id = data['id']?.toString().trim() ?? '';
+    if (id.isEmpty) return;
+    if (_activeApprovalServerRequestId == id && _approvalDialogOpen) {
+      _activeApprovalServerRequestId = null;
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+    _clarifyPromptQueue.removeWhere(
+      (pending) => pending.request.serverRequestId == id,
+    );
+    if (_activeClarifyPrompt?.request.serverRequestId == id) {
+      _activeClarifyPrompt = null;
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+    _sensitivePromptQueue.removeWhere(
+      (pending) => pending.request.serverRequestId == id,
+    );
+    if (_activeSensitivePrompt?.request.serverRequestId == id) {
+      _activeSensitivePrompt = null;
+      if (mounted) Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+
+  /// Sends one clarify answer over the wire its request arrived on: a response
+  /// frame for server→client requests (Hermes 0.21.3+; batch answers lock
+  /// individually so early answers survive a timeout), or the legacy
+  /// `clarify.respond` method for `clarify.request` events.
+  Future<void> _respondToClarifyPrompt(
+    DesktopGatewayClient gateway,
+    GatewayClarifyRequest request,
+    String answer,
+  ) {
+    final serverRequestId = request.serverRequestId;
+    if (serverRequestId == null) {
+      return gateway.respondToClarify(
+        requestId: request.requestId,
+        questionId: request.questionId,
+        answer: answer,
+      );
+    }
+    final questionId = request.questionId;
+    if (questionId == null) {
+      return gateway.respondToServerRequest(
+        serverRequestId,
+        result: {'answer': answer},
+      );
+    }
+    return gateway.lockClarifyAnswer(
+      requestId: serverRequestId,
+      questionId: questionId,
+      answer: answer,
+    );
+  }
+
+  /// Sends one sudo/secret value over the wire its prompt arrived on: a
+  /// `{value}` response frame for server→client requests (Hermes 0.21.3+), or
+  /// the legacy `sudo.respond` / `secret.respond` method otherwise.
+  Future<void> _respondToSensitivePrompt(
+    DesktopGatewayClient gateway,
+    GatewaySensitivePromptRequest request,
+    String value,
+  ) {
+    final serverRequestId = request.serverRequestId;
+    if (serverRequestId != null) {
+      return gateway.respondToServerRequest(
+        serverRequestId,
+        result: {'value': value},
+      );
+    }
+    return switch (request.kind) {
+      GatewaySensitivePromptKind.sudo => gateway.respondToSudo(
+        requestId: request.requestId,
+        password: value,
+      ),
+      GatewaySensitivePromptKind.secret => gateway.respondToSecret(
+        requestId: request.requestId,
+        value: value,
+      ),
+    };
+  }
+
   Map<String, dynamic>? _lastAssistantMessage() {
     for (var index = _messages.length - 1; index >= 0; index--) {
       if (_messages[index]['role'] == 'assistant') return _messages[index];
@@ -2364,6 +2524,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleDesktopAsyncEvent(String mobileSessionId, StreamEvent event) {
     if (!mounted || mobileSessionId != widget.session.id) return;
+    if (event.type == 'request.cancel') {
+      _cancelServerRequest(event.data);
+      return;
+    }
     if (event.type == 'notification.show') {
       final notification = GatewayNotification.fromEventData(event.data);
       if (notification == null) return;
@@ -2437,11 +2601,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _showGatewayApproval(
     Map<String, dynamic> eventData,
-    int responseGeneration,
-  ) {
+    int responseGeneration, {
+    String? serverRequestId,
+  }) {
     if (_approvalDialogOpen) return;
-    final request = GatewayApprovalRequest.fromEventData(eventData);
+    final request = GatewayApprovalRequest.fromEventData(
+      eventData,
+      serverRequestId: serverRequestId,
+    );
     _approvalDialogOpen = true;
+    _activeApprovalServerRequestId = serverRequestId;
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted || responseGeneration != _responseGeneration) {
@@ -2459,13 +2628,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         barrierDismissible: false,
         builder: (dialogContext) => GatewayApprovalDialog(
           request: request,
-          onRespond: (choice) => desktopGateway.respondToApproval(
-            sessionId: widget.session.id,
-            choice: choice.wireValue,
-          ),
+          onRespond: (choice) => serverRequestId == null
+              ? desktopGateway.respondToApproval(
+                  sessionId: widget.session.id,
+                  choice: choice.wireValue,
+                )
+              : desktopGateway.respondToServerRequest(
+                  serverRequestId,
+                  result: {'choice': choice.wireValue},
+                ),
         ),
       );
       _approvalDialogOpen = false;
+      if (_activeApprovalServerRequestId == serverRequestId) {
+        _activeApprovalServerRequestId = null;
+      }
       _drainClarifyPromptQueue();
       _drainSensitivePromptQueue();
 
@@ -2475,10 +2652,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           mounted &&
           responseGeneration == _responseGeneration) {
         try {
-          await desktopGateway.respondToApproval(
-            sessionId: widget.session.id,
-            choice: GatewayApprovalChoice.deny.wireValue,
-          );
+          if (serverRequestId == null) {
+            await desktopGateway.respondToApproval(
+              sessionId: widget.session.id,
+              choice: GatewayApprovalChoice.deny.wireValue,
+            );
+          } else {
+            await desktopGateway.respondToServerRequest(
+              serverRequestId,
+              result: {'choice': GatewayApprovalChoice.deny.wireValue},
+            );
+          }
         } catch (error) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
@@ -2492,13 +2676,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  void _queueSensitivePrompt(StreamEvent event, int responseGeneration) {
-    final kind = event.type == 'sudo.request'
-        ? GatewaySensitivePromptKind.sudo
-        : GatewaySensitivePromptKind.secret;
+  void _queueSensitivePrompt({
+    required GatewaySensitivePromptKind kind,
+    required Map<String, dynamic> data,
+    required int responseGeneration,
+    String? serverRequestId,
+  }) {
     final request = GatewaySensitivePromptRequest.fromEventData(
       kind: kind,
-      data: event.data,
+      data: data,
+      serverRequestId: serverRequestId,
     );
     if (request == null) return;
     final duplicate =
@@ -2549,16 +2736,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         barrierDismissible: true,
         builder: (_) => GatewaySensitivePromptDialog(
           request: pending.request,
-          onRespond: (value) => switch (pending.request.kind) {
-            GatewaySensitivePromptKind.sudo => desktopGateway.respondToSudo(
-              requestId: pending.request.requestId,
-              password: value,
-            ),
-            GatewaySensitivePromptKind.secret => desktopGateway.respondToSecret(
-              requestId: pending.request.requestId,
-              value: value,
-            ),
-          },
+          onRespond: (value) => _respondToSensitivePrompt(
+            desktopGateway,
+            pending.request,
+            value,
+          ),
         ),
       );
       _sensitivePromptRouteOpen = false;
@@ -2572,20 +2754,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           mounted &&
           pending.responseGeneration == _responseGeneration) {
         try {
-          switch (pending.request.kind) {
-            case GatewaySensitivePromptKind.sudo:
-              await desktopGateway.respondToSudo(
-                requestId: pending.request.requestId,
-                password: '',
-              );
-              break;
-            case GatewaySensitivePromptKind.secret:
-              await desktopGateway.respondToSecret(
-                requestId: pending.request.requestId,
-                value: '',
-              );
-              break;
-          }
+          await _respondToSensitivePrompt(desktopGateway, pending.request, '');
         } catch (_) {
           // The request may have expired while the route was closing. Never
           // include a sensitive value in an error message or diagnostic.
@@ -2616,11 +2785,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _queueClarifyPrompt(
     Map<String, dynamic> eventData,
-    int responseGeneration,
-  ) {
-    final requests = GatewayClarifyRequest.fromEventDataList(eventData);
+    int responseGeneration, {
+    String? serverRequestId,
+  }) {
+    final requests = GatewayClarifyRequest.fromEventDataList(
+      eventData,
+      serverRequestId: serverRequestId,
+    );
     if (requests.isEmpty) return;
+
+    // A reconnect replay carries the answers the backend already locked —
+    // those questions are done and must not be asked again.
+    final locked = eventData['answers'];
+    final lockedQids = locked is Map
+        ? locked.keys.map((key) => key.toString()).toSet()
+        : const <String>{};
+
     for (final request in requests) {
+      final questionId = request.questionId;
+      if (questionId != null && lockedQids.contains(questionId)) continue;
       final duplicate =
           _activeClarifyPrompt?.request.identityKey == request.identityKey ||
           _clarifyPromptQueue.any(
@@ -2666,10 +2849,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         barrierDismissible: true,
         builder: (_) => GatewayClarifyDialog(
           request: pending.request,
-          onRespond: (answer) => desktopGateway.respondToClarify(
-            requestId: pending.request.requestId,
-            questionId: pending.request.questionId,
-            answer: answer,
+          onRespond: (answer) => _respondToClarifyPrompt(
+            desktopGateway,
+            pending.request,
+            answer,
           ),
         ),
       );
@@ -2685,11 +2868,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           mounted &&
           pending.responseGeneration == _responseGeneration) {
         try {
-          await desktopGateway.respondToClarify(
-            requestId: pending.request.requestId,
-            questionId: pending.request.questionId,
-            answer: '',
-          );
+          await _respondToClarifyPrompt(desktopGateway, pending.request, '');
         } catch (_) {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
