@@ -1010,6 +1010,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     List<AttachmentDraft> initialAttachmentDrafts = const [],
   }) async {
     final projectId = draft.projectId;
+    // A chat that could not be filed must not keep the Project's label: the
+    // sticky chat header shows this name, and a chat with nowhere to be born
+    // is a normal chat — not a Project chat that is somehow still coming.
+    var chatProjectName = draft.projectName;
     if (projectId != null) {
       // A project chat is filed by being BORN in the project's folder: the
       // gateway derives a chat's project from its working directory, so the
@@ -1024,6 +1028,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           projectName: draft.projectName,
         );
       } else {
+        chatProjectName = null;
         _reportProjectChatUnfiled();
       }
       if (!mounted) return;
@@ -1036,7 +1041,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
     await _openSession(
       draft.session,
-      projectName: draft.projectName,
+      projectName: chatProjectName,
       initialComposerText: initialComposerText,
       initialAttachmentDrafts: initialAttachmentDrafts,
     );

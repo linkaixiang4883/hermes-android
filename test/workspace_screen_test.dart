@@ -495,6 +495,39 @@ void main() {
     expect(assignments, isEmpty);
   });
 
+  testWidgets('a folderless Project opens the chat unfiled and unlabeled', (
+    tester,
+  ) async {
+    // Android itself allows Projects that carry only a name, so there may be
+    // no folder to be born in. The chat must then be an honest normal chat:
+    // it says so once, and it does not keep the Project's label in its sticky
+    // header — nothing will ever file it.
+    await _pump(
+      tester,
+      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
+      repository: await _repository([
+        _projectJson(id: 'p1', name: 'Folderless', primaryPath: ''),
+      ]),
+      newChatSessionIdFactory: () => 'folderless-chat',
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Projects').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Folderless'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(kProjectNewChatButtonKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.textContaining('file it into a project'), findsOneWidget);
+
+    final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
+    expect(chat.projectName, isNull);
+    expect(chat.projectAssignment, isNull);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('a host callback suppresses the built-in project route', (
     tester,
   ) async {

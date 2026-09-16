@@ -36,6 +36,20 @@ class DesktopGatewayClient {
   final String _documentProfile;
   WsClient? _ws;
   final Map<String, String> _gatewaySessionIds = {};
+
+  /// The folder each mobile chat must be created in while it does not exist on
+  /// the gateway yet.
+  ///
+  /// A Project chat is born in its project's folder, so the folder has to be
+  /// present at the moment `session.create` runs — and that moment can arrive
+  /// on any call that needs the session (the open-time preflight, the first
+  /// prompt, an attachment, a model change). Remembering the intent here keeps
+  /// a transient preflight failure, or a race with the first action, from
+  /// creating the session unfiled: `_connect` falls back to this folder
+  /// whenever its caller does not bring one of its own. It is only ever
+  /// applied while the session is being CREATED — an existing chat keeps its
+  /// workspace, so no call can re-home it.
+  final Map<String, String> _desiredCwd = {};
   DesktopAsyncEventCallback? _asyncEventListener;
   DesktopServerRequestCallback? _serverRequestListener;
   DesktopConnectionCallback? _connectionListener;
@@ -156,6 +170,16 @@ class DesktopGatewayClient {
     String mobileSessionId, {
     String? cwd,
   }) async {
+    final requestedCwd = cwd?.trim() ?? '';
+    if (requestedCwd.isNotEmpty) {
+      _desiredCwd[mobileSessionId] = requestedCwd;
+    }
+    // Every creation-capable call shares one anchor: the folder this call
+    // brings, or the folder the chat was last filed with. Without it, a
+    // preflight that fails transiently — or a first action racing that
+    // preflight — would create the session without the project folder it was
+    // meant to be born in, and the chat would silently lose its project.
+    final anchorCwd = _desiredCwd[mobileSessionId];
     final existing = _ws;
     if (existing != null && existing.isConnected) {
       final mappedSessionId = _gatewaySessionIds[mobileSessionId];
@@ -165,7 +189,7 @@ class DesktopGatewayClient {
       final gatewaySession = await _resumeOrCreate(
         existing,
         mobileSessionId,
-        cwd: cwd,
+        cwd: anchorCwd,
       );
       _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
       return gatewaySession;
@@ -195,7 +219,7 @@ class DesktopGatewayClient {
       final gatewaySession = await _resumeOrCreate(
         client,
         mobileSessionId,
-        cwd: cwd,
+        cwd: anchorCwd,
       );
       _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
       return gatewaySession;
