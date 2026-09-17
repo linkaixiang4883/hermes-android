@@ -1,4 +1,4 @@
-# Hermes Android — v2.1.0
+# Hermes Android — v2.1.3
 
 Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — chat with your Hermes sessions from a phone or tablet over local Wi-Fi or a private Tailscale network.
 
@@ -14,7 +14,7 @@ Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — ch
 
 ## Current release
 
-- Version: **2.1.0** (build 2140)
+- Version: **2.1.3** (build 2143)
 - Package: `com.hermesagent.hermes_android`
 - Recommended APK for modern phones: ARM64 release build from the
   [Releases](https://github.com/rusty4444/hermes-android/releases) page.
@@ -283,6 +283,13 @@ afterwards:
      dashboard is exposed elsewhere.
    - **Username / Password** — only for a password-protected dashboard. Leave
      both blank for an open (`--insecure`) dashboard.
+   - **Hermes profile** — only when the dashboard is a *machine-level* one
+     (`hermes dashboard` / `hermes serve` without `--isolated`) that hosts
+     several profiles. Hermes scopes each JSON-RPC call on that socket by a
+     `profile` field in the request, and falls back to its own default
+     profile when it is missing, so without this field chats can quietly land
+     in the wrong profile. Use the profile name exactly as in `hermes profile
+     list`, e.g. `sol`. Leave blank for an isolated per-profile dashboard.
 3. Tap **Save**. The app validates the settings against the dashboard before
    storing them.
 
@@ -491,7 +498,7 @@ cp build/app/outputs/flutter-apk/app-*-release.apk release-apks/
 block in `android/app/build.gradle.kts` derives per-ABI codes as
 `base * 10 + ABI code` (armeabi-v7a = 1, arm64-v8a = 2, x86_64 = 3), so the
 codes stay ordered armeabi-v7a < arm64-v8a < x86_64 as fdroiddata requires.
-For v2.1.0, base `2140` therefore produces codes `21401`/`21402`/`21403`.
+For v2.1.3, base `2143` therefore produces codes `21431`/`21432`/`21433`.
 CI reads the completed arm64 APK with `aapt` and fails if that relationship
 drifts. Release-floor checks continue to apply to the base value and must not
 be weakened to rely on the ABI code.
@@ -602,6 +609,10 @@ lib/
 
 ## Credits
 
+- **AletheiaVox** — Hermes-profile plumbing on the Desktop Gateway socket (PR #98): optional profile field on connections, injected into every JSON-RPC payload so machine-level dashboards scope chats to the right profile. Merged in v2.1.3.
+- **software-greg** — gateway-less chat model listing and application (PR #97). Merged in v2.1.3.
+- **realchrisolin** — removed the hardcoded desktop gateway URL default and made optional connection fields clearable (PR #86). Merged in v2.1.3.
+- **Thaeland** — diagnosed that Project chats were blocked on stock Hermes gateways (#100) and contributed the cwd-based fallback and stock `session.create` wire shape so Project chats open everywhere (PR #102). Merged in v2.1.2.
 - **CarlosReyesPena** — community daily-driver workspace edition (PR #88): Workspace shell with Home/Projects/Chats/Activity/More, gateway projects integration, three-mode session search (on-device / FTS5 full-text / AI-assisted), encrypted config backup & restore, quick-chat lifecycle and share intents, capability discovery, and 900+ tests. Merged in v2.1.0.
 - **CristianGCiocoi** — community Remote Gateway edition: unified JSON-RPC transport, per-chat model selection, multi-attachment uploads, durable turn recovery, voice dictation, gateway contract test suite, and the comprehensive CHANGELOG. Merged in v2.0.0.
 - **AI-Guru** — detailed review, independent testing, and scroll-offset bug identification for the community edition.

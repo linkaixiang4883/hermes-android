@@ -103,6 +103,7 @@ Widget buildWorkspaceChatScreen({
   required Session session,
   String? projectName,
   ProjectChatAssignment? projectAssignment,
+  String? projectWorkingDirectory,
   String? initialComposerText,
   List<AttachmentDraft> initialAttachmentDrafts = const [],
   GatewayTurnApplicationController? turnApplicationController,
@@ -112,6 +113,7 @@ Widget buildWorkspaceChatScreen({
     session: session,
     projectName: projectName,
     projectAssignment: projectAssignment,
+    projectWorkingDirectory: projectWorkingDirectory,
     initialComposerText: initialComposerText,
     initialAttachmentDrafts: initialAttachmentDrafts,
     turnApplicationController: turnApplicationController,
@@ -770,6 +772,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   Future<void> _openSession(
     Session session, {
     String? projectName,
+    String? projectWorkingDirectory,
     String? initialComposerText,
     List<AttachmentDraft> initialAttachmentDrafts = const [],
   }) async {
@@ -792,6 +795,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               session: session,
               projectName: projectName,
               projectAssignment: assignment,
+              projectWorkingDirectory: projectWorkingDirectory,
               initialComposerText: initialComposerText,
               initialAttachmentDrafts: initialAttachmentDrafts,
               turnApplicationController: widget.turnApplicationController,
@@ -839,8 +843,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           projectName: project.name,
           loadSessions: ({required bool refresh}) =>
               repository.projectSessions(projectId, refresh: refresh),
-          onOpenSession: (session) =>
-              _openSession(session, projectName: project.name),
+          onOpenSession: (session) => _openSession(
+            session,
+            projectName: project.name,
+            projectWorkingDirectory: project.workingDirectory,
+          ),
           onNewChat: () => unawaited(_startProjectChat(project)),
           projects: repository.current.projects,
           onMoveSession: (session, targetProjectId) =>
@@ -1042,6 +1049,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     await _openSession(
       draft.session,
       projectName: chatProjectName,
+      projectWorkingDirectory: draft.projectWorkingDirectory,
       initialComposerText: initialComposerText,
       initialAttachmentDrafts: initialAttachmentDrafts,
     );

@@ -410,6 +410,7 @@ class HomeScreenState extends State<HomeScreen> {
               dashboardPort,
               dashboardUsername,
               dashboardPassword,
+              gatewayProfile,
             }) async {
               if (existing == null) {
                 await widget.connManager.saveConnection(
@@ -424,6 +425,7 @@ class HomeScreenState extends State<HomeScreen> {
                   dashboardPort: dashboardPort,
                   dashboardUsername: dashboardUsername,
                   dashboardPassword: dashboardPassword,
+                  gatewayProfile: gatewayProfile,
                 );
               } else {
                 await widget.connManager.updateConnection(
@@ -439,6 +441,7 @@ class HomeScreenState extends State<HomeScreen> {
                   dashboardPort: dashboardPort,
                   dashboardUsername: dashboardUsername,
                   dashboardPassword: dashboardPassword,
+                  gatewayProfile: gatewayProfile,
                 );
               }
               _refresh();
@@ -964,6 +967,7 @@ class _AddDialog extends StatefulWidget {
     int? dashboardPort,
     String? dashboardUsername,
     String? dashboardPassword,
+    String? gatewayProfile,
   })
   onSave;
   const _AddDialog({required this.onSave, this.initialConnection});
@@ -983,6 +987,7 @@ class _AddDialogState extends State<_AddDialog> {
   late final TextEditingController _dashUser;
   late final TextEditingController _dashPass;
   late final TextEditingController _desktopGatewayUrl;
+  late final TextEditingController _gatewayProfile;
   late bool _showDashboard;
   late bool _dashboardProxied;
   bool _validating = false;
@@ -1019,9 +1024,11 @@ class _AddDialogState extends State<_AddDialog> {
     _desktopGatewayUrl = TextEditingController(
       text: conn?.desktopGatewayUrl ?? '',
     );
+    _gatewayProfile = TextEditingController(text: conn?.gatewayProfile ?? '');
     _dashboardProxied = conn?.dashboardProxied ?? false;
     _showDashboard =
         conn?.gatewayPrefix?.isNotEmpty == true ||
+        conn?.gatewayProfile?.isNotEmpty == true ||
         conn?.dashboardPrefix?.isNotEmpty == true ||
         conn?.dashboardPortOverride != null ||
         conn?.dashboardUsername?.isNotEmpty == true ||
@@ -1077,6 +1084,18 @@ class _AddDialogState extends State<_AddDialog> {
       final dashUser = _dashUser.text.trim();
       final dashPass = _dashPass.text.trim();
       final desktopGatewayUrl = _desktopGatewayUrl.text.trim();
+      final gatewayProfile = _gatewayProfile.text.trim();
+      if (gatewayProfile.contains('/') ||
+          gatewayProfile.contains(RegExp(r'\s'))) {
+        setState(() {
+          _error =
+              'Hermes profile must be a plain profile name such as "sol", '
+              'not a path.';
+          _validating = false;
+          _showDashboard = true;
+        });
+        return;
+      }
       final dashPort = dashPortText.isEmpty ? null : int.tryParse(dashPortText);
 
       // If the user supplied any dashboard details, validate them before saving
@@ -1127,13 +1146,14 @@ class _AddDialogState extends State<_AddDialog> {
         host,
         port,
         apiKey,
-        gatewayPrefix: gatewayPrefix.isEmpty ? null : gatewayPrefix,
-        dashboardPrefix: dashboardPrefix.isEmpty ? null : dashboardPrefix,
+        gatewayPrefix: gatewayPrefix,
+        dashboardPrefix: dashboardPrefix,
         dashboardProxied: _dashboardProxied,
-        desktopGatewayUrl: desktopGatewayUrl.isEmpty ? null : desktopGatewayUrl,
+        desktopGatewayUrl: desktopGatewayUrl,
         dashboardPort: dashPort,
         dashboardUsername: dashUser.isEmpty ? null : dashUser,
         dashboardPassword: dashPass.isEmpty ? null : dashPass,
+        gatewayProfile: gatewayProfile.isEmpty ? null : gatewayProfile,
       );
       if (mounted) Navigator.pop(context);
     } on CredentialStorageException {
@@ -1316,6 +1336,20 @@ class _AddDialogState extends State<_AddDialog> {
                 keyboardType: TextInputType.url,
                 autocorrect: false,
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _gatewayProfile,
+                decoration: const InputDecoration(
+                  labelText: 'Hermes profile (optional)',
+                  hintText: 'e.g. sol',
+                  helperText:
+                      'Profile this connection chats as when the dashboard '
+                      'serves several profiles. Leave blank for an isolated '
+                      'per-profile dashboard.',
+                  helperMaxLines: 3,
+                ),
+                autocorrect: false,
+              ),
             ],
           ],
         ),
@@ -1354,6 +1388,7 @@ class _AddDialogState extends State<_AddDialog> {
     _dashUser.dispose();
     _dashPass.dispose();
     _desktopGatewayUrl.dispose();
+    _gatewayProfile.dispose();
     super.dispose();
   }
 }

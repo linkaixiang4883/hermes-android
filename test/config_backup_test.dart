@@ -23,6 +23,7 @@ void main() {
           dashboardPortOverride: 9119,
           dashboardUsername: 'carlos',
           dashboardPassword: 'dash-secret',
+          gatewayProfile: 'carlos-work',
         ),
       ],
       preferences: const <String, Object>{
@@ -51,6 +52,7 @@ void main() {
       expect(conn.dashboardUsername, 'carlos');
       expect(conn.dashboardPassword, 'dash-secret');
       expect(conn.dashboardPortOverride, 9119);
+      expect(conn.gatewayProfile, 'carlos-work');
     });
 
     test('round-trips preference values without losing their types', () {

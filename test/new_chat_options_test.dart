@@ -15,12 +15,14 @@ HermesProject _project({
   String id = 'p1',
   String name = 'Hermes Android',
   bool archived = false,
+  String? primaryPath,
 }) {
   return HermesProject(
     id: id,
     slug: name.toLowerCase().replaceAll(' ', '-'),
     name: name,
     archived: archived,
+    primaryPath: primaryPath,
   );
 }
 
@@ -193,6 +195,7 @@ void main() {
       expect(draft.isQuick, isTrue);
       expect(draft.projectId, isNull);
       expect(draft.projectName, isNull);
+      expect(draft.projectWorkingDirectory, isNull);
       expect(draft.session.id, 'mob-1');
     });
 
@@ -234,7 +237,7 @@ void main() {
     test('a project chat carries the project and never expires', () {
       final draft = buildNewChatDraft(
         mode: NewChatMode.projectChat,
-        project: _project(),
+        project: _project(primaryPath: '/srv/projects/hermes-android'),
         sessionId: 'mob-2',
         now: _now,
       );
@@ -242,6 +245,7 @@ void main() {
       expect(draft.isQuick, isFalse);
       expect(draft.projectId, 'p1');
       expect(draft.projectName, 'Hermes Android');
+      expect(draft.projectWorkingDirectory, '/srv/projects/hermes-android');
       expect(draft.session.title, contains('Hermes Android'));
       expect(draft.expiresAt, isNull);
     });

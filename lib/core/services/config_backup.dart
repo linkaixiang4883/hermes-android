@@ -110,6 +110,7 @@ class ConfigBackup {
       'dashboard_port': connection.dashboardPortOverride,
       'dashboard_username': connection.dashboardUsername,
       'dashboard_password': connection.dashboardPassword,
+      'gateway_profile': connection.gatewayProfile,
     };
   }
 
@@ -133,6 +134,7 @@ class ConfigBackup {
       dashboardPortOverride: map['dashboard_port'] as int?,
       dashboardUsername: nonEmpty(map['dashboard_username']),
       dashboardPassword: nonEmpty(map['dashboard_password']),
+      gatewayProfile: nonEmpty(map['gateway_profile']),
     );
   }
 

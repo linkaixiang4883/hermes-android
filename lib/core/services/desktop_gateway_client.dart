@@ -34,9 +34,12 @@ class DesktopGatewayClient {
   final String _baseUrl;
   final DashboardClient _dashboard;
   final String _documentProfile;
+
+  /// Hermes profile the gateway socket should run chats under, or null to
+  /// let the server use its own. See [SavedConnection.gatewayProfile].
+  final String? _gatewayProfile;
   WsClient? _ws;
   final Map<String, String> _gatewaySessionIds = {};
-
   /// The folder each mobile chat must be created in while it does not exist on
   /// the gateway yet.
   ///
@@ -50,6 +53,14 @@ class DesktopGatewayClient {
   /// applied while the session is being CREATED — an existing chat keeps its
   /// workspace, so no call can re-home it.
   final Map<String, String> _desiredCwd = {};
+
+  /// The gateway-minted stored id for each mobile chat, once it exists.
+  ///
+  /// A mobile draft id is only a local handle: after a disconnect,
+  /// `session.resume` has to address the durable id Hermes minted and stored
+  /// (`stored_session_id`). Resuming the draft id instead would miss and
+  /// create a SECOND session, splitting one chat across two server sessions.
+  final Map<String, String> _storedSessionIds = {};
   DesktopAsyncEventCallback? _asyncEventListener;
   DesktopServerRequestCallback? _serverRequestListener;
   DesktopConnectionCallback? _connectionListener;
@@ -76,6 +87,7 @@ class DesktopGatewayClient {
     required this._baseUrl,
     required this._dashboard,
     required this._documentProfile,
+    this._gatewayProfile,
   });
 
   /// The canonical gateway origin for [connection].
@@ -159,10 +171,12 @@ class DesktopGatewayClient {
         port: baseUri.port,
         useHttps: baseUri.scheme == 'https',
         pathPrefix: pathPrefix,
+        proxied: connection.dashboardProxied,
         username: connection.dashboardUsername,
         password: connection.dashboardPassword,
       ),
       documentProfile: documentIntakeProfileForConnection(connection),
+      gatewayProfile: connection.gatewayProfile,
     );
   }
 
@@ -191,7 +205,7 @@ class DesktopGatewayClient {
         mobileSessionId,
         cwd: anchorCwd,
       );
-      _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
+      _rememberSession(mobileSessionId, gatewaySession);
       return gatewaySession;
     }
 
@@ -203,7 +217,7 @@ class DesktopGatewayClient {
     existing?.close();
     _gatewaySessionIds.clear();
     final ticket = await _dashboard.mintWebSocketTicket();
-    final client = WsClient(_baseUrl, ticket: ticket);
+    final client = WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
     _installAsyncEventBridge(client);
     client.onConnectionChanged = (connected) {
       if (connected) {
@@ -221,7 +235,7 @@ class DesktopGatewayClient {
         mobileSessionId,
         cwd: anchorCwd,
       );
-      _gatewaySessionIds[mobileSessionId] = gatewaySession.sessionId;
+      _rememberSession(mobileSessionId, gatewaySession);
       return gatewaySession;
     } catch (_) {
       client.close();
@@ -237,22 +251,33 @@ class DesktopGatewayClient {
   /// keeps the workspace it already has, so merely opening a chat can never
   /// re-home it. A created session is born anchored to [cwd] — that is what
   /// gives a project chat its project, and its project context files.
+  ///
+  /// Resume addresses the durable id Hermes minted for this chat once it has
+  /// been created ([_storedSessionIds]); the mobile draft id only resolves
+  /// before the first create.
   Future<_DesktopGatewaySession> _resumeOrCreate(
     WsClient client,
     String mobileSessionId, {
     String? cwd,
   }) async {
+    final storedSessionId =
+        _storedSessionIds[mobileSessionId] ?? mobileSessionId;
     try {
-      final resumed = await client.resumeSession(mobileSessionId);
-      return _DesktopGatewaySession(client, resumed.sessionId);
+      final resumed = await client.resumeSession(storedSessionId);
+      return _DesktopGatewaySession(
+        client,
+        resumed.sessionId,
+        storedSessionId: resumed.storedSessionId ?? storedSessionId,
+      );
     } on JsonRpcError catch (error) {
       if (error.code != 4007 &&
           !error.message.toLowerCase().contains('session not found')) {
         rethrow;
       }
-      // New mobile chats do not exist in Hermes yet. Create them with the
-      // mobile-generated ID so REST history and the Desktop runtime share one
-      // stable identity. Existing sessions always take the resume path.
+      // New mobile chats do not exist in Hermes yet. Stock Hermes rejects a
+      // client-supplied `session_id` on session.create, so keep whatever the
+      // gateway mints: the runtime id addresses calls on this socket, and the
+      // stored id keeps the chat resumable after a reconnect.
       final created = await client.createOrResumeSession(
         mobileSessionId,
         cwd: cwd,
@@ -262,6 +287,21 @@ class DesktopGatewayClient {
         created.sessionId,
         storedSessionId: created.storedSessionId,
       );
+    }
+  }
+
+  /// Remembers the ids a live gateway session must be addressed by.
+  ///
+  /// The runtime id serves calls on the current socket; the stored id is what
+  /// `session.resume` needs after a reconnect (see [_storedSessionIds]).
+  void _rememberSession(
+    String mobileSessionId,
+    _DesktopGatewaySession session,
+  ) {
+    _gatewaySessionIds[mobileSessionId] = session.sessionId;
+    final stored = session.storedSessionId;
+    if (stored != null && stored.isNotEmpty) {
+      _storedSessionIds[mobileSessionId] = stored;
     }
   }
 
@@ -338,7 +378,7 @@ class DesktopGatewayClient {
     existing?.close();
     _gatewaySessionIds.clear();
     final ticket = await _dashboard.mintWebSocketTicket();
-    final client = WsClient(_baseUrl, ticket: ticket);
+    final client = WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
     _installAsyncEventBridge(client);
     client.onConnectionChanged = (connected) {
       if (connected) {
@@ -371,7 +411,7 @@ class DesktopGatewayClient {
       journal: journal ?? GatewayTurnJournal(),
       freshSocketFactory: () async {
         final ticket = await _dashboard.mintWebSocketTicket();
-        return WsClient(_baseUrl, ticket: ticket);
+        return WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
       },
     );
   }
@@ -638,6 +678,8 @@ class DesktopGatewayClient {
     _ws?.close();
     _ws = null;
     _gatewaySessionIds.clear();
+    _storedSessionIds.clear();
+    _desiredCwd.clear();
     final turnCoordinatorRegistry = _turnCoordinatorRegistry;
     _turnCoordinatorRegistry = null;
     if (turnCoordinatorRegistry != null) {

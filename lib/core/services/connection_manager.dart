@@ -284,8 +284,10 @@ class ConnectionManager {
     int? dashboardPort,
     String? dashboardUsername,
     String? dashboardPassword,
+    String? gatewayProfile,
   }) async {
     final normalized = SavedConnection.normalizeHostAndPort(host, port);
+    final profile = gatewayProfile?.trim();
     final conn = SavedConnection(
       id: _uuid.v4(),
       label: label,
@@ -300,6 +302,7 @@ class ConnectionManager {
       dashboardPortOverride: dashboardPort,
       dashboardUsername: dashboardUsername,
       dashboardPassword: dashboardPassword,
+      gatewayProfile: profile == null || profile.isEmpty ? null : profile,
     );
     final current = getConnections();
     current.insert(0, conn);
@@ -329,6 +332,7 @@ class ConnectionManager {
     int? dashboardPort,
     String? dashboardUsername,
     String? dashboardPassword,
+    String? gatewayProfile,
   }) async {
     final current = getConnections();
     final idx = current.indexWhere((c) => c.id == connId);
@@ -344,6 +348,7 @@ class ConnectionManager {
     final dashUser = dashboardUsername?.trim();
     final dashPass = dashboardPassword?.trim();
     final desktopGateway = desktopGatewayUrl?.trim();
+    final profile = gatewayProfile?.trim();
 
     current[idx] = current[idx].copyWith(
       label: label,
@@ -368,6 +373,8 @@ class ConnectionManager {
       clearDashboardUsername: dashUser != null && dashUser.isEmpty,
       dashboardPassword: dashPass == null || dashPass.isEmpty ? null : dashPass,
       clearDashboardPassword: dashPass != null && dashPass.isEmpty,
+      gatewayProfile: profile == null || profile.isEmpty ? null : profile,
+      clearGatewayProfile: profile != null && profile.isEmpty,
     );
     await _commitCredentialAndMetadata(
       connectionId: connId,

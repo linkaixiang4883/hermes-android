@@ -1393,6 +1393,43 @@ void main() {
     });
 
     testWidgets(
+      'a Project chat from Home carries the project folder into the chat',
+      (tester) async {
+        final opened = <NewChatDraft>[];
+        await _pump(
+          tester,
+          connection: _connection(desktopGatewayUrl: 'https://host:8642'),
+          repository: await _repository([
+            _projectJson(
+              id: 'p1',
+              name: 'Hermes Android',
+              primaryPath: '/srv/projects/hermes-android',
+            ),
+          ]),
+          sessions: const [],
+          onNewChat: opened.add,
+          newChatSessionIdFactory: () => 'stock-project-chat',
+        );
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text(NewChatMode.projectChat.label));
+        await tester.pumpAndSettle();
+
+        // The folder rides on the draft so the chat it opens is born inside
+        // the project — nothing has to be written to file it.
+        expect(opened, hasLength(1));
+        expect(opened.single.session.id, 'stock-project-chat');
+        expect(opened.single.projectId, 'p1');
+        expect(
+          opened.single.projectWorkingDirectory,
+          '/srv/projects/hermes-android',
+        );
+      },
+    );
+
+    testWidgets(
       'a Project with no folder still opens the chat and says it stayed unfiled',
       (tester) async {
         final opened = <NewChatDraft>[];
