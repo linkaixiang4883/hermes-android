@@ -2000,6 +2000,24 @@ abstract class AppLocalizations {
   /// **'Enables file attachments through the Desktop remote gateway.'**
   String get desktopGatewayHelper;
 
+  /// No description provided for @gatewayProfileField.
+  ///
+  /// In en, this message translates to:
+  /// **'Hermes profile (optional)'**
+  String get gatewayProfileField;
+
+  /// No description provided for @gatewayProfileHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. sol'**
+  String get gatewayProfileHint;
+
+  /// No description provided for @gatewayProfileHelper.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile this connection chats as when the dashboard serves several profiles. Leave blank for an isolated per-profile dashboard.'**
+  String get gatewayProfileHelper;
+
   /// No description provided for @toolRunning.
   ///
   /// In en, this message translates to:

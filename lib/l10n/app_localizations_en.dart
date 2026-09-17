@@ -1102,6 +1102,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Enables file attachments through the Desktop remote gateway.';
 
   @override
+  String get gatewayProfileField => 'Hermes profile (optional)';
+
+  @override
+  String get gatewayProfileHint => 'e.g. sol';
+
+  @override
+  String get gatewayProfileHelper =>
+      'Profile this connection chats as when the dashboard serves several profiles. Leave blank for an isolated per-profile dashboard.';
+
+  @override
   String get toolRunning => 'Running';
 
   @override

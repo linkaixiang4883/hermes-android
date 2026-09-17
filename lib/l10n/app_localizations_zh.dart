@@ -1070,6 +1070,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get desktopGatewayHelper => '通过 Desktop 远程网关启用文件附件功能。';
 
   @override
+  String get gatewayProfileField => 'Hermes 配置文件（可选）';
+
+  @override
+  String get gatewayProfileHint => '例如：sol';
+
+  @override
+  String get gatewayProfileHelper =>
+      '当 Dashboard 托管多个配置文件时，指定此连接以哪个配置文件聊天。留空则用于独立的单配置文件 Dashboard。';
+
+  @override
   String get toolRunning => '运行中';
 
   @override

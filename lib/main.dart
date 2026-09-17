@@ -1339,13 +1339,10 @@ class _AddDialogState extends State<_AddDialog> {
               const SizedBox(height: 12),
               TextField(
                 controller: _gatewayProfile,
-                decoration: const InputDecoration(
-                  labelText: 'Hermes profile (optional)',
-                  hintText: 'e.g. sol',
-                  helperText:
-                      'Profile this connection chats as when the dashboard '
-                      'serves several profiles. Leave blank for an isolated '
-                      'per-profile dashboard.',
+                decoration: InputDecoration(
+                  labelText: context.l10n.gatewayProfileField,
+                  hintText: context.l10n.gatewayProfileHint,
+                  helperText: context.l10n.gatewayProfileHelper,
                   helperMaxLines: 3,
                 ),
                 autocorrect: false,
