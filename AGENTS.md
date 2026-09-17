@@ -87,9 +87,11 @@
 - **修复**：`DesktopGatewayClient` 按 mobile session 记住 desired cwd（`_desiredCwd`），任何创建路径都带上，**仅在创建时生效**（resume 不换房）；`workspace_screen._finishNewChat` 无文件夹时不再把项目名传给聊天头
 - **回归测试**：`test/desktop_gateway_cwd_binding_test.dart`（摘掉修复即 `Actual: {}` 必挂）+ workspace 的 folderless 用例；写该类假网关测试的坑（9119 回退）见技能
 
-### 4) 本仓库新基线
+### 4) 上游 merge 记录与基线（2026-09-17，`32ac1b7`）
 
-- 测试 **1030**（1027 + 项目归组持久化 3 条）；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测
+- 已合入上游 **2.1.3+2143**（#102 项目聊天 stock 化 + 其 5385556 重连修复 / #98 profile 透传 / #97 无网关模型选择 / #86 网关 URL 默认值移除 / #99 签名钉扎 + 两次 bump）；**测试 1037**；版本 `2.1.3+2143`（CI `REQUIRED_BASE_VERSION_CODE` 已同步为 2143）
+- **决议**：creation/assign 区域保留我们的**纯 cwd 单通道**（上游的 assign 主路径 + stored-id reconcile + 4s snackbar 一律不取）；**吸收**上游 `5385556` 的 **stored-id 重连修复**——与我们的 `_desiredCwd` 合成一条路径：断线后 resume 用网关铸的 stored id（不再分叉成第二个会话），创建时仍带项目文件夹；上游的 `projectWorkingDirectory` 线保留（从项目列表重开、运行时需重建的聊天仍生在项目文件夹）
+- gap①（无文件夹项目：诚实提示一次 + 头部不贴标签）保持我们的实现；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测（merge 后建议重跑）
 
 ## 拉取上游 / Merge 流程
 
