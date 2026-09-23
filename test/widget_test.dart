@@ -202,6 +202,8 @@ void main() {
     for (final isUser in [false, true]) {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: l10nTestDelegates,
+          supportedLocales: l10nTestSupportedLocales,
           home: Scaffold(
             body: Center(
               child: ConstrainedBox(
