@@ -579,6 +579,10 @@ class WsClient {
     if (pinned == null) {
       _gatewayReadyCanonical = canonical;
       _gatewayReadyFrame = frame;
+      // Hermes 0.21.5+ gates clarify/approval/... delivery on a per-connection
+      // capability advertisement (see [_advertiseServerRequests]); a fresh
+      // ready is exactly once per connection, which is the contract's cadence.
+      _advertiseServerRequests();
       final ready = _gatewayReadyCompleter;
       if (ready != null && !ready.isCompleted) ready.complete(frame);
       try {
@@ -598,6 +602,39 @@ class WsClient {
     final channel = _channel;
     _handleClosedConnection(generation);
     channel?.sink.close();
+  }
+
+  /// Advertises this client's server->client request capability (Hermes 0.21.5+).
+  ///
+  /// The backend gates clarify / approval / sudo / secret delivery on a
+  /// per-connection `client.capabilities` advertisement: a socket that never
+  /// sent `{"server_requests": true}` is treated as a build older than
+  /// server->client requests, and every question fails fast instead of
+  /// reaching this client. Sent on every fresh `gateway.ready`; a server that
+  /// predates the method answers an error this fire-and-forget write ignores.
+  ///
+  /// The params contract accepts `server_requests` alone and rejects unknown
+  /// keys, so this must NOT ride [withProfile]'s `profile` field.
+  void _advertiseServerRequests() {
+    final channel = _channel;
+    if (channel == null) return;
+    final id = _nextId++;
+    final completer = Completer<Map<String, dynamic>>();
+    completer.future.ignore();
+    _pending[id] = _Pending('client.capabilities', completer, null);
+    try {
+      channel.sink.add(
+        jsonEncode({
+          'jsonrpc': '2.0',
+          'method': 'client.capabilities',
+          'params': const {'server_requests': true},
+          'id': id,
+        }),
+      );
+    } catch (_) {
+      // A capability advertisement can never break the connect path.
+      _pending.remove(id);
+    }
   }
 
   /// Dispatch a server-pushed event to registered listeners.

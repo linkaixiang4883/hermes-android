@@ -235,6 +235,63 @@ void main() {
     expect(secret?.serverRequestId, 'srq-3');
   });
 
+  test('advertises server_requests right after gateway.ready '
+      '(Hermes 0.21.5+)', () async {
+    gateway = _GatewayServer();
+    final baseUrl = await gateway.start();
+    final client = WsClient(baseUrl, profile: 'work');
+    try {
+      await client.connect();
+      await gateway.push({
+        'jsonrpc': '2.0',
+        'method': 'event',
+        'params': {'type': 'gateway.ready', 'payload': <String, dynamic>{}},
+      });
+      await gateway.flush();
+
+      final advert = gateway.requests
+          .where((frame) => frame['method'] == 'client.capabilities')
+          .toList();
+      expect(advert, hasLength(1));
+      expect(advert.single['params'], {'server_requests': true});
+      // The params contract forbids unknown keys: the connection's profile
+      // must not ride along on this one call.
+      expect(
+        (advert.single['params'] as Map).containsKey('profile'),
+        isFalse,
+      );
+    } finally {
+      client.close();
+    }
+  });
+
+  test('a pre-0.21.5 server erroring on the advertisement is harmless', () async {
+    gateway = _GatewayServer(
+      answer: (method, params) => method == 'client.capabilities'
+          ? {
+              'error': {'code': -32601, 'message': 'unknown method'},
+            }
+          : {'result': {'ok': method}},
+    );
+    final baseUrl = await gateway.start();
+    final client = WsClient(baseUrl);
+    try {
+      await client.connect();
+      await gateway.push({
+        'jsonrpc': '2.0',
+        'method': 'event',
+        'params': {'type': 'gateway.ready', 'payload': <String, dynamic>{}},
+      });
+      await gateway.flush();
+
+      final response = await client.send('config.get', {'key': 'project'});
+      expect((response['result'] as Map)['ok'], 'config.get');
+      expect(client.isConnected, isTrue);
+    } finally {
+      client.close();
+    }
+  });
+
   test('answering without a connection fails instead of dropping it', () async {
     gateway = _GatewayServer();
     final baseUrl = await gateway.start();

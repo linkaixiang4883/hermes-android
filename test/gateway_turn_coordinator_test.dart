@@ -151,6 +151,26 @@ class _GatewayFixture {
       socket.listen(
         (raw) async {
           final request = jsonDecode(raw as String) as Map<String, dynamic>;
+          // The client advertises its server->client request capability once
+          // per connection (Hermes 0.21.5+). That is transport handshake,
+          // like the ready frame above, not part of the turn protocol this
+          // fixture asserts on -- answer it here and keep it out of the
+          // request/order ledgers every test compares against.
+          if (request['method'] == 'client.capabilities') {
+            try {
+              socket.add(
+                jsonEncode(<String, dynamic>{
+                  'jsonrpc': '2.0',
+                  'id': request['id'],
+                  'result': {'server_requests': <String>[]},
+                }),
+              );
+            } catch (_) {
+              // A connection the client already rejected may have closed its
+              // sink; a handshake reply has no observer to fail.
+            }
+            return;
+          }
           requests.add(request);
           order.add(request['method'] as String);
           final result = await (handler == null
