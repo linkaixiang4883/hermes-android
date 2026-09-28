@@ -5,7 +5,7 @@
 ## 本地化基础设施
 
 - `l10n.yaml` — gen-l10n 配置（生成文件输出到 `lib/l10n/`，**必须提交**，CI 的 analyze 用 `--no-pub`）
-- `lib/l10n/app_en.arb` — 英文模板（618 条 key：main 基线 612 + exp 用量条 4 + 项目归组 2，含 `@key` placeholder 元数据）
+- `lib/l10n/app_en.arb` — 英文模板（**640** 条 key：main 基线 612 + 用量条 4 + 项目归组 2 + profile 3 + 2026-09-28 上游 v2.1.7 merge 窗口 19，含 `@key` placeholder 元数据）
 - `lib/l10n/app_zh.arb` — 中文翻译
 - `lib/l10n/l10n.dart` — `context.l10n` 扩展（`AppLocalizations.of(this)` 的便捷封装）
 - `lib/l10n/app_localizations*.dart` — 生成文件，改 ARB 后运行 `flutter gen-l10n` 重新生成
@@ -25,7 +25,7 @@
 - 模型层 getter 保持英文（测试断言依赖），UI 显示用 `Localized` 变体（如 `statusLabelLocalized`）
 - 测试文件 pump widget 时需要 l10n 包裹：`test/support/l10n_test_utils.dart` 的 `l10nTestDelegates`/`l10nTestSupportedLocales`
 
-## 汉化改动范围（基线 v2.1.0，2026-09-05 re-i18n 六批做完，612 key；2026-09-14 功能修复后 618 key）
+## 汉化改动范围（基线 v2.1.0，2026-09-05 re-i18n 六批做完，612 key；2026-09-14 功能修复后 618 key；2026-09-28 合上游 v2.1.7 后 640 key）
 
 - v2.0.x 旧屏（chat/cron/memory/session_list/settings/skills + main.dart）
 - v2.1.0 新屏全量：Workspace 壳/Home/Activity/More pane/Projects pane + 项目详情/Chats 搜索 + Spaces/文件屏/各类 sheet 与卡片/消息代码块
@@ -34,10 +34,10 @@
 - voice_composer_controller 注入 `AppLocalizations? l10n`（null 时保持英文，测试兼容）
 - main.dart：`HermesApp.getLocale/setLocale` + 设置页语言切换器（System/English/中文，prefs key `app_locale`，默认跟随系统）
 - 35 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加）+ `test/arb_parity_test.dart`（en/zh key 对等 + 占位符元数据）+ `test/zh_smoke_test.dart`（zh 真泵冒烟）
-- 门禁：`analyze --fatal-infos` 0 + `flutter test` **1019** 全绿（2026-09-14；main 基线 1002 + 项目归组/思考块修复新增 17）
+- 门禁：`analyze --fatal-infos` 0 + `flutter test` **1121** 全绿（2026-09-28 合上游 v2.1.7 后；此前 1038）
 - **实验分支 `exp/context-usage-display`（已合并到 main，`803c7bd`）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616；压缩按钮曾落地 6 commit，真机端到端走通过，后因复杂度超支整段回退（`acad605`，reflog 可捞 90 天），结论归档于 `.hermes/plans/2026-09-06_024500-compress-button.md` 尾部"调研结论归档"；分支现仅保留用量条，用量 plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`
-- **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段
-- **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）
+- **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段。2026-09-28 补录：Chats 筛选 chips（All/Recent/Unassigned/Archived）已补翻（`chatsFilterAll`/`chatsFilterRecent`/`chatsViewSearch`）；**服务层 move 拒绝原因串保持英文**（如 "This gateway files chats by working folder…"，经 `couldNotMoveTo` 拼接展示）；verbose 元数据调试行 `unknown` 保持英文
+- **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）；`AndroidManifest` 的 `RecognitionService` 2026-09-28 与上游 1fafff7 同款合流（重复 intent 已去重，留上游声明）
 
 ## 项目归组 & 思考块修复（2026-09-14，commit `2d189c4` + `8b81a7d`）
 
@@ -47,10 +47,10 @@
 
 | 场景 | 走哪条 RPC | 备注 |
 |---|---|---|
-| 新建项目聊天 | `session.create {cwd: 项目目录}`（仅 create 分支带 cwd，**resume 分支不带**） | 会话出生即锚定项目目录；首轮系统提示词据此注入项目 AGENTS.md 链（与桌面端同机制） |
+| 新建项目聊天 | `session.create {cwd: 项目目录}`（仅 create 分支带 cwd，**resume 分支不带**） | 会话出生即锚定项目目录；首轮系统提示词据此注入项目 AGENTS.md 链（与桌面端同机制）。cwd 承载者自 2026-09-28 起是**上游**的 `_workingDirectories` + 全创建路径 `workingDirectory` 透传 |
 | 移动已有会话 / 快聊提升 / Spaces 迁移 | `session.workspace.move {session_key, cwd}` | 用会话的 **stored id**（来自服务端列表）；立刻改工作目录/终端/项目树 |
-| 移动到「Unassigned」 | 同上，cwd = `config.get{key:'project'}` 返回的网关默认工作区 | 语义 = 桌面端的游离会话 |
-| ~~`projects.assign_session`~~ | **已从 App 全链路删除**（`ProjectsGatewayClient.assignSession` 与仓库同名方法） | 上游 merge 时**不要把它带回来**；相关测试与 mock 也已换成 `session.workspace.move` |
+| 移动到「Unassigned」 | **上游 2.1.7 起：拒绝**（返回诚实原因串，UI 提示无法回移） | 我们此前的「cwd=网关默认工作区」方案已按用户决议退役（随上游）；UI 仍列 Unassigned 目标，选中即提示 |
+| ~~`projects.assign_session`~~ | **已从 App 全链路删除**（`ProjectsGatewayClient.assignSession` 与仓库同名方法） | 上游 merge 时**不要把它带回来**；**上游 2.1.7 也独立删除了它**（a68e86e），方向已一致；相关测试与 mock 全部用 `session.workspace.move` |
 
 **系统提示词换血时机（别承诺"移动后立刻带上下文"）**：move 只改 `session["cwd"]` + 终端 pin + DB 行 + 项目树；系统提示词每会话只构建一次并落库复用，**新项目的文档要等该会话下次「压缩上下文」或「运行时重建后重开」才加载**（`conversation_compression.py` 压缩边界重建；`_stored_prompt_matches_runtime` 按 cwd 漂移判定重建；活会话 resume 走 `_resume_reuse_live` 复用，不重建）。UI 文案 `projectMoveContextPending` 就是在说这件事。
 
@@ -81,17 +81,18 @@
 - **改协议调用前做参数级审计**（只看「方法存在」不够）：允许字段 = `$LOCALAPPDATA/hermes/hermes-agent/tui_gateway/contracts/*.py` 里 `method("x", params=Cls)` 的 Cls **及其基类**字段（继承链要接上）；App 侧每个 `send('x', {...})` 的键必须 ⊆ 允许集
 - 已知遗留（stock 网关不触发，勿误判）：turn coordinator 的 `prompt.submit` 会带 `version/client_turn_id/attachments`（仅在 turn_recovery 能力存在时启用，官方主线无此能力）；`GatewayActivityCard` 有 setState-during-build 断言（仅 debug 包出现，上游遗留）
 
-### 3) 项目归组的 cwd 持久化（2026-09-16，`b26ac7d`）
+### 3) 项目归组的 cwd 持久化（2026-09-16 `b26ac7d`；2026-09-28 已由上游接管）
 
-- **问题**：项目文件夹（`session.create {cwd}`）此前只挂开屏 preflight，`submitPrompt`/`attachFile`/`setSessionModel` 等创建路径都不带 → preflight 失败或与首条动作竞态时会话以**无 cwd** 建成、项目静默丢失（= 上游 #102 被自动 review 打回的 gap②；gap①「无文件夹项目」我们同样已按 review 认可方式做：诚实提示一次 + 头部不贴项目标签）
-- **修复**：`DesktopGatewayClient` 按 mobile session 记住 desired cwd（`_desiredCwd`），任何创建路径都带上，**仅在创建时生效**（resume 不换房）；`workspace_screen._finishNewChat` 无文件夹时不再把项目名传给聊天头
-- **回归测试**：`test/desktop_gateway_cwd_binding_test.dart`（摘掉修复即 `Actual: {}` 必挂）+ workspace 的 folderless 用例；写该类假网关测试的坑（9119 回退）见技能
+- **问题（存档）**：项目文件夹（`session.create {cwd}`）曾只挂开屏 preflight，其他创建路径不带 → preflight 失败或竞态时会话以**无 cwd** 建成、项目静默丢失（上游 #102 review 的 gap②）
+- **现状（2026-09-28 起）**：由**上游 2.1.7**（#106）的 `_workingDirectories` + 一切创建路径的 `workingDirectory` 透传 + single-flight 绑定承担；我们的 `_desiredCwd` 已删除。**无文件夹项目改为上游 provisioner**（name-only 项目自动建文件夹；旧「诚实提示 + 不贴标签」退役，提示文案 `projectNoFolderNotice`）
+- **回归测试**：`test/desktop_gateway_cwd_binding_test.dart` 保留（参数已适配 `workingDirectory:`；「已存在会话绝不换房」用例仍直接钉住该保证）；写该类假网关测试的坑（9119 回退）见技能
 
-### 4) 上游 merge 记录与基线（2026-09-17，`32ac1b7`）
+### 4) 上游 merge 记录与基线（2026-09-28，`e7685b2`）
 
-- 已合入上游 **2.1.4+2144**（2.1.3 批：#102 项目聊天 stock 化 + 其 5385556 重连修复 / #98 profile 透传 / #97 无网关模型选择 / #86 网关 URL 默认值移除 / #99 签名钉扎；2.1.4 批：#105 平板消息气泡宽度，**零冲突**，仅需给上游新测试补 l10n 包裹）；**测试 1038**；版本 `2.1.4+2144`（CI `REQUIRED_BASE_VERSION_CODE` 已同步为 2144）
-- **决议**：creation/assign 区域保留我们的**纯 cwd 单通道**（上游的 assign 主路径 + stored-id reconcile + 4s snackbar 一律不取）；**吸收**上游 `5385556` 的 **stored-id 重连修复**——与我们的 `_desiredCwd` 合成一条路径：断线后 resume 用网关铸的 stored id（不再分叉成第二个会话），创建时仍带项目文件夹；上游的 `projectWorkingDirectory` 线保留（从项目列表重开、运行时需重建的聊天仍生在项目文件夹）
-- gap①（无文件夹项目：诚实提示一次 + 头部不贴标签）保持我们的实现；真机验收（2026-09-16）：澄清弹卡作答 ✅ / 审批弹卡批准后落盘 ✅ / 断线重放 ⏳ 未测（merge 后建议重跑）
+- 已合入上游 **2.1.7+2147**（46 commits / 3 releases；PR **#106 stock-compat**：断线重连 + WS 心跳（15s ping / 45s 死链）+ durable resume/分页 + stock Projects（provisioner + `session.workspace.move`）+ 传输加固；**#109** 用户安装 CA 信任（`network_security_config.xml`）；2.1.5 F-Droid 批；cron runs 与聊天列表分离；`file.attach` 字段精简（同我们 `b4247a3`）；`RecognitionService` 声明（同我们已做））；**测试 1121**；版本 `2.1.7+2147`（CI `REQUIRED_BASE_VERSION_CODE` 已同步 2147）
+- **本次决议**：① srq 交互提示**保留并重打**（上游仍无此实现）② 用量条 / 思考块 `isAnswerPreview` / STT-TTS / i18n 全保留 ③ `_desiredCwd`、ws 层 move 栈（`WsClient.moveSessionWorkspace`/`createOrResumeSession`/`GatewaySessionHandle`）、`ProjectChatMoveOutcome`、manifest 重复 intent **退役** ④ Unassigned 回移**随上游拒绝**（用户决议）⑤ 无文件夹项目**采纳上游 provisioner**
+- **merge 打法（16 文件冲突：9 lib + 7 test）**：**采上游为基 + 重打 overlay**——`git checkout --theirs`（或按 hunk 取 theirs），再对照 `pre-v217-merge`/`git show HEAD:<file>` 重打我们的块（srq/用量/STT/l10n）。踩坑四条：① 三方合并会把"跨区域相似块"错位对齐（project_detail 成功 snackbar 对齐到上游失败块、workspace `_finishNewChat` 尾部遗留我方 `chatProjectName`），**解完必须跑花括号配平扫描** ② l10n 回填走 **ARB 字典脚本**（唯一 key 自动替换；`const Text(` 包着的一并去 const；枚举声明行跳过）③ 上游新测试缺 delegates 挂 `AppLocalizations.of` null → 补 `l10nTestDelegates` 包裹（本次 4 文件 11 处）④ 测试 fixture 语义跟上游（`'primary_path': ?primaryPath` 省略空路径，否则 folderless 用例假失败）
+- 完整冲突清单、逐文件重打清单与坑位见 `.hermes/plans/2026-09-28_222516-merge-upstream-v2.1.7.md`
 
 ## 拉取上游 / Merge 流程
 
@@ -110,10 +111,11 @@ git merge upstream/main
 ```
 
 - 新增文件（l10n.yaml、lib/l10n/、test/support/l10n_test_utils.dart）零冲突
-- 冲突集中在屏幕/组件文件的"英文串 vs l10n 调用"区域（机械冲突，保留 l10n 调用即可）
+- 冲突集中在屏幕/组件文件的"英文串 vs l10n 调用"区域；上游大改版时按 **§4 的 take-upstream + 重打 overlay 打法**（含括号配平扫描、ARB 字典回填、新串扫描）
+- merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照）；merge 后汉化守卫：`git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '|hintText: '"` 扫残留英文 + 逐文件 `context.l10n` 计数对照（2026-09-28 基线：chat 91 / session_list 69 / project_detail 54 / workspace 16 / workspace_sessions 20 / main.dart 52）
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（当前要求 base=2141，`pubspec.yaml` 的 `2.1.1+2141` 别动；release.yml 只在打 tag 时跑签名构建，#96 起无 signing block 直接失败）
+- CI 另有 versionCode 门禁（当前要求 base=**2147**，`pubspec.yaml` 的 `2.1.7+2147` 别动；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）
