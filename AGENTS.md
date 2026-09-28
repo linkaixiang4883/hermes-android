@@ -36,7 +36,7 @@
 - 35 个测试文件加 l10n delegates（上游新增测试若 pump 用到 `context.l10n` 的 widget 也必须加）+ `test/arb_parity_test.dart`（en/zh key 对等 + 占位符元数据）+ `test/zh_smoke_test.dart`（zh 真泵冒烟）
 - 门禁：`analyze --fatal-infos` 0 + `flutter test` **1121** 全绿（2026-09-28 合上游 v2.1.7 后；此前 1038）
 - **实验分支 `exp/context-usage-display`（已合并到 main，`803c7bd`）**：聊天输入框用量条（WS `session.context_breakdown` 主路径 + REST 流尾 triple fallback，不持久化），ARB 612→616；压缩按钮曾落地 6 commit，真机端到端走通过，后因复杂度超支整段回退（`acad605`，reflog 可捞 90 天），结论归档于 `.hermes/plans/2026-09-06_024500-compress-button.md` 尾部"调研结论归档"；分支现仅保留用量条，用量 plan 见 `.hermes/plans/2026-09-05_233700-token-usage-display.md`
-- **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段。2026-09-28 补录：Chats 筛选 chips（All/Recent/Unassigned/Archived）已补翻（`chatsFilterAll`/`chatsFilterRecent`/`chatsViewSearch`）；**服务层 move 拒绝原因串保持英文**（如 "This gateway files chats by working folder…"，经 `couldNotMoveTo` 拼接展示）；verbose 元数据调试行 `unknown` 保持英文
+- **已知未翻（有意）**：底部导航 5 词（YAGNI，翻要改 shell 签名+语义断言）、`relative_time` 紧凑格式、发往模型的 prompt 模板、存库 `Session.title`、服务端数据/日志/协议字段。2026-09-28 补录：Chats 筛选 chips（All/Recent/Unassigned/Archived）已补翻（`chatsFilterAll`/`chatsFilterRecent`/`chatsViewSearch`）；**服务层 move 拒绝原因串保持英文**（如 "This gateway files chats by working folder…"，经 `couldNotMoveTo` 拼接展示）；verbose 元数据调试行 `unknown` 保持英文；Chats 日期分组标题（Today/Yesterday/This week/Earlier，`ChatDateBucket` 枚举 label）仍英文——待补 `labelLocalized`（2026-09-29 记录）
 - **本地语音增强（非上游，STT/TTS）**：`TtsVoiceConfig` 跟随系统引擎按 App 语言（`df72878`）；STT 无服务弹键盘语音引导（`4c4670a`同步/异步+`a46f5c1`自动关闭+`02fd875`有结果不提示）；`AndroidManifest` 已补 `RecognitionService` queries（小米 8 实锤系统组件残缺）；记忆屏 Chip 深底显式白字（`bd31115`，hermesTheme 下默认深色字会糊进背景）；`AndroidManifest` 的 `RecognitionService` 2026-09-28 与上游 1fafff7 同款合流（重复 intent 已去重，留上游声明）
 
 ## 项目归组 & 思考块修复（2026-09-14，commit `2d189c4` + `8b81a7d`）
@@ -58,7 +58,7 @@
 
 **QA / 门禁**：`analyze --no-pub --fatal-infos` 0 + `flutter test --no-pub` 1019 全绿。真机验收两种：① 手点三步（Projects → 项目 → 新建聊天 → 发消息）后查库 `SELECT id,cwd FROM sessions ORDER BY started_at DESC LIMIT 3`，**cwd 必须等于项目目录**；② `flutter test integration_test/project_chat_filing_test.dart -d <id>`（自动点完整个流程），但**该命令每次都卸载重装 dev 包 → App 数据（连接+密钥）被清空**，跑完需重建连接，且 MIUI 锁屏时会静默拦截 USB 安装。完整记录见 `.hermes/plans/2026-09-13_122432-reasoning-and-project-chat-fix.md`（含机制证据、实施记录、收尾步骤）。
 
-## Hermes 0.21.3 兼容性（2026-09-16，commit `aadea14` + `b4247a3`）
+## Hermes 0.21.3+ 兼容性（0.21.3/0.21.4 修复 2026-09-16；0.21.5 门禁见 §5）
 
 **背景**：v2026.9.14 窗口（#110521/#110522）把网关改成「严格契约 + 服务端反问客户端」，两处都曾让手机端功能整段失效，均已修复并真机验收。改协议/UI 前先读本节；机制细节与证据见技能 `hermes-android-client` → `references/server-requests-0.21.3.md`。
 
@@ -89,10 +89,18 @@
 
 ### 4) 上游 merge 记录与基线（2026-09-28，`e7685b2`）
 
-- 已合入上游 **2.1.7+2147**（46 commits / 3 releases；PR **#106 stock-compat**：断线重连 + WS 心跳（15s ping / 45s 死链）+ durable resume/分页 + stock Projects（provisioner + `session.workspace.move`）+ 传输加固；**#109** 用户安装 CA 信任（`network_security_config.xml`）；2.1.5 F-Droid 批；cron runs 与聊天列表分离；`file.attach` 字段精简（同我们 `b4247a3`）；`RecognitionService` 声明（同我们已做））；**测试 1121**；版本 `2.1.7+2147`（CI `REQUIRED_BASE_VERSION_CODE` 已同步 2147）
+- 已合入上游 **2.1.7+2147**（46 commits / 3 releases；PR **#106 stock-compat**：断线重连 + WS 心跳（15s ping / 45s 死链）+ durable resume/分页 + stock Projects（provisioner + `session.workspace.move`）+ 传输加固；**#109** 用户安装 CA 信任（`network_security_config.xml`）；2.1.5 F-Droid 批；cron runs 与聊天列表分离；`file.attach` 字段精简（同我们 `b4247a3`）；`RecognitionService` 声明（同我们已做））；**测试 1123**（合并后 1121 + §5 的 2 条广告回归）；版本 `2.1.7+2147`（CI `REQUIRED_BASE_VERSION_CODE` 已同步 2147）
 - **本次决议**：① srq 交互提示**保留并重打**（上游仍无此实现）② 用量条 / 思考块 `isAnswerPreview` / STT-TTS / i18n 全保留 ③ `_desiredCwd`、ws 层 move 栈（`WsClient.moveSessionWorkspace`/`createOrResumeSession`/`GatewaySessionHandle`）、`ProjectChatMoveOutcome`、manifest 重复 intent **退役** ④ Unassigned 回移**随上游拒绝**（用户决议）⑤ 无文件夹项目**采纳上游 provisioner**
 - **merge 打法（16 文件冲突：9 lib + 7 test）**：**采上游为基 + 重打 overlay**——`git checkout --theirs`（或按 hunk 取 theirs），再对照 `pre-v217-merge`/`git show HEAD:<file>` 重打我们的块（srq/用量/STT/l10n）。踩坑四条：① 三方合并会把"跨区域相似块"错位对齐（project_detail 成功 snackbar 对齐到上游失败块、workspace `_finishNewChat` 尾部遗留我方 `chatProjectName`），**解完必须跑花括号配平扫描** ② l10n 回填走 **ARB 字典脚本**（唯一 key 自动替换；`const Text(` 包着的一并去 const；枚举声明行跳过）③ 上游新测试缺 delegates 挂 `AppLocalizations.of` null → 补 `l10nTestDelegates` 包裹（本次 4 文件 11 处）④ 测试 fixture 语义跟上游（`'primary_path': ?primaryPath` 省略空路径，否则 folderless 用例假失败）
 - 完整冲突清单、逐文件重打清单与坑位见 `.hermes/plans/2026-09-28_222516-merge-upstream-v2.1.7.md`
+
+### 5) Hermes 0.21.5：server→client 请求要先"广告"能力（2026-09-29，`d312bef`，真机复验 ✅）
+
+- **门禁（#112548）**：0.21.5 起，服务端**只在该连接发过 `client.capabilities {server_requests: true}` 时才发** clarify/approval/sudo/secret 请求；没发过 = 视为「比这半套协议更老的构建」→ 直接拒发（日志 `server request clarify for <sid> not sent: the attached client predates server→client requests`），agent 侧等同收到错误响应。会话多客户端时任一广告过即可（`session_transports.py::_session_client_answers_requests`）。
+- **症状与判据**：手机端提问/审批卡片**完全不弹**（2026-09-25 起出现过，当次误判偶发）；**排查第一步 grep `not sent`**——命中即该连接没广告（或那台设备还装旧包）。成功路径依旧零日志。
+- **修复**：`ws_client._advertiseServerRequests()` —— **每个全新 `gateway.ready` 发一次**（恰好每连接一次，与官方桌面端同节奏；重连后 ready 重来、close 已清 pin）；**裸帧发送、绝不带 `profile`**（该契约 `extra=forbid`，只收 `server_requests`；`send()` 的 `withProfile` 会踩雷）；fire-and-forget（旧服务端 -32601 由 pending `.ignore()` 吞掉，不影响连接）。
+- **测试**：`test/ws_client_server_requests_test.dart` +2（ready 后恰一帧、params 恰 `{server_requests: true}` 且无 profile；旧服务端报错无害）。**上游严格 fixture 适配**：`gateway_turn_coordinator_test.dart` 的 `_GatewayFixture` 有 60 处帧序硬断言——把该帧当**传输级握手**在入口直接应答（try/catch 兜 socket 已关）、不进 requests/order 账本。
+- 服务端源码锚点：`tui_gateway/server_requests.py`（`_unanswerable`）/ `methods_voice.py`（`client.capabilities` handler）/ `contracts/liveness.py`（params 形状）/ `session_transports.py`（门禁）。技能细节页：`hermes-android-client → references/server-requests-0.21.3.md`「0.21.5 门禁」节。
 
 ## 拉取上游 / Merge 流程
 
