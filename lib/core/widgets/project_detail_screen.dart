@@ -39,7 +39,7 @@ typedef ProjectSessionsLoader =
 /// (`null`); the outcome drives the message the sheet shows, so failures stay
 /// distinguishable from "moved, no project".
 typedef ProjectSessionMover =
-    Future<ProjectChatMoveOutcome> Function(Session session, String? projectId);
+    Future<String?> Function(Session session, String? projectId);
 typedef ProjectRenamer = Future<void> Function(String name);
 typedef ProjectArchiver = Future<void> Function();
 typedef ProjectDeleter = Future<void> Function();
@@ -192,13 +192,17 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
 
   Future<void> _moveSession(Session session, _MoveTarget target) async {
     try {
-      final outcome = await widget.onMoveSession!(session, target.projectId);
+      final reason = await widget.onMoveSession!(session, target.projectId);
       if (!mounted) return;
-      if (outcome != ProjectChatMoveOutcome.moved &&
-          outcome != ProjectChatMoveOutcome.unassigned) {
-        // A gateway that cannot re-home a conversation (or a project with no
-        // folder) must not read as success.
-        await _showMoveFailure(session, target);
+      if (reason != null) {
+        // The gateway could not perform this move (e.g. a stock gateway
+        // files chats by folder and cannot un-file one). Report the real
+        // reason instead of a generic failure with a doomed Retry.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.couldNotMoveTo(target.label, reason)),
+          ),
+        );
         return;
       }
       await _load(refresh: true);
@@ -230,6 +234,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        persist: false,
         content: Text(context.l10n.moveConversationFailed),
         action: SnackBarAction(
           label: context.l10n.retry,
@@ -331,6 +336,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   void _showManagementError(String action, Future<void> Function() retry) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        persist: false,
         content: Text(context.l10n.couldNotActionProject(action)),
         action: SnackBarAction(label: context.l10n.retry, onPressed: retry),
       ),
@@ -382,6 +388,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       setState(() => _deleting = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
+          persist: false,
           content: Text(context.l10n.deleteProjectFailed),
           action: SnackBarAction(
             label: context.l10n.retry,

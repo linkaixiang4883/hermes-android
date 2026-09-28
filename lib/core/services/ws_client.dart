@@ -6,6 +6,7 @@
 // a JSON-RPC response with the same id.
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:web_socket_channel/io.dart';
 
 Object? _deepFreezeJson(Object? value) {
@@ -181,32 +182,28 @@ class CreatedGatewaySession {
   });
 }
 
+/// Runtime binding and recovery state returned by `session.resume`.
+///
+/// Stock Hermes includes retained in-flight failure details here so a client
+/// that missed the terminal event while disconnected can stop recovery and
+/// surface the failure instead of polling history forever.
+class ResumedGatewaySession {
+  final String runtimeSessionId;
+  final bool? running;
+  final String? status;
+  final Map<String, dynamic>? inflight;
+
+  const ResumedGatewaySession({
+    required this.runtimeSessionId,
+    this.running,
+    this.status,
+    this.inflight,
+  });
+}
+
 typedef StreamCallback = void Function(StreamEvent event);
 typedef ConnectionCallback = void Function(bool connected);
 typedef GatewayReadyCallback = void Function(Map<String, dynamic> frame);
-
-/// One gateway session: the runtime id chat turns are addressed by, plus the
-/// durable stored id the session's database row is keyed by.
-///
-/// Hermes mints its own runtime id and ignores a client-supplied one, so a
-/// caller that needs the durable row (`session.workspace.move`, REST history)
-/// has to read it back from this handle.
-class GatewaySessionHandle {
-  final String sessionId;
-  final String? storedSessionId;
-
-  const GatewaySessionHandle(this.sessionId, this.storedSessionId);
-
-  factory GatewaySessionHandle.fromResult(Object? result, String fallbackId) {
-    final map = result is Map ? result : const <String, dynamic>{};
-    final sessionId = map['session_id']?.toString().trim() ?? '';
-    final storedSessionId = map['stored_session_id']?.toString().trim() ?? '';
-    return GatewaySessionHandle(
-      sessionId.isEmpty ? fallbackId : sessionId,
-      storedSessionId.isEmpty ? null : storedSessionId,
-    );
-  }
-}
 
 /// WebSocket client for the Hermes JSON-RPC gateway.
 class WsClient {
@@ -250,11 +247,39 @@ class WsClient {
     String? token,
     String? ticket,
     String? profile,
+    Duration heartbeatInterval = defaultHeartbeatInterval,
+    Duration heartbeatDeadline = defaultHeartbeatDeadline,
   }) {
-    return WsClient._(baseUrl, token, ticket, profile);
+    return WsClient._(
+      baseUrl,
+      token,
+      ticket,
+      profile,
+      heartbeatInterval,
+      heartbeatDeadline,
+    );
   }
 
-  WsClient._(this.baseUrl, this._token, this._ticket, this._profile);
+  WsClient._(
+    this.baseUrl,
+    this._token,
+    this._ticket,
+    this._profile,
+    this.heartbeatInterval,
+    this.heartbeatDeadline,
+  );
+
+  /// Keepalive cadence mirroring the desktop client
+  /// (`apps/shared/src/json-rpc-channel.ts` DEFAULT_HEARTBEAT_*): a
+  /// `gateway.ping` every 15s, dead-socket verdict after 45s of silence.
+  static const defaultHeartbeatInterval = Duration(seconds: 15);
+  static const defaultHeartbeatDeadline = Duration(seconds: 45);
+
+  final Duration heartbeatInterval;
+  final Duration heartbeatDeadline;
+  Timer? _heartbeatTimer;
+  int _heartbeatSeq = 0;
+  int _lastLivenessMs = 0;
 
   /// Connect to the WebSocket gateway.
   Future<void> connect() async {
@@ -291,6 +316,7 @@ class WsClient {
         );
       }
       _connected = true;
+      _startHeartbeat(generation);
       try {
         onConnectionChanged?.call(true);
       } catch (_) {
@@ -312,6 +338,7 @@ class WsClient {
     // Invalidate this socket before any completion or observer can enqueue
     // more work. Buffered callbacks from it now fail the generation guard.
     _connectionGeneration = generation + 1;
+    _stopHeartbeat();
     final wasConnected = _connected || _channel != null;
     _connected = false;
     _channel = null;
@@ -382,6 +409,53 @@ class WsClient {
     _connectionClosedListeners.remove(token);
   }
 
+  /// Keepalive loop mirroring the desktop `JsonRpcChannel.startHeartbeat`.
+  /// Every [heartbeatInterval] sends a `gateway.ping` (answered cheaply on
+  /// the gateway's WS reader thread, even while every agent is mid-turn);
+  /// if nothing has been received for [heartbeatDeadline] the socket is
+  /// declared half-open and torn down, which starts the owner's reconnect
+  /// instead of leaving later RPCs parked on a dead pipe.
+  void _startHeartbeat(int generation) {
+    _stopHeartbeat();
+    if (heartbeatInterval.inMilliseconds <= 0 ||
+        heartbeatDeadline.inMilliseconds <= 0) {
+      return;
+    }
+    _lastLivenessMs = DateTime.now().millisecondsSinceEpoch;
+    _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) {
+      if (generation != _connectionGeneration || !_connected) return;
+      final silenceMs = DateTime.now().millisecondsSinceEpoch - _lastLivenessMs;
+      if (silenceMs >= heartbeatDeadline.inMilliseconds) {
+        // Half-open socket (phone slept, NAT dropped the mapping, proxy
+        // died): close it so the close path rejects pending calls and the
+        // owner can reconnect on a fresh ticket. 4000 = private close
+        // code (the channel rejects 1001).
+        _channel?.sink.close(4000, 'heartbeat timeout');
+        _handleClosedConnection(generation);
+        return;
+      }
+      _heartbeatSeq++;
+      try {
+        _channel?.sink.add(
+          jsonEncode({
+            'jsonrpc': '2.0',
+            'id': 'heartbeat-$_heartbeatSeq',
+            'method': 'gateway.ping',
+            'params': <String, dynamic>{},
+          }),
+        );
+      } catch (_) {
+        _channel?.sink.close(4000, 'heartbeat send failed');
+        _handleClosedConnection(generation);
+      }
+    });
+  }
+
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   /// Produces the gateway `/api/ws` URL. Secured Desktop gateways use a
   /// single-use ticket; insecure legacy gateways still use a session token.
   static String buildWebSocketUrl(
@@ -423,6 +497,10 @@ class WsClient {
   /// Handle inbound messages.
   void _handleMessage(dynamic msg, int generation) {
     if (generation != _connectionGeneration) return;
+    // Any inbound frame proves the socket is alive ('any-inbound' liveness,
+    // matching the desktop channel): streaming events keep the heartbeat
+    // deadline reset even if the pong for one ping raced past it.
+    _lastLivenessMs = DateTime.now().millisecondsSinceEpoch;
     try {
       Map<String, dynamic> data;
       if (msg is String) {
@@ -643,6 +721,7 @@ class WsClient {
     String method,
     Map<String, dynamic> params, {
     Duration timeout = const Duration(seconds: 30),
+    void Function()? onSent,
   }) async {
     if (!_connected || _channel == null) {
       throw Exception('Not connected');
@@ -658,14 +737,26 @@ class WsClient {
     });
 
     _pending[id] = _Pending(method, completer, timer);
-    _channel!.sink.add(
-      jsonEncode({
-        'jsonrpc': '2.0',
-        'method': method,
-        'params': withProfile(params, _profile),
-        'id': id,
-      }),
-    );
+    try {
+      _channel!.sink.add(
+        jsonEncode({
+          'jsonrpc': '2.0',
+          'method': method,
+          'params': withProfile(params, _profile),
+          'id': id,
+        }),
+      );
+    } catch (_) {
+      timer.cancel();
+      _pending.remove(id);
+      rethrow;
+    }
+    try {
+      onSent?.call();
+    } catch (_) {
+      // A local observer must not turn a successfully emitted RPC into an
+      // apparent transport failure.
+    }
     return completer.future;
   }
 
@@ -713,6 +804,7 @@ class WsClient {
     String message, {
     required String sessionId,
     required StreamCallback onEvent,
+    void Function()? onSent,
     Duration timeout = const Duration(minutes: 10),
   }) async {
     final completion = Completer<void>();
@@ -767,7 +859,7 @@ class WsClient {
       final response = await send('prompt.submit', {
         'session_id': sessionId,
         'text': message,
-      });
+      }, onSent: onSent);
       final error = response['error'];
       if (error != null) {
         throw _gatewayResponseError(
@@ -972,12 +1064,8 @@ class WsClient {
     return null;
   }
 
-  /// Resume an existing session.
-  ///
-  /// Returns the gateway runtime id together with the durable stored id the
-  /// session's database row is keyed by (`stored_session_id`); project writes
-  /// address the row, chat turns address the runtime.
-  Future<GatewaySessionHandle> resumeSession(String sessionId) async {
+  /// Resume an existing session while preserving retained turn state.
+  Future<ResumedGatewaySession> resumeSessionDetails(String sessionId) async {
     final result = await send('session.resume', {'session_id': sessionId});
     if (result['error'] != null) {
       throw _gatewayResponseError(
@@ -986,8 +1074,34 @@ class WsClient {
         fallbackMessage: 'Unknown error',
       );
     }
-    _replayOpenServerRequests(result['result']);
-    return GatewaySessionHandle.fromResult(result['result'], sessionId);
+    final rawPayload = result['result'];
+    if (rawPayload is! Map) {
+      throw StateError('session.resume succeeded without a result payload.');
+    }
+    final payload = Map<String, dynamic>.from(rawPayload);
+    _replayOpenServerRequests(payload);
+    final runtimeSessionId = payload['session_id'] as String?;
+    if (runtimeSessionId == null || runtimeSessionId.isEmpty) {
+      throw StateError(
+        'session.resume succeeded without a session_id — refusing to bind '
+        'the caller-supplied id, which may not be the runtime session the '
+        'gateway resumed.',
+      );
+    }
+    final rawInflight = payload['inflight'];
+    return ResumedGatewaySession(
+      runtimeSessionId: runtimeSessionId,
+      running: payload['running'] as bool?,
+      status: payload['status']?.toString(),
+      inflight: rawInflight is Map
+          ? Map<String, dynamic>.from(rawInflight)
+          : null,
+    );
+  }
+
+  /// Backward-compatible runtime-id-only resume helper.
+  Future<String> resumeSession(String sessionId) async {
+    return (await resumeSessionDetails(sessionId)).runtimeSessionId;
   }
 
   /// Re-delivers the questions a session was still waiting on when this client
@@ -1018,57 +1132,6 @@ class WsClient {
       } catch (_) {
         // One bad entry must not stop the remaining replays.
       }
-    }
-  }
-
-  /// Re-homes one stored session's workspace folder
-  /// (`session.workspace.move`).
-  ///
-  /// This is the gateway's own "move this chat into that project" write: a
-  /// chat belongs to the project whose folders cover its working directory
-  /// (`project_for_path`), so moving the directory is what moves the chat —
-  /// including its terminal cwd, its database row and the project tree.
-  ///
-  /// A live agent keeps the system prompt it already built, so a project's
-  /// context files load at the next compression or rebuilt runtime, not here.
-  Future<String> moveSessionWorkspace({
-    required String sessionKey,
-    required String cwd,
-  }) async {
-    final result = await send('session.workspace.move', {
-      'session_key': sessionKey,
-      'cwd': cwd,
-    });
-    if (result['error'] != null) {
-      throw _gatewayResponseError(
-        'session.workspace.move',
-        result['error'],
-        fallbackMessage: 'Unknown error',
-      );
-    }
-    final payload = result['result'];
-    if (payload is Map && payload['cwd']?.toString().trim().isNotEmpty == true) {
-      return payload['cwd'].toString().trim();
-    }
-    return cwd;
-  }
-
-  /// The gateway's own default workspace folder, or `null` when it cannot say.
-  ///
-  /// `config.get {key: 'project'}` resolves the configured working directory —
-  /// the directory a fresh detached chat would run in. Moving a chat there is
-  /// the gateway's notion of “not in any project”.
-  Future<String?> defaultWorkspaceCwd() async {
-    try {
-      final result = await send('config.get', {'key': 'project'});
-      if (result['error'] != null) return null;
-      final payload = result['result'];
-      if (payload is! Map) return null;
-      final cwd = payload['cwd']?.toString().trim() ?? '';
-      return cwd.isEmpty ? null : cwd;
-    } catch (_) {
-      // A gateway that predates this getter simply has no unassigned target.
-      return null;
     }
   }
 
@@ -1132,13 +1195,18 @@ class WsClient {
 
   /// Uploads one file or image to a remote Desktop gateway and returns the
   /// canonical `@file:` reference that must be included in the following turn.
+  ///
+  /// The wire params are exactly the stock gateway's `FileAttachParams`
+  /// (`extra="forbid"`: session_id/profile/path/data_url/name). An earlier
+  /// revision also sent `source_channel`/`source_profile`; those exist only
+  /// in the repo's fixture gateway and stock Hermes rejects them with
+  /// "invalid params for file.attach: source_channel: Extra inputs are not
+  /// permitted", so they must never go on the wire.
   Future<RemoteFileAttachment> attachFile({
     required String sessionId,
     required String name,
     required String dataUrl,
     String path = '',
-    String? sourceChannel,
-    String? sourceProfile,
   }) async {
     // `source_channel` / `source_profile` are NOT part of Hermes'
     // `file.attach` contract: 0.21.3 validates params strictly and rejects
@@ -1222,37 +1290,6 @@ class WsClient {
       runtimeSessionId: runtimeSessionId,
       storedSessionId: storedSessionId,
     );
-  }
-
-  /// Mint a chat session through `session.create`, anchored to [cwd] when one
-  /// is given.
-  ///
-  /// The client id is deliberately not sent: Hermes mints the runtime id
-  /// itself, and its 0.21.3 wire contract rejects `session_id` on
-  /// `session.create` ("Extra inputs are not permitted") — a mobile id can
-  /// only ever be a local handle. The reply's `session_id` /
-  /// `stored_session_id` are the ids every later call must address.
-  ///
-  /// [cwd] anchors the new session to a workspace folder. Project chats pass
-  /// their project's folder here: the first turn's system prompt reads the
-  /// project's AGENTS.md chain from that directory, and the project tree
-  /// groups the chat by it.
-  Future<GatewaySessionHandle> createOrResumeSession(
-    String sessionId, {
-    String? cwd,
-  }) async {
-    final trimmedCwd = cwd?.trim() ?? '';
-    final result = await send('session.create', {
-      if (trimmedCwd.isNotEmpty) 'cwd': trimmedCwd,
-    });
-    if (result['error'] != null) {
-      throw _gatewayResponseError(
-        'session.create',
-        result['error'],
-        fallbackMessage: 'Unknown error',
-      );
-    }
-    return GatewaySessionHandle.fromResult(result['result'], sessionId);
   }
 
   /// Applies a model only to one live gateway session.  Hermes interprets the

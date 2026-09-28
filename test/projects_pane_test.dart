@@ -18,14 +18,22 @@ Map<String, dynamic> _projectJson({
   required String id,
   required String name,
   bool archived = false,
+  List<Map<String, dynamic>>? folders,
 }) => {
   'id': id,
   'slug': name.toLowerCase().replaceAll(' ', '-'),
   'name': name,
   'archived': archived,
   'created_at': 1750000000,
-  'primary_path': '/srv/$id',
-  'folders': const [],
+  'folders': folders ??
+      [
+        {
+          'path': '/home/test/${name.toLowerCase().replaceAll(' ', '-')}',
+          'label': name,
+          'is_primary': true,
+          'added_at': 1750000001,
+        },
+      ],
 };
 
 class _FakeGateway {
@@ -106,7 +114,7 @@ class _FakeGateway {
         return _ok({'projects': projects, 'active_id': activeId});
       case 'session.workspace.move':
         assignments.add(Map<String, dynamic>.from(params));
-        return _ok({'cwd': params['cwd'], 'branch': null});
+        return _ok(const {'ok': true});
       case 'projects.set_active':
         activeId = params['id'] as String?;
         return _ok({'active_id': activeId});
@@ -130,13 +138,6 @@ Future<ProjectsRepository> _repo(
     client: ProjectsGatewayClient(gateway.call),
     preferences: await SharedPreferences.getInstance(),
     connectionId: connectionId,
-    moveSession: ({required String sessionKey, required String cwd}) async {
-      await gateway.call('session.workspace.move', {
-        'session_key': sessionKey,
-        'cwd': cwd,
-      });
-      return cwd;
-    },
   );
 }
 
@@ -551,7 +552,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.assignments, [
-      {'session_key': 'chat-1', 'cwd': '/srv/p1'},
+      {'session_key': 'chat-1', 'cwd': '/home/test/hermes-android'},
     ]);
     expect(find.text('Migration complete'), findsOneWidget);
   });

@@ -31,7 +31,13 @@ void main() {
       await _pumpChat(
         tester,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               onEvent(
                 StreamEvent(
                   type: 'reasoning.delta',
@@ -66,7 +72,13 @@ void main() {
       await _pumpChat(
         tester,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               onEvent(
                 StreamEvent(
                   type: 'reasoning.delta',

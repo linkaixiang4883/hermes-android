@@ -26,7 +26,13 @@ void main() {
         tester,
         voice: voice,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               submitCount += 1;
               submittedText = text;
             },
@@ -70,7 +76,13 @@ void main() {
         tester,
         voice: voice,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               submitCount += 1;
             },
       );
@@ -108,7 +120,13 @@ void main() {
         tester,
         voice: voice,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               submitCount += 1;
             },
       );
@@ -144,7 +162,13 @@ void main() {
         tester,
         voice: voice,
         remoteSubmit:
-            ({required sessionId, required text, required onEvent}) async {
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) async {
+              onSent();
               submitCount += 1;
             },
       );

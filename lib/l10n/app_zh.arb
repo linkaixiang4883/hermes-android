@@ -621,4 +621,26 @@
   "usageThisTurn": "本轮 {value} tokens",
   "usageModelName": "模型 {model}",
   "usageTitle": "用量统计"
+,
+  "stockGatewayNotice": "此服务端不提供后台恢复——聊天以实时方式运行",
+  "moveToProject": "移动到项目",
+  "projectNoFolderNotice": "该项目没有文件夹，聊天已按未归类打开。给项目添加文件夹后即可归组其聊天。",
+  "couldNotMoveTo": "无法移动到 {label}：{reason}",
+  "chatsFilterAll": "全部",
+  "chatsFilterRecent": "最近",
+  "chatsViewSearch": "搜索"
+,
+  "noRunsYet": "暂无运行记录。",
+  "cronRunTitle": "定时任务运行",
+  "couldNotLoadRuns": "无法加载运行记录：{error}",
+  "couldNotLoadSavedConnections": "Hermes 无法加载已保存的连接",
+  "damagedConnectionStore": "本地连接存储似乎已损坏（{error}）。你可以重置已保存的连接并重新开始；网关上的聊天不受影响。",
+  "resetSavedConnections": "重置已保存的连接",
+  "resetConnectionsFailed": "重置失败：{error}。安全存储可能需要重装。"
+,
+  "connectionSwitchedNotice": "连接已切换——运行中的回复将在服务端继续，并会自动重新附加。",
+  "loadMore": "加载更多…",
+  "couldNotLoadMoreChats": "无法加载更多聊天：{error}",
+  "detachedReplyFailed": "后台回复未能完成。",
+  "detachedReplyFailedDetail": "后台回复未能完成：{error}"
 }

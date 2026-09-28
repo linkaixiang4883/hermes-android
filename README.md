@@ -1,4 +1,4 @@
-# Hermes Android — v2.1.4
+# Hermes Android — v2.1.7
 
 Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — chat with your Hermes sessions from a phone or tablet over local Wi-Fi or a private Tailscale network.
 
@@ -14,7 +14,7 @@ Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — ch
 
 ## Current release
 
-- Version: **2.1.4** (build 2144)
+- Version: **2.1.7** (build 2147)
 - Package: `com.hermesagent.hermes_android`
 - Recommended APK for modern phones: ARM64 release build from the
   [Releases](https://github.com/rusty4444/hermes-android/releases) page.
@@ -58,11 +58,37 @@ See [CHANGELOG.md](CHANGELOG.md) for the complete `.13` change list and
 [docs/HERMESAPK_DEVELOPMENT_LOG.md](docs/HERMESAPK_DEVELOPMENT_LOG.md) for the
 sanitized implementation and validation record.
 
-## What's new in v2.1.4
+## What's new in v2.1.7
 
-- **Tablet message wrapping** — long user and Hermes messages now respect the
-  capped chat-column width, wrapping normally instead of being clipped on wide
-  screens (#104).
+v2.1.7 brings the Android daily-driver workspace into line with stock Hermes
+gateways through the extensive compatibility work contributed by
+[@Thaeland](https://github.com/Thaeland) in PR #106.
+
+- **Reliable detached replies** — interrupted socket connections now resume the
+  stored session, keep retrying across long-running turns and app backgrounding,
+  and use durable message IDs so replies are recovered even when the server's
+  capped history window rolls over.
+- **Stock Projects support** — new Projects receive safely provisioned folders,
+  chat moves use the stock `session.workspace.move` contract, and project labels,
+  archived chats, migration, search, and compatibility states follow the real
+  gateway wire shapes.
+- **Correct session pagination** — pinned-session backfills can no longer skip,
+  duplicate, or prematurely end later pages. Mutable OFFSET scans no longer
+  delete local assignments they cannot prove are stale.
+- **Safer transport and offline state** — stale runtime bindings reattach,
+  socket creation and authentication are single-flight, network requests are
+  bounded, and concurrent Project mutations cannot persist optimistic or stale
+  cache snapshots.
+- **Additional resilience** — archived reads are profile-scoped and complete,
+  machine sessions stay out of human chat lists, deliberate reconnects are
+  explained, and Android can discover installed speech-recognition services.
+
+## What's new in v2.1.6
+
+- **Private gateway certificates** — Android now trusts certificate authorities
+  that the device user explicitly installed, so private Caddy and Tailscale
+  gateway endpoints can connect without weakening normal certificate checks
+  (#108).
 
 ## What's new in v2.1.0
 
@@ -504,7 +530,7 @@ cp build/app/outputs/flutter-apk/app-*-release.apk release-apks/
 block in `android/app/build.gradle.kts` derives per-ABI codes as
 `base * 10 + ABI code` (armeabi-v7a = 1, arm64-v8a = 2, x86_64 = 3), so the
 codes stay ordered armeabi-v7a < arm64-v8a < x86_64 as fdroiddata requires.
-For v2.1.4, base `2144` therefore produces codes `21441`/`21442`/`21443`.
+For v2.1.7, base `2147` therefore produces codes `21471`/`21472`/`21473`.
 CI reads the completed arm64 APK with `aapt` and fails if that relationship
 drifts. Release-floor checks continue to apply to the base value and must not
 be weakened to rely on the ABI code.
@@ -615,6 +641,13 @@ lib/
 
 ## Credits
 
+- **Thaeland** — contributed the extensive stock-gateway compatibility and
+  reliability work in PR #106: durable reconnect recovery, Projects and Chats
+  wire-contract fixes, safe pagination and folder ownership, transport
+  hardening, and the accompanying regression suite. Released in v2.1.7.
+- **spsDrop** — reported that Android could not connect through a private
+  Caddy/Tailscale gateway whose CA was installed in the device trust store
+  (#108). Fixed in v2.1.6.
 - **kon1z** — supplied the detailed tablet reproduction, measurements, and root-cause analysis for clipped long messages (#104). Fixed in v2.1.4.
 - **AletheiaVox** — Hermes-profile plumbing on the Desktop Gateway socket (PR #98): optional profile field on connections, injected into every JSON-RPC payload so machine-level dashboards scope chats to the right profile. Merged in v2.1.3.
 - **software-greg** — gateway-less chat model listing and application (PR #97). Merged in v2.1.3.

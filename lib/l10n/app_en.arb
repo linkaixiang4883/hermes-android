@@ -1280,4 +1280,71 @@
     }
   },
   "usageTitle": "Token usage"
+,
+  "stockGatewayNotice": "This server doesn't offer background recovery — chats run live",
+  "moveToProject": "Move to project",
+  "projectNoFolderNotice": "This Project has no folder to open the chat in — it opened unassigned. Add a folder to the Project to group its chats.",
+  "couldNotMoveTo": "Couldn’t move to {label}: {reason}",
+  "@couldNotMoveTo": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+  "chatsFilterAll": "All",
+  "chatsFilterRecent": "Recent",
+  "chatsViewSearch": "Search"
+,
+  "noRunsYet": "No runs yet.",
+  "cronRunTitle": "Cron run",
+  "couldNotLoadRuns": "Couldn’t load runs: {error}",
+  "@couldNotLoadRuns": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotLoadSavedConnections": "Hermes could not load your saved connections",
+  "damagedConnectionStore": "The local connection store looks damaged ({error}). You can reset the saved connections and start fresh. Chats on your gateway are not affected.",
+  "@damagedConnectionStore": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "resetSavedConnections": "Reset saved connections",
+  "resetConnectionsFailed": "Reset failed: {error}. The secure storage may need reinstall.",
+  "@resetConnectionsFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
+,
+  "connectionSwitchedNotice": "Connection switched — the running reply continues on the server and will reattach automatically.",
+  "loadMore": "Load more…",
+  "couldNotLoadMoreChats": "Could not load more chats: {error}",
+  "@couldNotLoadMoreChats": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "detachedReplyFailed": "The detached reply failed.",
+  "detachedReplyFailedDetail": "The detached reply failed: {error}",
+  "@detachedReplyFailedDetail": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  }
 }

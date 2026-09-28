@@ -143,7 +143,7 @@ void main() {
 
       // The open-time preflight — the gateway hiccups on its first create.
       await expectLater(
-        client.ensureSession('mob-1', cwd: '/srv/p1'),
+        client.ensureSession('mob-1', workingDirectory: '/srv/p1'),
         throwsA(anything),
       );
 
@@ -176,7 +176,7 @@ void main() {
       await gateway.close();
     });
 
-    await client.ensureSession('mob-2', cwd: '/srv/p2');
+    await client.ensureSession('mob-2', workingDirectory: '/srv/p2');
     await client.attachFile(
       sessionId: 'mob-2',
       name: 'notes.txt',

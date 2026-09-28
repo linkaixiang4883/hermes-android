@@ -403,7 +403,7 @@ void main() {
       onMoveSession: (session, projectId) async {
         expect(session.id, 's-42');
         moves.add(projectId);
-        return ProjectChatMoveOutcome.moved;
+        return null;
       },
     );
     await tester.pumpAndSettle();
@@ -452,7 +452,7 @@ void main() {
       ],
       onMoveSession: (session, projectId) async {
         moves.add(projectId);
-        return ProjectChatMoveOutcome.unsupported;
+        return 'This gateway cannot move chats.';
       },
     );
     await tester.pumpAndSettle();
@@ -463,8 +463,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(moves, ['p2']);
-    expect(find.text('Couldn’t move conversation'), findsOneWidget);
-    expect(find.text('Retry'), findsOneWidget);
+    expect(
+      find.text(
+        'Couldn’t move to ScriptHive: This gateway cannot move chats.',
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('project actions rename and archive through explicit flows', (

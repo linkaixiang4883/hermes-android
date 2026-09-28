@@ -3823,6 +3823,120 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Token usage'**
   String get usageTitle;
+
+  /// No description provided for @stockGatewayNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This server doesn\'t offer background recovery — chats run live'**
+  String get stockGatewayNotice;
+
+  /// No description provided for @moveToProject.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to project'**
+  String get moveToProject;
+
+  /// No description provided for @projectNoFolderNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'This Project has no folder to open the chat in — it opened unassigned. Add a folder to the Project to group its chats.'**
+  String get projectNoFolderNotice;
+
+  /// No description provided for @couldNotMoveTo.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t move to {label}: {reason}'**
+  String couldNotMoveTo(String label, String reason);
+
+  /// No description provided for @chatsFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get chatsFilterAll;
+
+  /// No description provided for @chatsFilterRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recent'**
+  String get chatsFilterRecent;
+
+  /// No description provided for @chatsViewSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get chatsViewSearch;
+
+  /// No description provided for @noRunsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No runs yet.'**
+  String get noRunsYet;
+
+  /// No description provided for @cronRunTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Cron run'**
+  String get cronRunTitle;
+
+  /// No description provided for @couldNotLoadRuns.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t load runs: {error}'**
+  String couldNotLoadRuns(String error);
+
+  /// No description provided for @couldNotLoadSavedConnections.
+  ///
+  /// In en, this message translates to:
+  /// **'Hermes could not load your saved connections'**
+  String get couldNotLoadSavedConnections;
+
+  /// No description provided for @damagedConnectionStore.
+  ///
+  /// In en, this message translates to:
+  /// **'The local connection store looks damaged ({error}). You can reset the saved connections and start fresh. Chats on your gateway are not affected.'**
+  String damagedConnectionStore(String error);
+
+  /// No description provided for @resetSavedConnections.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset saved connections'**
+  String get resetSavedConnections;
+
+  /// No description provided for @resetConnectionsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset failed: {error}. The secure storage may need reinstall.'**
+  String resetConnectionsFailed(String error);
+
+  /// No description provided for @connectionSwitchedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection switched — the running reply continues on the server and will reattach automatically.'**
+  String get connectionSwitchedNotice;
+
+  /// No description provided for @loadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more…'**
+  String get loadMore;
+
+  /// No description provided for @couldNotLoadMoreChats.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more chats: {error}'**
+  String couldNotLoadMoreChats(String error);
+
+  /// No description provided for @detachedReplyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The detached reply failed.'**
+  String get detachedReplyFailed;
+
+  /// No description provided for @detachedReplyFailedDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'The detached reply failed: {error}'**
+  String detachedReplyFailedDetail(String error);
 }
 
 class _AppLocalizationsDelegate

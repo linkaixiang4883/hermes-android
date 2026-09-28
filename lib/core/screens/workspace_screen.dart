@@ -11,12 +11,14 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../l10n/l10n.dart';
 import '../models/attachment_draft.dart';
 import '../models/hermes_project.dart';
+import '../models/projects_tree_overview.dart';
 import '../services/android_share_intent_service.dart';
 import '../services/attachment_draft_service.dart';
 import '../services/chat_space_store.dart';
@@ -24,6 +26,7 @@ import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_journal.dart';
+import '../services/project_folder_provisioner.dart';
 import '../services/projects_repository.dart';
 import '../services/quick_chat_store.dart';
 import '../services/remote_files_client.dart';
@@ -102,7 +105,6 @@ Widget buildWorkspaceChatScreen({
   required SavedConnection connection,
   required Session session,
   String? projectName,
-  ProjectChatAssignment? projectAssignment,
   String? projectWorkingDirectory,
   String? initialComposerText,
   List<AttachmentDraft> initialAttachmentDrafts = const [],
@@ -112,7 +114,6 @@ Widget buildWorkspaceChatScreen({
     connection: connection,
     session: session,
     projectName: projectName,
-    projectAssignment: projectAssignment,
     projectWorkingDirectory: projectWorkingDirectory,
     initialComposerText: initialComposerText,
     initialAttachmentDrafts: initialAttachmentDrafts,
@@ -141,6 +142,12 @@ class WorkspaceScreen extends StatefulWidget {
   /// Overrides how Home reads the sessions it ranks. Injectable for tests so
   /// the digest can be asserted without a live gateway.
   final HomeSessionsLoader? sessionsLoader;
+
+  /// Test-only HTTP client injected into Home's session-list [ApiClient] so
+  /// the real paging loop (pinned back-fills, offset advance, dedupe) can
+  /// be driven against a fake server without a live gateway. Ignored when
+  /// [sessionsLoader] is set.
+  final http.Client? testSessionsHttpClient;
 
   /// Overrides the screen a Home row opens.
   final WorkspaceSessionScreenBuilder? sessionScreenBuilder;
@@ -185,6 +192,7 @@ class WorkspaceScreen extends StatefulWidget {
     this.onOpenSession,
     this.turnApplicationController,
     this.sessionsLoader,
+    this.testSessionsHttpClient,
     this.sessionScreenBuilder,
     this.filesScreenBuilder,
     this.turnSignalsLoader,
@@ -209,6 +217,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   ChatSpaceStore? _spaceStore;
   QuickChatStore? _quickChats;
   ApiClient? _sessionsApi;
+  DashboardClient? _archivedSessionsClient;
   bool _ownsRepository = false;
   bool _initialized = false;
   late final Future<void> _initialization;
@@ -255,14 +264,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// used to carry context into chats opened from the global Chats browser.
   Map<String, String> _chatProjectLabels = const {};
 
-  /// What a newly opened chat must tell its gateway runtime: the project it
-  /// belongs to and the folder that project owns.
-  ///
-  /// Handed to [ChatScreen] so the session is CREATED in that folder. A session
-  /// born there gets the project's context files in its first system prompt and
-  /// is grouped under the project by the gateway's own directory rule.
-  final Map<String, ProjectChatAssignment> _projectChatBindings = {};
-
   /// Read lazily so a connection that never opens Home never touches secure
   /// storage, and so tests that inject a loader never construct one at all.
   GatewayTurnJournal? _journal;
@@ -275,14 +276,68 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   late final WorkspaceTurnSignalsLoader _loadTurnSignals =
       widget.turnSignalsLoader ?? _loadTurnSignalsFromJournal;
 
-  Future<List<Session>> _loadSessionsFromGateway() {
+  Future<List<Session>> _loadSessionsFromGateway() async {
     final connection = widget.connection;
     final api = _sessionsApi ??= ApiClient(
       baseUrl: connection.baseUrl,
       apiKey: connection.apiKey,
       pathPrefix: connection.gatewayPrefix ?? '',
+      httpClient: widget.testSessionsHttpClient,
     );
-    return api.getSessions();
+    // Page through the whole visible list. The gateway serves newest-first
+    // in a capped window; a single first-page request truncated the
+    // Unassigned bucket (older unfiled chats never reached the device).
+    // Bounded at 20 pages x 100 so a chatty store can't fan out forever.
+    const pageSize = 100;
+    const maxPages = 20;
+    final all = <Session>[];
+    final seenIds = <String>{};
+    var offset = 0;
+    // Upper bound on the total pin set: stock repeats EVERY pin on EVERY
+    // page, so the max pinned count seen on any single page bounds them all.
+    var pinBound = 0;
+    // Consecutive pages that contributed zero unseen ids (see below).
+    var zeroNewPages = 0;
+    for (var page = 0; page < maxPages; page++) {
+      final result = await api.getSessionsPage(limit: pageSize, offset: offset);
+      // The stock gateway back-fills pinned sessions past `limit` and
+      // repeats them on later pages, so the returned row count is NOT
+      // the window size: advance by the requested pageSize or window
+      // rows between the window and the back-fill are skipped, and dedupe
+      // by id so a repeated pin never shows twice.
+      var newRows = 0;
+      for (final session in result.sessions) {
+        if (seenIds.add(session.id)) {
+          all.add(session);
+          newRows++;
+        }
+      }
+      final pinsOnPage = result.sessions
+          .where((session) => session.pinned)
+          .length;
+      if (pinsOnPage > pinBound) pinBound = pinsOnPage;
+      // `has_more` is NOT trusted for stopping: the server computes it
+      // from the non-pinned rows in the combined response
+      // (api_server.py: windowed >= limit), so a pin that already sits
+      // INSIDE the base window makes that count fall below `limit` and
+      // report has_more=false while rows still exist past the offset.
+      // End-of-list is decided client-side — but a SINGLE zero-new page
+      // is not proof either: a later base window made entirely of
+      // already-seen pins contributes nothing new while unseen rows
+      // remain further along. k consecutive zero-new windows must be
+      // k*pageSize disjoint all-pin windows, so once k*pageSize exceeds
+      // the pin bound the end is proven. With no pins, one zero-new page
+      // already proves it.
+      if (newRows == 0) {
+        zeroNewPages++;
+        final required = pinBound == 0 ? 1 : pinBound ~/ pageSize + 1;
+        if (zeroNewPages >= required) break;
+      } else {
+        zeroNewPages = 0;
+      }
+      offset += pageSize;
+    }
+    return all;
   }
 
   /// Derives Home's signals from the durable turn recovery journal.
@@ -609,6 +664,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       unawaited(_repository?.close());
       _ownedGateway?.close();
     }
+    // Screen-owned transport clients close with the screen — both hold live
+    // http.Client pools that leak otherwise.
+    _sessionsApi?.close();
+    _archivedSessionsClient?.close();
     super.dispose();
   }
 
@@ -655,8 +714,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           client: gateway.projects,
           preferences: preferences,
           connectionId: widget.connection.id,
-          moveSession: gateway.moveSessionToProject,
-          defaultWorkspace: gateway.defaultWorkspaceCwd,
+          folderProvisioner: DashboardFolderProvisioner(gateway.dashboard),
         );
         _spaceStore = spaceStore;
         _ownsRepository = true;
@@ -680,6 +738,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           onOpenSession: (session) => unawaited(
             _openSession(session, projectName: _chatProjectLabels[session.id]),
           ),
+          // The Unassigned chip inside this browser gets the same
+          // move-to-project affordance as the standalone Unassigned view.
+          onPromote: _moveUnassignedChat,
         );
       case HermesDestination.projects:
         final repository = _repository;
@@ -776,9 +837,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     String? initialComposerText,
     List<AttachmentDraft> initialAttachmentDrafts = const [],
   }) async {
-    // A project chat carries the binding until its runtime exists; every other
-    // chat opens with none.
-    final assignment = _projectChatBindings.remove(session.id);
     final report = widget.onOpenSession;
     if (report != null) {
       report(session);
@@ -794,7 +852,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               connection: widget.connection,
               session: session,
               projectName: projectName,
-              projectAssignment: assignment,
               projectWorkingDirectory: projectWorkingDirectory,
               initialComposerText: initialComposerText,
               initialAttachmentDrafts: initialAttachmentDrafts,
@@ -852,8 +909,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           projects: repository.current.projects,
           onMoveSession: (session, targetProjectId) =>
               repository.moveSessionToProject(
-                sessionId: session.id,
-                projectId: targetProjectId,
+                session.id,
+                targetProjectId,
+                storedSessionKey: _ownedGateway?.storedSessionKeyFor(
+                  session.id,
+                ),
               ),
           onRenameProject: (name) => repository.rename(projectId, name),
           onArchiveProject: () => repository.archive(projectId),
@@ -1007,38 +1067,35 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   /// Opens a drafted chat, handing a Project chat its project.
   ///
-  /// Nothing is written here: the project's folder travels with the chat and is
-  /// what the gateway creates the session in, so a chat is never left Unassigned
-  /// under the guise of the Project the user chose, and a gateway that cannot
-  /// file it still opens the chat and says so.
+  /// Stock-gateway-only path: the chat is opened with the Project's folder as
+  /// its session `cwd` (threaded via `draft.projectWorkingDirectory` into
+  /// `session.create`), and the gateway derives project membership from cwd
+  /// (`project_for_path`) — the same way Hermes Desktop files chats. There
+  /// is no pre-open assignment RPC to commit: `projects.assign_session`
+  /// never shipped upstream, so there is nothing to fail or retry here.
+  ///
+  /// A Project with no folder cannot be bound this way (Android allows
+  /// name-only Projects), so the message must not claim a folder that was
+  /// never sent. The chat still opens; the user is told plainly it is
+  /// unassigned and what to do about it.
   Future<void> _finishNewChat(
     NewChatDraft draft, {
     String? initialComposerText,
     List<AttachmentDraft> initialAttachmentDrafts = const [],
   }) async {
-    final projectId = draft.projectId;
-    // A chat that could not be filed must not keep the Project's label: the
-    // sticky chat header shows this name, and a chat with nowhere to be born
-    // is a normal chat — not a Project chat that is somehow still coming.
-    var chatProjectName = draft.projectName;
-    if (projectId != null) {
-      // A project chat is filed by being BORN in the project's folder: the
-      // gateway derives a chat's project from its working directory, so the
-      // binding rides along to the chat, which hands the folder to
-      // `session.create`. Nothing is written here — a gateway that cannot file
-      // the chat still opens it, and the chat says so.
-      final folder = _repository?.folderPathFor(projectId);
-      if (folder != null && folder.trim().isNotEmpty) {
-        _projectChatBindings[draft.session.id] = ProjectChatAssignment(
-          projectId: projectId,
-          folder: folder.trim(),
-          projectName: draft.projectName,
+    if (draft.projectId != null) {
+      final hasFolder =
+          (draft.projectWorkingDirectory?.trim().isNotEmpty ?? false);
+      if (!hasFolder && mounted) {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentSnackBar();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.projectNoFolderNotice),
+            duration: const Duration(seconds: 6),
+          ),
         );
-      } else {
-        chatProjectName = null;
-        _reportProjectChatUnfiled();
       }
-      if (!mounted) return;
     }
 
     final report = widget.onNewChat;
@@ -1048,21 +1105,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
     await _openSession(
       draft.session,
-      projectName: chatProjectName,
+      projectName: draft.projectName,
       projectWorkingDirectory: draft.projectWorkingDirectory,
       initialComposerText: initialComposerText,
       initialAttachmentDrafts: initialAttachmentDrafts,
-    );
-  }
-
-  /// Tells the user the chat they just opened could not be filed into its
-  /// project, without blocking them from using it.
-  void _reportProjectChatUnfiled() {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(content: Text(context.l10n.projectChatUnfiled)),
     );
   }
 
@@ -1072,6 +1118,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
     Set<String> claimed = const {};
     Map<String, String> projectLabels = const {};
+    var projectsKnown = true;
     final repository = _repository;
     if (repository != null) {
       try {
@@ -1082,17 +1129,29 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         final overview = await repository
             .overview(refresh: true)
             .timeout(const Duration(seconds: 8));
-        claimed = overview.scopedSessionIds.toSet();
-        // Best-effort session → project label, from the server's own preview
-        // rows. A conversation the overview does not name stays honest as
+        claimed = {
+          // scoped_session_ids is server-computed over EVERY tier including
+          // the synthetic Home bucket, so it names unfiled chats too —
+          // using it raw would make the Unassigned filter permanently
+          // empty. A chat is claimed only when its owner is a real
+          // project, not the Home bucket.
+          for (final entry in overview.sessionProjects.entries)
+            if (entry.value != ProjectsTreeOverview.noProjectId) entry.key,
+        };
+        // Best-effort session → project label from the server's full placement
+        // map (every claimed chat names its owner, not just the top-N
+        // previews). A conversation the map does not name stays honest as
         // "Unassigned" in the Chats row.
         projectLabels = {
-          for (final project in overview.projects)
-            for (final preview in project.previewSessions)
-              preview.id: project.label,
+          for (final entry in overview.sessionProjects.entries)
+            if (overview.ownerLabelOf(entry.key) != null)
+              entry.key: overview.ownerLabelOf(entry.key)!,
         };
       } catch (_) {
         // A gateway without projects.tree still gets All chats and Search.
+        // But the claim map is UNKNOWN, not empty: the Unassigned chip
+        // must not present every chat as unfiled on a timeout.
+        projectsKnown = false;
       }
     }
 
@@ -1104,21 +1163,50 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       // Quick-chat metadata is additive; session access must survive its loss.
     }
 
+    // Server-archived chats come from the dashboard, not the gateway: the
+    // api_server behind the chat transport ignores `archived` and never
+    // returns archived rows (live-verified). Best-effort like the reads
+    // above — a connection without dashboard credentials keeps the
+    // Archived chip on quick-chat expiries only.
+    List<Session> archivedSessions = const [];
+    if (_dashboardReachable) {
+      try {
+        final dashboard = _archivedSessionsClient ??= DashboardClient(
+          host: widget.connection.host,
+          port: widget.connection.dashboardPort,
+          useHttps: widget.connection.useHttps,
+          pathPrefix: widget.connection.dashboardPrefix ?? '',
+          proxied: widget.connection.dashboardProxied,
+          username: widget.connection.dashboardUsername,
+          password: widget.connection.dashboardPassword,
+        );
+        archivedSessions = await dashboard
+            .getArchivedSessions(
+              gatewayProfile: widget.connection.gatewayProfile,
+            )
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {
+        // Same additive contract: no dashboard, no server-archived rows.
+      }
+    }
+
     _chatProjectLabels = Map.unmodifiable(projectLabels);
     return WorkspaceSessionsData(
       sessions: sessions,
       claimedSessionIds: Set.unmodifiable(claimed),
       archivedQuickChatIds: Set.unmodifiable(archived),
+      archivedSessions: List.unmodifiable(archivedSessions),
       projectLabels: _chatProjectLabels,
+      projectsKnown: projectsKnown,
     );
   }
 
   void _openWorkspaceSessionView(WorkspaceSessionView view) {
     final title = switch (view) {
-      WorkspaceSessionView.all => 'All chats',
-      WorkspaceSessionView.unassigned => 'Unassigned chats',
-      WorkspaceSessionView.archivedQuick => 'Archived quick chats',
-      WorkspaceSessionView.search => 'Search',
+      WorkspaceSessionView.all => context.l10n.spaceAllChats,
+      WorkspaceSessionView.unassigned => context.l10n.unassignedChats,
+      WorkspaceSessionView.archivedQuick => context.l10n.archivedQuickChats,
+      WorkspaceSessionView.search => context.l10n.chatsViewSearch,
     };
     _push(
       WorkspaceSessionsScreen(
@@ -1126,14 +1214,62 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         view: view,
         load: _loadWorkspaceSessionsData,
         onOpenSession: (session) => unawaited(_openSession(session)),
-        onPromote: view == WorkspaceSessionView.archivedQuick
-            ? _promoteQuickChat
-            : null,
+        onPromote: switch (view) {
+          WorkspaceSessionView.archivedQuick => _promoteQuickChat,
+          WorkspaceSessionView.unassigned => _moveUnassignedChat,
+          WorkspaceSessionView.all || WorkspaceSessionView.search => null,
+        },
       ),
     );
   }
 
-  Future<void> _promoteQuickChat(Session session) async {
+  /// Files one unassigned chat into an existing Project.
+  ///
+  /// Same repository move as the quick-chat promotion (explicit assign,
+  /// cwd re-home fallback on stock gateways); the only difference is no
+  /// quick-chat store bookkeeping — the chat was never a quick chat.
+  Future<String> _moveUnassignedChat(Session session) async {
+    final repository = _repository;
+    if (repository == null) {
+      throw StateError('Projects are unavailable for this connection');
+    }
+    var view = repository.current;
+    if (view.support == ProjectsSupport.unknown) {
+      view = await repository.refresh();
+    }
+    final projects = view.projects
+        .where((project) => !project.archived)
+        .toList(growable: false);
+    if (projects.isEmpty) {
+      throw StateError('Create a Project before moving this chat');
+    }
+
+    if (!mounted) throw const QuickChatPromotionCancelled();
+    final project = projects.length == 1
+        ? projects.single
+        : await showModalBottomSheet<HermesProject>(
+            context: context,
+            isScrollControlled: true,
+            builder: (_) => ProjectPickerSheet(projects: projects),
+          );
+    if (project == null) throw const QuickChatPromotionCancelled();
+
+    final reason = await repository.moveSessionToProject(
+      session.id,
+      project.id,
+      storedSessionKey: _ownedGateway?.storedSessionKeyFor(session.id),
+    );
+    if (reason != null) {
+      throw StateError(reason);
+    }
+    _chatProjectLabels = Map.unmodifiable({
+      ..._chatProjectLabels,
+      session.id: project.name,
+    });
+    return project.name;
+  }
+
+  Future<String> _promoteQuickChat(Session session) async {
     final repository = _repository;
     if (repository == null) {
       throw StateError('Projects are unavailable for this connection');
@@ -1159,14 +1295,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           );
     if (project == null) throw const QuickChatPromotionCancelled();
 
-    // Re-files the chat by moving its workspace into the project's folder; the
-    // local 72h quick-chat lifecycle marker only clears once that write landed.
-    final outcome = await repository.moveSessionToProject(
-      sessionId: session.id,
-      projectId: project.id,
+    final reason = await repository.moveSessionToProject(
+      session.id,
+      project.id,
     );
-    if (outcome != ProjectChatMoveOutcome.moved) {
-      throw StateError('Could not promote the chat: ${outcome.name}');
+    if (reason != null) {
+      throw StateError(reason);
     }
     await (await _quickChatStore()).promote(session.id);
     if (mounted) {
@@ -1177,6 +1311,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         };
       });
     }
+    _chatProjectLabels = Map.unmodifiable({
+      ..._chatProjectLabels,
+      session.id: project.name,
+    });
+    return project.name;
   }
 
   Future<void> _openFiles() async {

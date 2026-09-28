@@ -22,16 +22,22 @@ Map<String, dynamic> _projectJson({
   required String id,
   required String name,
   bool archived = false,
+  List<Map<String, dynamic>>? folders,
 }) => {
   'id': id,
   'slug': name.toLowerCase().replaceAll(' ', '-'),
   'name': name,
   'archived': archived,
   'created_at': 1750000000,
-  // The gateway derives a chat's project from its working directory, so a
-  // project a chat can actually be filed into owns a folder.
-  'primary_path': '/srv/$id',
-  'folders': const [],
+  'folders': folders ??
+      [
+        {
+          'path': '/home/test/${name.toLowerCase().replaceAll(' ', '-')}',
+          'label': name,
+          'is_primary': true,
+          'added_at': 1750000001,
+        },
+      ],
 };
 
 class _FakeGateway {
@@ -92,7 +98,7 @@ class _FakeGateway {
         return _ok({'project': created});
       case 'session.workspace.move':
         assignmentParams.add(Map<String, dynamic>.from(params));
-        return _ok({'cwd': params['cwd'], 'branch': null});
+        return _ok(const {'ok': true});
       case 'projects.set_active':
         activeId = params['id'] as String?;
         return _ok({'active_id': activeId});
@@ -116,23 +122,6 @@ ProjectsRepository _repository(_FakeGateway gateway, SharedPreferences prefs) =>
       client: ProjectsGatewayClient(gateway.call),
       preferences: prefs,
       connectionId: 'gateway-a',
-      // Mirrors WsClient.moveSessionWorkspace: an error envelope becomes a
-      // JsonRpcError, so an older gateway's -32601 reads as "unsupported".
-      moveSession: ({required String sessionKey, required String cwd}) async {
-        final response = await gateway.call('session.workspace.move', {
-          'session_key': sessionKey,
-          'cwd': cwd,
-        });
-        final error = response['error'];
-        if (error is Map) {
-          throw JsonRpcError(
-            'session.workspace.move',
-            error['message']?.toString() ?? 'move failed',
-            code: error['code'] is int ? error['code'] as int : null,
-          );
-        }
-        return cwd;
-      },
     );
 
 /// Builds a local Spaces store holding [names], each with [chatsPerSpace] chats.
@@ -292,18 +281,21 @@ void main() {
         expect(
           gateway.assignmentParams,
           containsAll([
-            {'session_key': 'chat-0', 'cwd': '/srv/p-existing'},
-            {'session_key': 'chat-1', 'cwd': '/srv/p-existing'},
-            {'session_key': 'chat-2', 'cwd': '/srv/srv-2'},
-            {'session_key': 'chat-3', 'cwd': '/srv/srv-2'},
+            {'session_key': 'chat-0', 'cwd': '/home/test/alpha'},
+            {'session_key': 'chat-1', 'cwd': '/home/test/alpha'},
+            {'session_key': 'chat-2', 'cwd': '/home/test/beta'},
+            {'session_key': 'chat-3', 'cwd': '/home/test/beta'},
           ]),
         );
       },
     );
 
     test(
-      'an older gateway reports chats left local without disowning Projects',
+      'a folderless target leaves its chats unlinked without disowning Projects',
       () async {
+        // Stock filing is cwd-derived: a Project with no folder cannot
+        // receive chats. They are reported unlinked (honest), the local
+        // store stays intact, and the Projects family stays supported.
         final prefs = await SharedPreferences.getInstance();
         final gateway = _FakeGateway();
         gateway.unknownMethods.add('session.workspace.move');

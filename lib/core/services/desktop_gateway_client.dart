@@ -12,10 +12,10 @@ import 'ws_client.dart';
 
 typedef DesktopAsyncEventCallback =
     void Function(String mobileSessionId, StreamEvent event);
-typedef DesktopServerRequestCallback =
-    void Function(String mobileSessionId, GatewayServerRequest request);
 typedef DesktopConnectionCallback =
     void Function(DesktopConnectionState connectionState);
+typedef DesktopServerRequestCallback =
+    void Function(String mobileSessionId, GatewayServerRequest request);
 
 enum DesktopConnectionState {
   disconnected,
@@ -33,34 +33,19 @@ class DesktopGatewayClient {
   final String _connectionId;
   final String _baseUrl;
   final DashboardClient _dashboard;
-  final String _documentProfile;
 
   /// Hermes profile the gateway socket should run chats under, or null to
   /// let the server use its own. See [SavedConnection.gatewayProfile].
   final String? _gatewayProfile;
   WsClient? _ws;
+  Future<WsClient>? _socketInFlight;
+  Timer? _reconnectTimer;
+  int _reconnectAttempts = 0;
+  final Map<String, Future<_DesktopGatewayBinding>> _bindingInFlight = {};
+  bool _closed = false;
   final Map<String, String> _gatewaySessionIds = {};
-  /// The folder each mobile chat must be created in while it does not exist on
-  /// the gateway yet.
-  ///
-  /// A Project chat is born in its project's folder, so the folder has to be
-  /// present at the moment `session.create` runs — and that moment can arrive
-  /// on any call that needs the session (the open-time preflight, the first
-  /// prompt, an attachment, a model change). Remembering the intent here keeps
-  /// a transient preflight failure, or a race with the first action, from
-  /// creating the session unfiled: `_connect` falls back to this folder
-  /// whenever its caller does not bring one of its own. It is only ever
-  /// applied while the session is being CREATED — an existing chat keeps its
-  /// workspace, so no call can re-home it.
-  final Map<String, String> _desiredCwd = {};
-
-  /// The gateway-minted stored id for each mobile chat, once it exists.
-  ///
-  /// A mobile draft id is only a local handle: after a disconnect,
-  /// `session.resume` has to address the durable id Hermes minted and stored
-  /// (`stored_session_id`). Resuming the draft id instead would miss and
-  /// create a SECOND session, splitting one chat across two server sessions.
   final Map<String, String> _storedSessionIds = {};
+  final Map<String, String> _workingDirectories = {};
   DesktopAsyncEventCallback? _asyncEventListener;
   DesktopServerRequestCallback? _serverRequestListener;
   DesktopConnectionCallback? _connectionListener;
@@ -73,20 +58,25 @@ class DesktopGatewayClient {
     'review.summary',
     'notification.show',
     'notification.clear',
-    'request.cancel',
     'subagent.spawn_requested',
     'subagent.start',
     'subagent.thinking',
     'subagent.tool',
     'subagent.progress',
     'subagent.complete',
+    // A detached legacy turn can settle after its prompt.submit listener was
+    // rejected by socket close. Route its terminal frame to ChatScreen's
+    // recovery controller; live turns ignore this duplicate async delivery.
+    'message.complete',
+    'turn.end',
+    'turn.error',
+    'error',
   };
 
   DesktopGatewayClient._({
     required this._connectionId,
     required this._baseUrl,
     required this._dashboard,
-    required this._documentProfile,
     this._gatewayProfile,
   });
 
@@ -175,40 +165,91 @@ class DesktopGatewayClient {
         username: connection.dashboardUsername,
         password: connection.dashboardPassword,
       ),
-      documentProfile: documentIntakeProfileForConnection(connection),
       gatewayProfile: connection.gatewayProfile,
     );
   }
 
   Future<_DesktopGatewaySession> _connect(
     String mobileSessionId, {
-    String? cwd,
+    String? workingDirectory,
   }) async {
-    final requestedCwd = cwd?.trim() ?? '';
-    if (requestedCwd.isNotEmpty) {
-      _desiredCwd[mobileSessionId] = requestedCwd;
+    final requestedWorkingDirectory = workingDirectory?.trim();
+    if (requestedWorkingDirectory != null &&
+        requestedWorkingDirectory.isNotEmpty) {
+      _workingDirectories[mobileSessionId] = requestedWorkingDirectory;
     }
-    // Every creation-capable call shares one anchor: the folder this call
-    // brings, or the folder the chat was last filed with. Without it, a
-    // preflight that fails transiently — or a first action racing that
-    // preflight — would create the session without the project folder it was
-    // meant to be born in, and the chat would silently lose its project.
-    final anchorCwd = _desiredCwd[mobileSessionId];
+    final effectiveWorkingDirectory = _workingDirectories[mobileSessionId];
     final existing = _ws;
     if (existing != null && existing.isConnected) {
       final mappedSessionId = _gatewaySessionIds[mobileSessionId];
       if (mappedSessionId != null) {
         return _DesktopGatewaySession(existing, mappedSessionId);
       }
-      final gatewaySession = await _resumeOrCreate(
+      final binding = await _resumeOrCreateSingle(
         existing,
         mobileSessionId,
-        cwd: anchorCwd,
+        workingDirectory: effectiveWorkingDirectory,
       );
-      _rememberSession(mobileSessionId, gatewaySession);
-      return gatewaySession;
+      _rememberBinding(mobileSessionId, binding);
+      return _DesktopGatewaySession(existing, binding.runtimeSessionId);
     }
 
+    final client = await _ensureSocket();
+    final binding = await _resumeOrCreateSingle(
+      client,
+      mobileSessionId,
+      workingDirectory: effectiveWorkingDirectory,
+    );
+    _rememberBinding(mobileSessionId, binding);
+    return _DesktopGatewaySession(client, binding.runtimeSessionId);
+  }
+
+  /// Single-flight wrapper for `_resumeOrCreate`: two concurrent callers for
+  /// the same mobile session must not each issue a `session.create` and leave
+  /// one gateway session orphaned.
+  Future<_DesktopGatewayBinding> _resumeOrCreateSingle(
+    WsClient client,
+    String mobileSessionId, {
+    String? workingDirectory,
+  }) {
+    final inFlight = _bindingInFlight[mobileSessionId];
+    if (inFlight != null) return inFlight;
+    final future = _resumeOrCreate(
+      client,
+      mobileSessionId,
+      workingDirectory: workingDirectory,
+    );
+    _bindingInFlight[mobileSessionId] = future;
+    future.whenComplete(() {
+      if (identical(_bindingInFlight[mobileSessionId], future)) {
+        _bindingInFlight.remove(mobileSessionId);
+      }
+    }).ignore();
+    return future;
+  }
+
+  /// Single-flight socket establishment shared by `_connect` and
+  /// `_connectControl`. Without this, concurrent callers both pass the
+  /// `isConnected` check, both mint tickets, and both build sockets: the
+  /// last assignment wins and the loser's socket leaks with the async-event
+  /// bridge attached.
+  Future<WsClient> _ensureSocket() {
+    final existing = _ws;
+    if (existing != null && existing.isConnected) {
+      return Future.value(existing);
+    }
+    final inFlight = _socketInFlight;
+    if (inFlight != null) return inFlight;
+    final future = _openSocket(existing);
+    _socketInFlight = future;
+    future.whenComplete(() {
+      if (identical(_socketInFlight, future)) _socketInFlight = null;
+    }).ignore();
+    return future;
+  }
+
+  Future<WsClient> _openSocket(WsClient? existing) async {
+    if (_closed) throw StateError('DesktopGatewayClient is closed.');
     _connectionListener?.call(
       existing == null
           ? DesktopConnectionState.connecting
@@ -216,27 +257,55 @@ class DesktopGatewayClient {
     );
     existing?.close();
     _gatewaySessionIds.clear();
+    // A fresh socket means a possibly-replaced server: forget old
+    // -32601 verdicts so an upgraded gateway's methods are re-discovered
+    // instead of staying short-circuited until app restart. gateway.ready
+    // on the new socket re-populates protocol/advertisement.
+    _capabilities.reset();
     final ticket = await _dashboard.mintWebSocketTicket();
+    if (_closed) throw StateError('DesktopGatewayClient is closed.');
     final client = WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
     _installAsyncEventBridge(client);
     client.onConnectionChanged = (connected) {
       if (connected) {
+        // Fires inside connect() before _ws is assigned, so no identical()
+        // guard is possible here. The single-flight in _ensureSocket keeps
+        // loser sockets from being built concurrently.
+        _reconnectAttempts = 0;
+        _reconnectTimer?.cancel();
+        _reconnectTimer = null;
+        // The drop cleared every runtime binding and the server forgot the
+        // old socket's sessions. Re-bind each stored session on this
+        // fresh socket immediately — a turn that completed detached during
+        // the outage must be addressable (and its history refetchable)
+        // without waiting for the next user action. Initial connects have
+        // no stored ids, so this is a no-op there. Individual resume
+        // failures are swallowed: a later explicit call retries the same
+        // single-flight path.
+        if (!_closed && _storedSessionIds.isNotEmpty) {
+          unawaited(_rebindStoredSessions(client));
+        }
         _connectionListener?.call(DesktopConnectionState.connected);
       } else if (identical(_ws, client)) {
         _gatewaySessionIds.clear();
         _connectionListener?.call(DesktopConnectionState.disconnected);
+        // A socket that was once live and then dropped (phone sleep,
+        // heartbeat timeout, gateway restart) must come back on its own:
+        // the user is often not looking at the chat window when it dies,
+        // and every later RPC would otherwise fail until app restart.
+        // Stored session ids survive the drop, so the reopened socket
+        // re-binds each session via session.resume on next use.
+        _scheduleReconnect();
       }
     };
     try {
       await client.connect();
+      if (_closed) {
+        client.close();
+        throw StateError('DesktopGatewayClient is closed.');
+      }
       _ws = client;
-      final gatewaySession = await _resumeOrCreate(
-        client,
-        mobileSessionId,
-        cwd: anchorCwd,
-      );
-      _rememberSession(mobileSessionId, gatewaySession);
-      return gatewaySession;
+      return client;
     } catch (_) {
       client.close();
       if (identical(_ws, client)) _ws = null;
@@ -245,29 +314,76 @@ class DesktopGatewayClient {
     }
   }
 
-  /// Opens the gateway runtime for one mobile chat.
-  ///
-  /// [cwd] is applied only when this call CREATES the session: an existing chat
-  /// keeps the workspace it already has, so merely opening a chat can never
-  /// re-home it. A created session is born anchored to [cwd] — that is what
-  /// gives a project chat its project, and its project context files.
-  ///
-  /// Resume addresses the durable id Hermes minted for this chat once it has
-  /// been created ([_storedSessionIds]); the mobile draft id only resolves
-  /// before the first create.
-  Future<_DesktopGatewaySession> _resumeOrCreate(
+  /// Exponential-backoff reconnect loop, started when a previously-live
+  /// socket drops. Runs independently of the UI: the socket is back before
+  /// the user opens the chat again. Retries until success or client close;
+  /// detached-turn recovery has no safe deadline after which a reply may be
+  /// abandoned. The delay remains capped so a long outage does not spin.
+  void _scheduleReconnect() {
+    if (_closed || _reconnectTimer != null) return;
+    _reconnectAttempts++;
+    final exponent = _reconnectAttempts.clamp(1, 5);
+    final delay = Duration(seconds: (1 << (exponent - 1)).clamp(2, 30));
+    _reconnectTimer = Timer(delay, () async {
+      _reconnectTimer = null;
+      if (_closed) return;
+      _connectionListener?.call(DesktopConnectionState.reconnecting);
+      try {
+        await _ensureSocket();
+      } catch (_) {
+        if (!_closed) _scheduleReconnect();
+      }
+    });
+  }
+
+  /// Re-establish the runtime binding for every stored session on a fresh
+  /// socket. Runs fire-and-forget from the connected callback so a reply
+  /// that finished server-side during an outage is immediately addressable
+  /// on the new socket; the UI's resync (ensureSession + history refetch)
+  /// then single-flights with these resumes instead of racing them.
+  Future<void> _rebindStoredSessions(WsClient client) async {
+    // The connected callback fires inside WsClient.connect() before the
+    // await returns; hop off that frame so the socket's message pump is
+    // fully live before we issue session.resume over it.
+    await Future<void>.delayed(Duration.zero);
+    // Snapshot: the map may mutate while resumes are in flight.
+    final mobileIds = List<String>.from(_storedSessionIds.keys);
+    for (final mobileId in mobileIds) {
+      if (_closed || !client.isConnected) return;
+      // _ws is null only while this client's own connect() is still
+      // returning — that is this socket's own pending assignment, not a
+      // replacement. A non-null different client means we were superseded.
+      final current = _ws;
+      if (current != null && !identical(current, client)) return;
+      try {
+        final binding = await _resumeOrCreateSingle(
+          client,
+          mobileId,
+          workingDirectory: _workingDirectories[mobileId],
+        );
+        final after = _ws;
+        if (_closed || (after != null && !identical(after, client))) return;
+        _rememberBinding(mobileId, binding);
+      } catch (_) {
+        // Swallow: a later explicit action retries the same single-flight
+        // resume path; a resume error must never escape the socket callback.
+      }
+    }
+  }
+
+  Future<_DesktopGatewayBinding> _resumeOrCreate(
     WsClient client,
     String mobileSessionId, {
-    String? cwd,
+    String? workingDirectory,
   }) async {
     final storedSessionId =
         _storedSessionIds[mobileSessionId] ?? mobileSessionId;
     try {
-      final resumed = await client.resumeSession(storedSessionId);
-      return _DesktopGatewaySession(
-        client,
-        resumed.sessionId,
-        storedSessionId: resumed.storedSessionId ?? storedSessionId,
+      final resumed = await client.resumeSessionDetails(storedSessionId);
+      return _DesktopGatewayBinding(
+        runtimeSessionId: resumed.runtimeSessionId,
+        storedSessionId: storedSessionId,
+        resumed: resumed,
       );
     } on JsonRpcError catch (error) {
       if (error.code != 4007 &&
@@ -275,75 +391,140 @@ class DesktopGatewayClient {
         rethrow;
       }
       // New mobile chats do not exist in Hermes yet. Stock Hermes rejects a
-      // client-supplied `session_id` on session.create, so keep whatever the
-      // gateway mints: the runtime id addresses calls on this socket, and the
-      // stored id keeps the chat resumable after a reconnect.
-      final created = await client.createOrResumeSession(
-        mobileSessionId,
-        cwd: cwd,
+      // client-supplied `session_id` on session.create, so retain both gateway-
+      // minted identities: runtime for this socket and stored for reconnect.
+      final created = await client.createSession(
+        workingDirectory: workingDirectory,
       );
-      return _DesktopGatewaySession(
-        client,
-        created.sessionId,
+      return _DesktopGatewayBinding(
+        runtimeSessionId: created.runtimeSessionId,
         storedSessionId: created.storedSessionId,
       );
     }
   }
 
-  /// Remembers the ids a live gateway session must be addressed by.
-  ///
-  /// The runtime id serves calls on the current socket; the stored id is what
-  /// `session.resume` needs after a reconnect (see [_storedSessionIds]).
-  void _rememberSession(
+  void _rememberBinding(
     String mobileSessionId,
-    _DesktopGatewaySession session,
+    _DesktopGatewayBinding binding,
   ) {
-    _gatewaySessionIds[mobileSessionId] = session.sessionId;
-    final stored = session.storedSessionId;
-    if (stored != null && stored.isNotEmpty) {
-      _storedSessionIds[mobileSessionId] = stored;
+    _gatewaySessionIds[mobileSessionId] = binding.runtimeSessionId;
+    _storedSessionIds[mobileSessionId] = binding.storedSessionId;
+    final resumed = binding.resumed;
+    final inflight = resumed?.inflight;
+    final error = inflight?['error']?.toString().trim() ?? '';
+    final status = (inflight?['status'] ?? resumed?.status)
+        ?.toString()
+        .trim()
+        .toLowerCase();
+    const terminalFailures = {
+      'error',
+      'failed',
+      'interrupted',
+      'cancelled',
+      'canceled',
+    };
+    if (resumed != null &&
+        (error.isNotEmpty || terminalFailures.contains(status))) {
+      if (binding.resumeStateDelivered) return;
+      binding.resumeStateDelivered = true;
+      // Deliver after the binding maps are authoritative. The UI may already
+      // have begun a history fetch from the connected callback; its recovery
+      // generation makes that fetch harmless once this failure clears it.
+      scheduleMicrotask(() {
+        _asyncEventListener?.call(
+          mobileSessionId,
+          StreamEvent(
+            type: 'turn.error',
+            data: {
+              'session_id': binding.runtimeSessionId,
+              'message': error.isNotEmpty ? error : 'Detached turn $status',
+              if (status != null && status.isNotEmpty) 'status': status,
+            },
+            isComplete: true,
+            sessionId: binding.runtimeSessionId,
+          ),
+        );
+      });
     }
   }
 
-  /// Opens (or reuses) this chat's gateway runtime.
-  ///
-  /// [cwd] anchors a newly created session to a workspace folder: the project
-  /// chat path hands over the project's directory so the session is born inside
-  /// the project. An already-existing chat is left exactly as it is.
-  Future<GatewaySessionHandle?> ensureSession(
-    String sessionId, {
-    String? cwd,
-  }) async {
-    final session = await _connect(sessionId, cwd: cwd);
-    return session.handle;
+  /// The gateway's stored session key bound to a mobile session id, when a
+  /// binding exists. Stored keys address rows in the session DB (move,
+  /// resume); mobile ids do not survive into gateway-side lookups.
+  String? storedSessionKeyFor(String mobileSessionId) =>
+      _storedSessionIds[mobileSessionId];
+
+  /// True when [error] says the runtime session id the gateway was handed no
+  /// longer exists — the detached/orphan-reap or eviction signature. The
+  /// gateway's own rejection text tells the client to resume the STORED id
+  /// (`_sess_nowait`, 4001), so this is a recoverable stale-binding, not a
+  /// hard failure.
+  static bool _isStaleRuntimeSession(JsonRpcError error) {
+    if (error.code == 4001) return true;
+    final message = error.message.toLowerCase();
+    return message.contains('session not found') ||
+        message.contains('not in memory');
   }
 
-  /// Re-files one stored chat into a project's folder
-  /// (`session.workspace.move`).
+  /// Runs a session-scoped gateway call with one automatic recovery from a
+  /// stale runtime binding.
   ///
-  /// A chat belongs to the project whose folders cover its working directory,
-  /// so moving the directory is the write that moves the chat: the gateway
-  /// re-anchors a live agent's terminal, the database row and the project tree.
-  /// The new project's context files load at the next compression or rebuilt
-  /// runtime — a live agent's system prompt is already built.
-  Future<String> moveSessionToProject({
-    required String sessionKey,
-    required String cwd,
-  }) async {
-    final client = await _connectControl();
-    return client.moveSessionWorkspace(sessionKey: sessionKey, cwd: cwd);
-  }
-
-  /// The gateway's default (no-project) workspace folder, or `null` when this
-  /// gateway cannot name one.
-  Future<String?> defaultWorkspaceCwd() async {
+  /// The gateway orphan-reaps detached runtimes and LRU-evicts idle ones, so
+  /// a cached runtime sid can name a session the server no longer holds even
+  /// while the stored row lives on. Every session-scoped RPC then fails with
+  /// 4001 "session not found" and the UI shows a dropped chat. Recovery is
+  /// exactly what the gateway's rejection asks for: drop the stale runtime
+  /// mapping, `session.resume` the stored key on the live socket, and retry
+  /// the call once with the fresh runtime sid. A second stale failure is a
+  /// real one (stored row gone too) and propagates.
+  Future<T> _callSessionScoped<T>(
+    String mobileSessionId,
+    Future<T> Function(_DesktopGatewaySession session) call,
+  ) async {
+    final session = await _connect(mobileSessionId);
     try {
-      final client = await _connectControl();
-      return await client.defaultWorkspaceCwd();
-    } catch (_) {
-      return null;
+      return await call(session);
+    } on JsonRpcError catch (error) {
+      if (!_isStaleRuntimeSession(error)) rethrow;
+      final client = _ws;
+      if (client == null ||
+          !client.isConnected ||
+          !_rememberedRuntimeIsStale(mobileSessionId, session.sessionId)) {
+        rethrow;
+      }
+      _gatewaySessionIds.remove(mobileSessionId);
+      final binding = await _resumeOrCreateSingle(
+        client,
+        mobileSessionId,
+        workingDirectory: _workingDirectories[mobileSessionId],
+      );
+      _rememberBinding(mobileSessionId, binding);
+      return call(_DesktopGatewaySession(client, binding.runtimeSessionId));
     }
   }
+
+  /// Guard against retrying a call whose sid was not the one we cached: if
+  /// some other path already re-bound the session while the call was in
+  /// flight, the error came from a different generation and a blind retry
+  /// could double-execute against the new binding.
+  bool _rememberedRuntimeIsStale(
+    String mobileSessionId,
+    String usedRuntimeId,
+  ) => _gatewaySessionIds[mobileSessionId] == usedRuntimeId;
+
+  Future<void> ensureSession(
+    String sessionId, {
+    String? workingDirectory,
+  }) async {
+    await _connect(sessionId, workingDirectory: workingDirectory);
+  }
+
+  /// The dashboard client backing this gateway's auth/ticket flow.
+  ///
+  /// Exposed so collaborators (e.g. the Projects folder provisioner) can
+  /// reuse this connection's cached auth and single-flight login instead of
+  /// standing up a second unauthenticated HTTP client.
+  DashboardClient get dashboard => _dashboard;
 
   /// Server-owned Hermes Projects for this gateway.
   ///
@@ -366,39 +547,7 @@ class DesktopGatewayClient {
   CapabilityRegistry get capabilities => _capabilities;
 
   /// Opens (or reuses) the gateway socket without binding it to a session.
-  Future<WsClient> _connectControl() async {
-    final existing = _ws;
-    if (existing != null && existing.isConnected) return existing;
-
-    _connectionListener?.call(
-      existing == null
-          ? DesktopConnectionState.connecting
-          : DesktopConnectionState.reconnecting,
-    );
-    existing?.close();
-    _gatewaySessionIds.clear();
-    final ticket = await _dashboard.mintWebSocketTicket();
-    final client = WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
-    _installAsyncEventBridge(client);
-    client.onConnectionChanged = (connected) {
-      if (connected) {
-        _connectionListener?.call(DesktopConnectionState.connected);
-      } else if (identical(_ws, client)) {
-        _gatewaySessionIds.clear();
-        _connectionListener?.call(DesktopConnectionState.disconnected);
-      }
-    };
-    try {
-      await client.connect();
-      _ws = client;
-      return client;
-    } catch (_) {
-      client.close();
-      if (identical(_ws, client)) _ws = null;
-      _connectionListener?.call(DesktopConnectionState.disconnected);
-      rethrow;
-    }
-  }
+  Future<WsClient> _connectControl() => _ensureSocket();
 
   /// Creates the source-only recovery-v2 registry without changing any legacy
   /// session, submit, interrupt, or event route in this client.
@@ -425,13 +574,13 @@ class DesktopGatewayClient {
     required String name,
     required String dataUrl,
   }) async {
-    final gateway = await _connect(sessionId);
-    return gateway.client.attachFile(
-      sessionId: gateway.sessionId,
-      name: name,
-      dataUrl: dataUrl,
-      sourceChannel: 'hermes_mobile',
-      sourceProfile: _documentProfile,
+    return _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.attachFile(
+        sessionId: gateway.sessionId,
+        name: name,
+        dataUrl: dataUrl,
+      ),
     );
   }
 
@@ -439,18 +588,25 @@ class DesktopGatewayClient {
     required String sessionId,
     required String text,
     required StreamCallback onEvent,
+    required void Function() onSent,
   }) async {
-    final gateway = await _connect(sessionId);
-    await gateway.client.submitPrompt(
-      text,
-      sessionId: gateway.sessionId,
-      onEvent: onEvent,
+    await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.submitPrompt(
+        text,
+        sessionId: gateway.sessionId,
+        onEvent: onEvent,
+        onSent: onSent,
+      ),
     );
   }
 
-  /// Receives only durable, session-scoped events that may arrive after a
-  /// prompt's terminal event. Active-turn events continue through [submitPrompt]
-  /// so they are never delivered twice.
+  /// Receives durable session-scoped events plus terminal turn frames.
+  ///
+  /// Terminal frames are also delivered through [submitPrompt] while its
+  /// listener is attached. The async path is required after socket close,
+  /// when a detached turn can settle on the resumed session; ChatScreen
+  /// ignores the duplicate unless legacy reattach recovery is pending.
   void setAsyncEventListener(DesktopAsyncEventCallback? listener) {
     _asyncEventListener = listener;
   }
@@ -467,9 +623,18 @@ class DesktopGatewayClient {
     _capabilities.bindTo(client);
     client.onStreamEvent = (event) {
       if (!_asyncEventTypes.contains(event.type)) return;
-      final mobileSessionId = _mobileSessionFor(
-        event.data['session_id']?.toString(),
-      );
+      final gatewaySessionId = event.data['session_id']?.toString();
+      String? mobileSessionId;
+      if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {
+        for (final entry in _gatewaySessionIds.entries) {
+          if (entry.value == gatewaySessionId) {
+            mobileSessionId = entry.key;
+            break;
+          }
+        }
+      } else if (_gatewaySessionIds.length == 1) {
+        mobileSessionId = _gatewaySessionIds.keys.single;
+      }
       if (mobileSessionId == null) return;
       _asyncEventListener?.call(mobileSessionId, event);
     };
@@ -513,32 +678,6 @@ class DesktopGatewayClient {
     return true;
   }
 
-  /// Fetches the live context-window breakdown for usage display.
-  ///
-  /// Returns `null` when there is no mapped/connected gateway session or
-  /// the RPC fails, so callers can fall back to the REST stream triple.
-  /// Never throws.
-  Future<Map<String, dynamic>?> getContextUsage({
-    required String sessionId,
-  }) async {
-    final gatewaySessionId = _gatewaySessionIds[sessionId];
-    final client = _ws;
-    if (gatewaySessionId == null || client == null || !client.isConnected) {
-      return null;
-    }
-    try {
-      final response = await client.send('session.context_breakdown', {
-        'session_id': gatewaySessionId,
-      });
-      final result = response['result'];
-      if (result is Map<String, dynamic>) return result;
-      if (result is Map) return Map<String, dynamic>.from(result);
-      return null;
-    } catch (_) {
-      return null;
-    }
-  }
-
   /// Resolves an approval against the gateway session mapped to this mobile
   /// chat. Approval requests are session-keyed and do not carry a request ID.
   Future<void> respondToApproval({
@@ -580,6 +719,32 @@ class DesktopGatewayClient {
       answer: answer,
       questionId: questionId,
     );
+  }
+
+  /// Fetches the live context-window breakdown for usage display.
+  ///
+  /// Returns `null` when there is no mapped/connected gateway session or
+  /// the RPC fails, so callers can fall back to the REST stream triple.
+  /// Never throws.
+  Future<Map<String, dynamic>?> getContextUsage({
+    required String sessionId,
+  }) async {
+    final gatewaySessionId = _gatewaySessionIds[sessionId];
+    final client = _ws;
+    if (gatewaySessionId == null || client == null || !client.isConnected) {
+      return null;
+    }
+    try {
+      final response = await client.send('session.context_breakdown', {
+        'session_id': gatewaySessionId,
+      });
+      final result = response['result'];
+      if (result is Map<String, dynamic>) return result;
+      if (result is Map) return Map<String, dynamic>.from(result);
+      return null;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Answers one backend-initiated request by its `srq-…` id (Hermes 0.21.3+).
@@ -631,27 +796,33 @@ class DesktopGatewayClient {
     required String provider,
     required String model,
   }) async {
-    final gateway = await _connect(sessionId);
-    await gateway.client.setSessionModel(
-      sessionId: gateway.sessionId,
-      provider: provider,
-      model: model,
+    await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.setSessionModel(
+        sessionId: gateway.sessionId,
+        provider: provider,
+        model: model,
+      ),
     );
   }
 
-  Future<String> getSessionReasoning(String sessionId) async {
-    final gateway = await _connect(sessionId);
-    return gateway.client.getSessionReasoning(gateway.sessionId);
+  Future<String> getSessionReasoning(String sessionId) {
+    return _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.getSessionReasoning(gateway.sessionId),
+    );
   }
 
   Future<void> setSessionReasoning({
     required String sessionId,
     required String effort,
   }) async {
-    final gateway = await _connect(sessionId);
-    await gateway.client.setSessionReasoning(
-      sessionId: gateway.sessionId,
-      effort: effort,
+    await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.setSessionReasoning(
+        sessionId: gateway.sessionId,
+        effort: effort,
+      ),
     );
   }
 
@@ -659,19 +830,26 @@ class DesktopGatewayClient {
     required String sessionId,
     required String title,
   }) async {
-    final gateway = await _connect(sessionId);
-    await gateway.client.setSessionTitle(gateway.sessionId, title);
+    await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.setSessionTitle(gateway.sessionId, title),
+    );
   }
 
   Future<Map<String, dynamic>> branchSession({
     required String sessionId,
     required String name,
   }) async {
-    final gateway = await _connect(sessionId);
-    return gateway.client.branchSession(gateway.sessionId, name: name);
+    return _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.branchSession(gateway.sessionId, name: name),
+    );
   }
 
   void close() {
+    _closed = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     _asyncEventListener = null;
     _connectionListener = null;
     _projects = null;
@@ -679,7 +857,7 @@ class DesktopGatewayClient {
     _ws = null;
     _gatewaySessionIds.clear();
     _storedSessionIds.clear();
-    _desiredCwd.clear();
+    _workingDirectories.clear();
     final turnCoordinatorRegistry = _turnCoordinatorRegistry;
     _turnCoordinatorRegistry = null;
     if (turnCoordinatorRegistry != null) {
@@ -710,16 +888,18 @@ class _DesktopGatewaySession {
   final WsClient client;
   final String sessionId;
 
-  /// The durable row id when this open created the session; `null` for a
-  /// reattached session whose row is already keyed by [sessionId].
-  final String? storedSessionId;
+  const _DesktopGatewaySession(this.client, this.sessionId);
+}
 
-  const _DesktopGatewaySession(
-    this.client,
-    this.sessionId, {
-    this.storedSessionId,
+class _DesktopGatewayBinding {
+  final String runtimeSessionId;
+  final String storedSessionId;
+  final ResumedGatewaySession? resumed;
+  bool resumeStateDelivered = false;
+
+  _DesktopGatewayBinding({
+    required this.runtimeSessionId,
+    required this.storedSessionId,
+    this.resumed,
   });
-
-  GatewaySessionHandle get handle =>
-      GatewaySessionHandle(sessionId, storedSessionId);
 }

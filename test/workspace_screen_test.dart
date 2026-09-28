@@ -68,7 +68,7 @@ Map<String, dynamic> _projectJson({
   'name': name,
   'archived': false,
   'created_at': 1750000000,
-  'primary_path': primaryPath ?? '/srv/$id',
+  'primary_path': ?primaryPath,
   'folders': const [],
 };
 
@@ -99,6 +99,10 @@ Future<ProjectsRepository> _repository(
                   'label': entry.value.label,
                   'isNoProject': false,
                   'sessionCount': 1,
+                  // The real gateway emits every claimed id on the node
+                  // itself (project_tree.py::_project_node); the Chats row
+                  // labels derive owner names from it.
+                  'sessionIds': [entry.value.sessionId],
                   'previewSessions': [
                     {
                       'id': entry.value.sessionId,
@@ -145,7 +149,7 @@ Future<ProjectsRepository> _repository(
         return {
           'jsonrpc': '2.0',
           'id': 1,
-          'result': {'cwd': params['cwd'], 'branch': null},
+          'result': const {'ok': true},
         };
       }
       return {'jsonrpc': '2.0', 'id': 1, 'result': const {}};
@@ -308,6 +312,42 @@ void main() {
 
     await tester.tap(find.text('Daily driver'));
     expect(opened, ['s1']);
+  });
+
+  testWidgets('Chats keeps its selected filter after switching away and back', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
+      repository: await _repository([]),
+      sessions: [_session(id: 's1', title: 'Loose chat')],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(ChoiceChip, 'Unassigned'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Unassigned'))
+          .selected,
+      isTrue,
+    );
+
+    await tester.tap(find.text(HermesDestination.home.label).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<ChoiceChip>(find.widgetWithText(ChoiceChip, 'Unassigned'))
+          .selected,
+      isTrue,
+    );
+    expect(find.text('Loose chat'), findsOneWidget);
   });
 
   testWidgets('Chats rows show the project label from the server tree', (
@@ -489,19 +529,21 @@ void main() {
     await tester.tap(find.byKey(kProjectNewChatButtonKey));
     await tester.pumpAndSettle();
 
+    // Stock flow: filing happens via the session cwd at create time, so
+    // starting the chat issues no assignment RPC.
+    expect(assignments, isEmpty);
     expect(opened.single.projectId, 'p1');
     // Nothing is written when the chat opens: the project rides along to the
     // chat, which anchors its gateway session to the project's folder.
     expect(assignments, isEmpty);
   });
 
-  testWidgets('a folderless Project opens the chat unfiled and unlabeled', (
+  testWidgets('a folderless Project opens with an honest unassigned notice', (
     tester,
   ) async {
     // Android itself allows Projects that carry only a name, so there may be
-    // no folder to be born in. The chat must then be an honest normal chat:
-    // it says so once, and it does not keep the Project's label in its sticky
-    // header — nothing will ever file it.
+    // no folder to be born in. The chat still opens; the user is told plainly
+    // it went unassigned and what to do about it.
     await _pump(
       tester,
       connection: _connection(desktopGatewayUrl: 'https://host:8642'),
@@ -520,11 +562,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.textContaining('file it into a project'), findsOneWidget);
+    expect(
+      find.textContaining('no folder to open the chat in'),
+      findsOneWidget,
+    );
 
     final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
-    expect(chat.projectName, isNull);
-    expect(chat.projectAssignment, isNull);
+    expect(chat.projectName, 'Folderless');
     expect(tester.takeException(), isNull);
   });
 
@@ -949,6 +993,79 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
     expect(find.text('Find me'), findsOneWidget);
+  });
+
+  testWidgets('Unassigned shows Home-bucket chats despite scoped_session_ids', (
+    tester,
+  ) async {
+    // Regression: the server's scoped_session_ids covers EVERY tier
+    // including the synthetic Home bucket (project_tree.py::_scope on
+    // tier 0), so treating it as the claim set made the Unassigned
+    // filter permanently empty. Only chats owned by a REAL project are
+    // claimed; Home-bucket chats must show.
+    final repository = ProjectsRepository(
+      client: ProjectsGatewayClient((method, params) async {
+        if (method == 'projects.tree') {
+          return {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'result': {
+              'projects': [
+                {
+                  'id': '__no_project__',
+                  'label': 'Home',
+                  'isNoProject': true,
+                  'sessionCount': 1,
+                  'sessionIds': ['s_home'],
+                  'previewSessions': const [],
+                },
+                {
+                  'id': 'p1',
+                  'label': 'Filed Project',
+                  'isNoProject': false,
+                  'sessionCount': 1,
+                  'sessionIds': ['s_filed'],
+                  'previewSessions': const [],
+                },
+              ],
+              'active_id': null,
+              // Both tiers scoped — the trap this fix steps around.
+              'scoped_session_ids': ['s_home', 's_filed'],
+            },
+          };
+        }
+        if (method == 'projects.list') {
+          return {
+            'jsonrpc': '2.0',
+            'id': 1,
+            'result': const {'projects': [], 'active_id': null},
+          };
+        }
+        return {'jsonrpc': '2.0', 'id': 1, 'result': const {}};
+      }),
+      preferences: await SharedPreferences.getInstance(),
+      connectionId: 'conn-1',
+    );
+    await _pump(
+      tester,
+      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
+      repository: repository,
+      sessions: [
+        _session(id: 's_home', title: 'Unfiled chat'),
+        _session(id: 's_filed', title: 'Filed chat'),
+      ],
+      openedSessions: <String>[],
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unassigned chats'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
+    expect(find.text('Unfiled chat'), findsOneWidget);
+    expect(find.text('Filed chat'), findsNothing);
   });
 
   testWidgets('More opens the native Files screen', (tester) async {
@@ -1393,8 +1510,11 @@ void main() {
     });
 
     testWidgets(
-      'a Project chat from Home carries the project folder into the chat',
+      'a project chat carries the project folder as its session cwd',
       (tester) async {
+        // Stock filing: the draft's projectWorkingDirectory becomes the
+        // session cwd at create time; no assignment RPC is issued and no
+        // warning snackbar shows when the Project has a folder.
         final opened = <NewChatDraft>[];
         await _pump(
           tester,
@@ -1426,24 +1546,26 @@ void main() {
           opened.single.projectWorkingDirectory,
           '/srv/projects/hermes-android',
         );
+        expect(find.byType(SnackBar), findsNothing);
       },
     );
 
     testWidgets(
-      'a Project with no folder still opens the chat and says it stayed unfiled',
+      'a folderless Project on a stock gateway says unassigned, not folder',
       (tester) async {
+        // Android allows name-only Projects; without a folder the cwd
+        // fallback cannot bind the session, so the snackbar must not
+        // claim the chat opened in a folder that was never sent.
         final opened = <NewChatDraft>[];
-        final assignments = <Map<String, dynamic>>[];
         await _pump(
           tester,
           connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-          repository: await _repository(
-            [_projectJson(id: 'p1', name: 'Hermes Android', primaryPath: '')],
-            assignments: assignments,
-          ),
+          repository: await _repository([
+            _projectJson(id: 'p1', name: 'Nameless'),
+          ]),
           sessions: const [],
           onNewChat: opened.add,
-          newChatSessionIdFactory: () => 'new-project-chat',
+          newChatSessionIdFactory: () => 'folderless-chat',
         );
         await tester.pumpAndSettle();
 
@@ -1452,17 +1574,9 @@ void main() {
         await tester.tap(find.text(NewChatMode.projectChat.label));
         await tester.pumpAndSettle();
 
-        // The chat is never held back by a project the gateway cannot host it
-        // in; the user is told instead.
-        expect(
-          find.text(
-            'Opened as a normal chat — couldn’t file it into a project',
-          ),
-          findsOneWidget,
-        );
-        expect(opened.single.session.id, 'new-project-chat');
-        expect(opened.single.projectId, 'p1');
-        expect(assignments, isEmpty);
+        expect(opened, hasLength(1));
+        expect(opened.single.projectWorkingDirectory, isNull);
+        expect(find.textContaining('opened unassigned'), findsOneWidget);
       },
     );
 
@@ -1876,33 +1990,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(MorePane), findsOneWidget);
     });
-    testWidgets('the workspace hands the project folder to the chat it opens', (
+    testWidgets('a project chat issues no assignment writes on turn binding', (
       tester,
     ) async {
-      // The project rides along to the chat, which anchors its gateway session
-      // to the folder: that is what files the chat into the project and gives
-      // its first prompt the project's context files.
-      final widget = buildWorkspaceChatScreen(
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        session: _session(id: 'chat-1', title: 'Chat'),
-        projectName: 'Hermes Android',
-        projectAssignment: const ProjectChatAssignment(
-          projectId: 'p1',
-          folder: '/srv/p1',
-          projectName: 'Hermes Android',
-        ),
-      );
-
-      final chat = widget as ChatScreen;
-      expect(chat.projectAssignment?.projectId, 'p1');
-      expect(chat.projectAssignment?.folder, '/srv/p1');
-    });
-
-    testWidgets('a turn binding never writes a project assignment', (
-      tester,
-    ) async {
-      // Nothing files a chat after it opens: the write happens once, when the
-      // session is created. A later turn binding must not re-home the chat.
+      // Stock filing is cwd-derived: the chat was created inside the
+      // project's folder, so neither its own session.open binding nor any
+      // unrelated binding may issue assignment writes.
       final assignments = <Map<String, dynamic>>[];
       final repository = await _repository([
         _projectJson(id: 'p1', name: 'Hermes Android'),
@@ -1930,6 +2023,7 @@ void main() {
 
       // A single Project skips the picker and opens the chat directly.
       expect(find.textContaining('New chat · Hermes Android'), findsOneWidget);
+      expect(assignments, isEmpty);
 
       turnSession.fireSessionBound('new-project-chat', '20260829_stored_42');
       turnSession.fireSessionBound('some-other-chat', 'other-stored');

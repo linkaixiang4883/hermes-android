@@ -2056,4 +2056,73 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get usageTitle => '用量统计';
+
+  @override
+  String get stockGatewayNotice => '此服务端不提供后台恢复——聊天以实时方式运行';
+
+  @override
+  String get moveToProject => '移动到项目';
+
+  @override
+  String get projectNoFolderNotice => '该项目没有文件夹，聊天已按未归类打开。给项目添加文件夹后即可归组其聊天。';
+
+  @override
+  String couldNotMoveTo(String label, String reason) {
+    return '无法移动到 $label：$reason';
+  }
+
+  @override
+  String get chatsFilterAll => '全部';
+
+  @override
+  String get chatsFilterRecent => '最近';
+
+  @override
+  String get chatsViewSearch => '搜索';
+
+  @override
+  String get noRunsYet => '暂无运行记录。';
+
+  @override
+  String get cronRunTitle => '定时任务运行';
+
+  @override
+  String couldNotLoadRuns(String error) {
+    return '无法加载运行记录：$error';
+  }
+
+  @override
+  String get couldNotLoadSavedConnections => 'Hermes 无法加载已保存的连接';
+
+  @override
+  String damagedConnectionStore(String error) {
+    return '本地连接存储似乎已损坏（$error）。你可以重置已保存的连接并重新开始；网关上的聊天不受影响。';
+  }
+
+  @override
+  String get resetSavedConnections => '重置已保存的连接';
+
+  @override
+  String resetConnectionsFailed(String error) {
+    return '重置失败：$error。安全存储可能需要重装。';
+  }
+
+  @override
+  String get connectionSwitchedNotice => '连接已切换——运行中的回复将在服务端继续，并会自动重新附加。';
+
+  @override
+  String get loadMore => '加载更多…';
+
+  @override
+  String couldNotLoadMoreChats(String error) {
+    return '无法加载更多聊天：$error';
+  }
+
+  @override
+  String get detachedReplyFailed => '后台回复未能完成。';
+
+  @override
+  String detachedReplyFailedDetail(String error) {
+    return '后台回复未能完成：$error';
+  }
 }

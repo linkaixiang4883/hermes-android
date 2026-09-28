@@ -2134,4 +2134,77 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get usageTitle => 'Token usage';
+
+  @override
+  String get stockGatewayNotice =>
+      'This server doesn\'t offer background recovery — chats run live';
+
+  @override
+  String get moveToProject => 'Move to project';
+
+  @override
+  String get projectNoFolderNotice =>
+      'This Project has no folder to open the chat in — it opened unassigned. Add a folder to the Project to group its chats.';
+
+  @override
+  String couldNotMoveTo(String label, String reason) {
+    return 'Couldn’t move to $label: $reason';
+  }
+
+  @override
+  String get chatsFilterAll => 'All';
+
+  @override
+  String get chatsFilterRecent => 'Recent';
+
+  @override
+  String get chatsViewSearch => 'Search';
+
+  @override
+  String get noRunsYet => 'No runs yet.';
+
+  @override
+  String get cronRunTitle => 'Cron run';
+
+  @override
+  String couldNotLoadRuns(String error) {
+    return 'Couldn’t load runs: $error';
+  }
+
+  @override
+  String get couldNotLoadSavedConnections =>
+      'Hermes could not load your saved connections';
+
+  @override
+  String damagedConnectionStore(String error) {
+    return 'The local connection store looks damaged ($error). You can reset the saved connections and start fresh. Chats on your gateway are not affected.';
+  }
+
+  @override
+  String get resetSavedConnections => 'Reset saved connections';
+
+  @override
+  String resetConnectionsFailed(String error) {
+    return 'Reset failed: $error. The secure storage may need reinstall.';
+  }
+
+  @override
+  String get connectionSwitchedNotice =>
+      'Connection switched — the running reply continues on the server and will reattach automatically.';
+
+  @override
+  String get loadMore => 'Load more…';
+
+  @override
+  String couldNotLoadMoreChats(String error) {
+    return 'Could not load more chats: $error';
+  }
+
+  @override
+  String get detachedReplyFailed => 'The detached reply failed.';
+
+  @override
+  String detachedReplyFailedDetail(String error) {
+    return 'The detached reply failed: $error';
+  }
 }

@@ -280,6 +280,38 @@ void main() {
       expect(activeId, isNull);
     });
 
+    test('re-homes a session workspace via session.workspace.move', () async {
+      final rpc = _RecordingRpc([_ok({'ok': true})]);
+      final client = ProjectsGatewayClient(rpc.call);
+
+      await client.moveSessionWorkspace(
+        sessionKey: '20260829_stored_42',
+        cwd: '/srv/projects/app',
+      );
+
+      expect(rpc.calls.single.method, 'session.workspace.move');
+      expect(rpc.calls.single.params, {
+        'session_key': '20260829_stored_42',
+        'cwd': '/srv/projects/app',
+      });
+    });
+
+    test('workspace move rejects blank key or cwd before touching the gateway',
+    () async {
+      final rpc = _RecordingRpc([]);
+      final client = ProjectsGatewayClient(rpc.call);
+
+      await expectLater(
+        client.moveSessionWorkspace(sessionKey: ' ', cwd: '/x'),
+        throwsA(isA<ArgumentError>()),
+      );
+      await expectLater(
+        client.moveSessionWorkspace(sessionKey: 'k', cwd: ' '),
+        throwsA(isA<ArgumentError>()),
+      );
+      expect(rpc.calls, isEmpty);
+    });
+
     test('a successful call marks the gateway as supported', () async {
       final rpc = _RecordingRpc([
         _ok({'projects': const [], 'active_id': null}),

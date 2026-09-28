@@ -176,9 +176,64 @@ class ProjectsGatewayClient {
     return ProjectsSnapshot.fromJson(result);
   }
 
+  /// Adds a folder to an existing project and returns the updated record.
+  ///
+  /// The gateway normalizes the path and, with [isPrimary], repoints the
+  /// project's `primary_path`. An older gateway lacking this sibling raises
+  /// [ProjectsUnsupportedException] without disowning the `projects.*`
+  /// family (only `projects.list` decides that).
+  Future<HermesProject> addFolder({
+    required String id,
+    required String path,
+    String? label,
+    bool isPrimary = false,
+  }) async {
+    final trimmedPath = path.trim();
+    if (trimmedPath.isEmpty) {
+      throw ArgumentError.value(path, 'path', 'A folder path is required');
+    }
+    final params = <String, dynamic>{
+      'id': _requireId(id),
+      'path': trimmedPath,
+    };
+    if (label != null && label.trim().isNotEmpty) params['label'] = label.trim();
+    if (isPrimary) params['is_primary'] = true;
+    final result = await _request('projects.add_folder', params);
+    return _requireProject('projects.add_folder', result);
+  }
+
   Future<ProjectsSnapshot> delete(String id) async {
     final result = await _request('projects.delete', {'id': _requireId(id)});
     return ProjectsSnapshot.fromJson(result);
+  }
+
+  /// Re-homes a stored session's workspace to [cwd] via `session.workspace.move`.
+  ///
+  /// This is how Hermes Desktop moves a chat between Projects: the gateway
+  /// derives project membership from the session's cwd (`project_for_path`),
+  /// so rewriting the cwd IS the move. Works on every gateway that serves
+  /// sessions, including stock ones without any explicit assignment RPC.
+  /// [sessionKey] must be the gateway's stored session key, not a local id.
+  Future<void> moveSessionWorkspace({
+    required String sessionKey,
+    required String cwd,
+  }) async {
+    final key = sessionKey.trim();
+    if (key.isEmpty) {
+      throw ArgumentError.value(
+        sessionKey,
+        'sessionKey',
+        'A stored session key is required',
+      );
+    }
+    final folder = cwd.trim();
+    if (folder.isEmpty) {
+      throw ArgumentError.value(cwd, 'cwd', 'A working directory is required');
+    }
+    await _request('session.workspace.move', {
+      'session_key': key,
+      'cwd': folder,
+    });
   }
 
   /// Selects [id] as the gateway's active project, or clears it when null.
