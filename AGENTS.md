@@ -41,9 +41,10 @@
 | TTS 语言跟随 | `tts_voice_config.dart` + `chat_screen._readAssistantText`（`TtsVoiceConfig.apply(appLanguageCode:)`） | 上游无 `TtsVoiceConfig` |
 | STT 键盘引导 | `voice_composer_controller`（`_hasReceivedResult` + `l10n` 注入）+ key `speech_recognition_use_keyboard`/`dictation_ready` | 上游 controller 无本地化 |
 | FAB heroTag 修复 | `workspace_screen`/`projects_pane`（`fd04661`） | 上游 IndexedStack 保活导致双 FAB 同 tag，debug 断言刷屏（上游对聊天 FAB 用 `heroTag: null`，同款思路） |
+| clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1161**（2026-10-05 合 v2.1.12 后）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1162**（2026-10-05 合 v2.1.12 + clarify 双-pop 修复后）。
 
 
 
@@ -107,8 +108,8 @@
 - 已合入上游 **2.1.12+2152**（43 commits / 5 releases）——两个"官方化"大项：**i18n（#115，10 语种）** 与 **srq server→client 请求（#118）**；外加会话稳健性修复（#117/#119/#120/#121/#122/#123：轻量恢复/大会话/并发回合/`is_active`/既有会话 target/活跃窗口）+ per-app language（#125）+ 占位符守卫 ×3；**72 冲突文件**（lib 39 / test 31 / l10n.yaml / pubspec.lock）
 - **决议（用户 2026-10-05）**：① i18n 全面倒向上游（我方仅补 8 条 overlay key）② srq 取上游实现 ③ 语言切换器退役 ④ 思考块 overlay 保留（复检上游未修）⑤ overlay 保留：用量条/TTS/STT
 - **打法**：`take-upstream 为基 + keep-list 重打`（全量 72 文件 `checkout --theirs` 后，重打 6 文件 29 处 + ARB 补 key + 测试迁移）——见 `.hermes/plans/2026-10-05_011843-merge-upstream-v2.1.12.md`（附件含 merge-tree 预演）
-- **本次新坑（复用时注意）**：① **多占位符 key 必须 @metadata**（不声明 → 字母序重排位置参数，编译期无感；`usage_bar_summary` 真机前被 zh_smoke 单测抓出）② 脚本按 CRLF `split` 处理**混合换行**文件会错位插入（用正则按行匹配；本次弄坏过 `chat_reasoning_replace_test`）③ 两侧各加一次的同名 import/参数在自动合并里会**翻倍**（`localizationsDelegates` 重复、`support/l10n_test_utils.dart` 双 import——清到分析器 0 告警）④ 上游严格 fixture 已被上游自己的 srq 协商适配取代，我方 v2.1.7 的帧适配随 theirs 退役 ⑤ 测试 `+1159/-2`（新增 zh_smoke 断言先挂）→ 修到 **1161 全绿**
-- 版本/CI：`2.1.12+2152`（CI `REQUIRED_BASE_VERSION_CODE=2152`）；门禁 analyze 0 + `flutter test` **1161**
+- **本次新坑（复用时注意）**：① **多占位符 key 必须 @metadata**（不声明 → 字母序重排位置参数，编译期无感；`usage_bar_summary` 真机前被 zh_smoke 单测抓出）② 脚本按 CRLF `split` 处理**混合换行**文件会错位插入（用正则按行匹配；本次弄坏过 `chat_reasoning_replace_test`）③ 两侧各加一次的同名 import/参数在自动合并里会**翻倍**（`localizationsDelegates` 重复、`support/l10n_test_utils.dart` 双 import——清到分析器 0 告警）④ 上游严格 fixture 已被上游自己的 srq 协商适配取代，我方 v2.1.7 的帧适配随 theirs 退役 ⑤ 测试 `+1159/-2`（新增 zh_smoke 断言先挂）→ 修到 1161 全绿；真机 QA 又修 clarify 双-pop 竞态（`2081bb6`，+1 回归）→ **1162**
+- 版本/CI：`2.1.12+2152`（CI `REQUIRED_BASE_VERSION_CODE=2152`）；门禁 analyze 0 + `flutter test` **1162**（含 clarify 双-pop 回归）
 
 ### 5) Hermes 0.21.5：server→client 请求要先"广告"能力（2026-09-29，`d312bef`，真机复验 ✅）
 
