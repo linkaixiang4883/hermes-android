@@ -1403,6 +1403,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
                 _destination == HermesDestination.chats
             ? FloatingActionButton.extended(
                 key: kWorkspaceNewChatButtonKey,
+                // Unique tag: the workspace IndexedStack keeps ProjectsPane's own
+                // FAB alive in the same route, so the default tag would clash.
+                heroTag: 'workspace-new-chat-fab',
                 onPressed: () => unawaited(_startNewChat()),
                 icon: const Icon(Icons.add),
                 label: Text(context.l10n.new_label),

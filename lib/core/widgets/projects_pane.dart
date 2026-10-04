@@ -260,6 +260,7 @@ class _ProjectsPaneState extends State<ProjectsPane> {
     return Scaffold(
       backgroundColor: tokens.surface,
       floatingActionButton: FloatingActionButton(
+        heroTag: 'projects-pane-new-project-fab',
         onPressed: _createProject,
         tooltip: context.l10n.new_project,
         child: const Icon(Icons.add),
