@@ -1,0 +1,369 @@
+a7d34d607d68d08c312e6aca24cafe9fb601e924
+100644 06c3dbaab1a310ad582d9b6cf3d89baf2f58c22d 2	l10n.yaml
+100644 1437ccc88b4525c17a92b110f268b92fadf4c9c6 3	l10n.yaml
+100644 dda6f8f2480087a9c947fbd36c85aebaa590d105 1	lib/core/models/gateway_sensitive_prompt.dart
+100644 c66e4f262e51761ad3258485a326aca83c20c06a 2	lib/core/models/gateway_sensitive_prompt.dart
+100644 9dcd23f75a11ae068e1573ddaf15151c76c05da0 3	lib/core/models/gateway_sensitive_prompt.dart
+100644 8440b07ddc64a30661d0c2abb04cb56aac139934 1	lib/core/screens/chat_screen.dart
+100644 cd58d74fa7ae130f960f4c205396e2984472f2f2 2	lib/core/screens/chat_screen.dart
+100644 305bc5a531a667e8ae7fb17330c4dd45755ea559 3	lib/core/screens/chat_screen.dart
+100644 abd19cca996bd030293665b7013cc18498ff5500 1	lib/core/screens/cron_screen.dart
+100644 a335912779432cf33761b69154f9222d209b5a06 2	lib/core/screens/cron_screen.dart
+100644 1d8cad169be5b3cf008fe14f96c93e3e4cb6cd3d 3	lib/core/screens/cron_screen.dart
+100644 d0b91854c72b58ebebbe41844c4ef56fa56c0eb6 1	lib/core/screens/files_screen.dart
+100644 e0f41808ff2cb674a4863c5a6d56e98e6357bb57 2	lib/core/screens/files_screen.dart
+100644 69e3ec022800a18d5d0655c6a2639879be3721a6 3	lib/core/screens/files_screen.dart
+100644 819a3d8bd81a05dc68edf72e5afecd9d73f7a989 1	lib/core/screens/memory_screen.dart
+100644 dcd6343cdf165cc2c2e9f128f25c19d712dca4db 2	lib/core/screens/memory_screen.dart
+100644 96582c04d4e654a63407bd2a3a343dff216df5e9 3	lib/core/screens/memory_screen.dart
+100644 7d69a11624eb16760b2ae0fd33a7c7339d996273 1	lib/core/screens/session_list_screen.dart
+100644 af922d54e79bce7301fb20f846d726a897483f2f 2	lib/core/screens/session_list_screen.dart
+100644 c3f26848d58b2db334db086060d0366950abeaa8 3	lib/core/screens/session_list_screen.dart
+100644 be94dd4f48ab74e39605079bf6e62a7e361defc6 1	lib/core/screens/settings_screen.dart
+100644 0b4811e84e544f175497dfde5ae00f58f59ca8ce 2	lib/core/screens/settings_screen.dart
+100644 68d793e8b9b38a7e17b803ef1a3301884cb26c6e 3	lib/core/screens/settings_screen.dart
+100644 841b1945060ccc8a13041e8a7dd67f8480d2faad 1	lib/core/screens/skills_screen.dart
+100644 07abab5399ecdd8a5e096ccb5a9f42026ccc1b5d 2	lib/core/screens/skills_screen.dart
+100644 6ed86e5b941d65afa58b89cc4603dcf223823eb5 3	lib/core/screens/skills_screen.dart
+100644 32fb52537ea61caa4f18be55374dad8eec5aaa13 1	lib/core/screens/spaces_screen.dart
+100644 3e0b84837c1e50571d4219586950c7c7cf1d1788 2	lib/core/screens/spaces_screen.dart
+100644 87d2e3879086f6811e5079a1555e9eef33a99897 3	lib/core/screens/spaces_screen.dart
+100644 c80cff75e86b3115ea9c111ef5f092661a1edff5 1	lib/core/screens/workspace_screen.dart
+100644 6c241c11bf8faf0223798c5d2006920d1d58fb27 2	lib/core/screens/workspace_screen.dart
+100644 502de454a6955f3b8bf4509d80e66302224cecdb 3	lib/core/screens/workspace_screen.dart
+100644 8129bb803435f73151138d64d8b86d46c54432e7 1	lib/core/screens/workspace_sessions_screen.dart
+100644 1ec4d1c9bc40bc2f5e44da27ece863be09bf1a9c 2	lib/core/screens/workspace_sessions_screen.dart
+100644 1b29ed3ab3c67f7b5696d71d948041e848e940aa 3	lib/core/screens/workspace_sessions_screen.dart
+100644 f0bb513f367c7b90511d738236aa1b64e31657f8 1	lib/core/services/desktop_gateway_client.dart
+100644 11bd0676151c0c67402dc3c26526e995d9f6e714 2	lib/core/services/desktop_gateway_client.dart
+100644 2e40a4527b45b183630df9b554dbecb671451d87 3	lib/core/services/desktop_gateway_client.dart
+100644 ee0295e7e010b4a0875777ba011b5c325db26553 1	lib/core/utils/home_digest.dart
+100644 bbb950061cbc5e883a351a8468cb7901768a2d42 2	lib/core/utils/home_digest.dart
+100644 1dd5c920c1194f442f8dc3a40fe4ef647ec9adeb 3	lib/core/utils/home_digest.dart
+100644 4a32ad3cfa5dcde214ec1e39a9d7043edeb9fc97 1	lib/core/utils/new_chat_options.dart
+100644 146b7c371b5c653f37504cdf46c1d5261dd6612b 2	lib/core/utils/new_chat_options.dart
+100644 c0acfe7cc2e30477eb52f4fdc05b7550a08bcae8 3	lib/core/utils/new_chat_options.dart
+100644 f3b50fbb373d8867afbc077daa21836642086cb9 1	lib/core/widgets/activity_pane.dart
+100644 d5c6d75f4ab43962d6a02ce03b6e9e3e27cd83d0 2	lib/core/widgets/activity_pane.dart
+100644 e11353dede2f86da345352d75f0999fb4f6ff761 3	lib/core/widgets/activity_pane.dart
+100644 709c3618209b150f3d98dff884386892d3edcb58 1	lib/core/widgets/attachment_draft_tile.dart
+100644 6a872b665a7ed630588a0f895805211f231987db 2	lib/core/widgets/attachment_draft_tile.dart
+100644 3f659d11335395b05ccf1ed65564022244cb2658 3	lib/core/widgets/attachment_draft_tile.dart
+100644 30cfec7206fcfea77f07df778de5d91b85e167c8 1	lib/core/widgets/chat_context_header.dart
+100644 b359a329ceaff24d3852a7c7ec13cb2d2686d61a 2	lib/core/widgets/chat_context_header.dart
+100644 6bd2c57e30c93a082a035c4eaafdf88a10468c83 3	lib/core/widgets/chat_context_header.dart
+100644 1c41584dd1ea6da7b9d94a337437c8756eff918a 1	lib/core/widgets/chat_end_affordance.dart
+100644 7829deb05454c8a2b76dccb9627356a81c5a4ea1 2	lib/core/widgets/chat_end_affordance.dart
+100644 f1dbc7e8b92ff67e8bf137004e598d6e2afde913 3	lib/core/widgets/chat_end_affordance.dart
+100644 b72421fc50f9083c1a56628c1f0a362df73b448d 1	lib/core/widgets/config_backup_card.dart
+100644 53c945b39be1c034ef3bfb607f87fc5b1b0d7b54 2	lib/core/widgets/config_backup_card.dart
+100644 6c451f9793eb26972008c8724c59a7404eb175ca 3	lib/core/widgets/config_backup_card.dart
+100644 cc95a6e4cb42f7557d8d8ab77d29805afead8feb 1	lib/core/widgets/gateway_activity_card.dart
+100644 dab6a166393cb2714bdafbad082649ff427fb60f 2	lib/core/widgets/gateway_activity_card.dart
+100644 b09bdc4d48ad273bef3f61541b9ac6cd17d389ef 3	lib/core/widgets/gateway_activity_card.dart
+100644 46cf32f1ea8d12191ff8241b71b0ac58585da152 1	lib/core/widgets/gateway_approval_dialog.dart
+100644 f3fc5cc9d92cf4e6490d147491992c8233e7abd4 2	lib/core/widgets/gateway_approval_dialog.dart
+100644 011dfbd2ec7e2122280d3e61c1cbf84ba8108080 3	lib/core/widgets/gateway_approval_dialog.dart
+100644 6d581e0b78065d9b1d44899cda5d5caa5c223f37 1	lib/core/widgets/gateway_clarify_dialog.dart
+100644 3fff8cc1fdf5f8923a674d98d023cf68fc20d8ff 2	lib/core/widgets/gateway_clarify_dialog.dart
+100644 18e67687a11f799ea377a4ecc69144f59f24618e 3	lib/core/widgets/gateway_clarify_dialog.dart
+100644 ac70bff52c1b624d6e4f7584067d4256a972d741 1	lib/core/widgets/gateway_insight_card.dart
+100644 0b429031ae65fbf7bc60efeee8f3fd8fb2f0fbaf 2	lib/core/widgets/gateway_insight_card.dart
+100644 dcef0ec3e3f656cac057c8977d20e551f45c8fe0 3	lib/core/widgets/gateway_insight_card.dart
+100644 2d5f805c5239b53252cf5bd1ac4720f9a14a164b 1	lib/core/widgets/gateway_sensitive_prompt_dialog.dart
+100644 4125b244f2e6b8c126bddf785a2ac7e2b6c88693 2	lib/core/widgets/gateway_sensitive_prompt_dialog.dart
+100644 b8715c30ac5b508d90ebcc3f42d848dee35b47d6 3	lib/core/widgets/gateway_sensitive_prompt_dialog.dart
+100644 56eacf1519c10865035a07bb201d7a82f7bb0b78 1	lib/core/widgets/hermes_components.dart
+100644 199e4e864e54a045df751a0833f0103925ee1740 2	lib/core/widgets/hermes_components.dart
+100644 9147b974e624c5c0f554396e37d5d981620446cd 3	lib/core/widgets/hermes_components.dart
+100644 e63a9298b34a551fab5080bf04a2952616ea2a50 1	lib/core/widgets/home_pane.dart
+100644 63e19a1c04aec18860fde17d23ca9d64b4c5dcee 2	lib/core/widgets/home_pane.dart
+100644 64bfc686dde24498746fef313de38a31d2a10e58 3	lib/core/widgets/home_pane.dart
+100644 2b595c1246f05097b42c031e21339ebec387533c 1	lib/core/widgets/markdown_code_block.dart
+100644 c4dd9ba581370ec9d6add3d890307ebafd3536d6 2	lib/core/widgets/markdown_code_block.dart
+100644 4db201d6dec74e8d8599dfcbe5cac1fcf79e04fa 3	lib/core/widgets/markdown_code_block.dart
+100644 3e3d3e8146658f071ca0076cc7c2dd497bf5e3ad 1	lib/core/widgets/more_pane.dart
+100644 4a1d98e81aabd3e46f9094db01ec0caa987b4f04 2	lib/core/widgets/more_pane.dart
+100644 11e3dadc9bca783a48614282a50fb9e790bd4d52 3	lib/core/widgets/more_pane.dart
+100644 14581d59820033cc7955870358bdb6439050228a 1	lib/core/widgets/new_chat_sheet.dart
+100644 717abf536b2f17a9050ecb53d94daea889fed0f2 2	lib/core/widgets/new_chat_sheet.dart
+100644 0674f908de1487a0053ca6aeb41b14729746aca4 3	lib/core/widgets/new_chat_sheet.dart
+100644 50ff5fd0eaf567cb671d487b5db3665cb0920368 1	lib/core/widgets/project_detail_screen.dart
+100644 240f8540a0a610134a20ab0a921bf9f5d40e6130 2	lib/core/widgets/project_detail_screen.dart
+100644 192c9864e5195b0566e42dae777925e7c5b9ad99 3	lib/core/widgets/project_detail_screen.dart
+100644 5d32a74856c85777e0368dcee84ff7f1b31b69be 1	lib/core/widgets/projects_pane.dart
+100644 4cfb814d881edafedf51fcb437ad4b67e57ff1c6 2	lib/core/widgets/projects_pane.dart
+100644 cf4efafead8742abaf6013fa119898308adef30b 3	lib/core/widgets/projects_pane.dart
+100644 8e1276bf2e0ae6196136d0eab7c98fdad9326cef 1	lib/core/widgets/share_text_review_sheet.dart
+100644 d38d7f67238fc13aab9fe4aa73f8ffd36c70c7d5 2	lib/core/widgets/share_text_review_sheet.dart
+100644 0613bb91f082c9522e051204b08a313f0d4ec5cf 3	lib/core/widgets/share_text_review_sheet.dart
+100644 8e2b70610e80063f4226a38262585d11caf43787 1	lib/core/widgets/space_migration_preview.dart
+100644 0fdbff564a84f73275a7c5136bf16d2c7e7ffcde 2	lib/core/widgets/space_migration_preview.dart
+100644 dc2d03e2d00324fadd1c737b3027040a76e0e234 3	lib/core/widgets/space_migration_preview.dart
+100644 04b2b2d452dddd0c765fd32edb613ced5cbcaaea 1	lib/core/widgets/text_size_settings_card.dart
+100644 b3ed1269055fbe13c4a65e828f961123d69ebe47 2	lib/core/widgets/text_size_settings_card.dart
+100644 cddfa7ff1aa0666e797b949792486b3ce16daf8a 3	lib/core/widgets/text_size_settings_card.dart
+100644 38a1829be79924b7f711bce6bf2f5e2c1861aca4 1	lib/core/widgets/voice_composer_controls.dart
+100644 ef5e9062b2653777eaf9922c0b16baa6f1269dff 2	lib/core/widgets/voice_composer_controls.dart
+100644 68281a2d8132c1f6fee76992259588bb32839c28 3	lib/core/widgets/voice_composer_controls.dart
+100644 d86a2a4c1a7506de5dd1ed65179a5ac99a3a5485 2	lib/l10n/app_en.arb
+100644 19a3a82ac153e37f11d1ba86706af69806594b0e 3	lib/l10n/app_en.arb
+100644 4956272374eb6396d769891ced726a33a23ac93e 2	lib/l10n/app_localizations.dart
+100644 da7de43f9856d8c993164d88a1f2cf88e5a46512 3	lib/l10n/app_localizations.dart
+100644 294baebb398fd7a788d43a1e0d355474df0aa11a 2	lib/l10n/app_localizations_en.dart
+100644 0f838a2e482cd542ac5d2f7da07703abf4685f07 3	lib/l10n/app_localizations_en.dart
+100644 02193ea84424e715be1d82d0cb7b08934b8ccd32 2	lib/l10n/app_localizations_zh.dart
+100644 cee889845f4547bf5889bc01db5ffd45c0c4c84c 3	lib/l10n/app_localizations_zh.dart
+100644 c700841c9e9378461eeb4d8fb7e5e9ecff21436b 2	lib/l10n/app_zh.arb
+100644 5897c99b317038a4304e111b4fa283fa74f0074b 3	lib/l10n/app_zh.arb
+100644 58ef395eb63410c68862d3ed1aafa108dc38226f 1	lib/main.dart
+100644 1f1c7cfc3681a6e976f3c5ccaa4e68be1af3c038 2	lib/main.dart
+100644 4a479e5f607df1239dffa14e0a771d1ddce5e5ca 3	lib/main.dart
+100644 88ae3f5e094390da58aee2bbc28758ab662159ab 1	pubspec.lock
+100644 685492d6202f385d0c7fd7dc76b1108e267a4279 2	pubspec.lock
+100644 ed777ee9a4a9e569d461f80cb0965fce84b68129 3	pubspec.lock
+100644 9c21b012c4672f8b3d3938f3bfb9c9e7d0eeb996 1	test/activity_feed_test.dart
+100644 09056c66c52dd7dfa0836ea344938b19c293d74d 2	test/activity_feed_test.dart
+100644 58a007076050423236d61ea4fc02b0edf0bbab90 3	test/activity_feed_test.dart
+100644 e7ea77ddf6fb62e5d9db8e531a8574d17836b54f 1	test/attachment_draft_tile_test.dart
+100644 8baa59aa34020f6b0d1fdd81d0e4f31ac76da80c 2	test/attachment_draft_tile_test.dart
+100644 041da598a0e732e1bfc56f29cb9d9c10f594dabd 3	test/attachment_draft_tile_test.dart
+100644 a1511b5bf0cec2ca86d8b2703ea2322d43f58dec 1	test/chat_history_scroll_test.dart
+100644 1cff50e1963ddcc168a4ad7cd0914a152df693ab 2	test/chat_history_scroll_test.dart
+100644 3c971f0888dc8da0bf03dc78e9f98104f75fafb6 3	test/chat_history_scroll_test.dart
+100644 e000c41f50c1ec76b36d41f12706536f48208327 1	test/chat_reattach_resync_test.dart
+100644 63c5622f5732b1b2b3e8607463730963c818f772 2	test/chat_reattach_resync_test.dart
+100644 d414c1f8d18c06c3de52eac055f20b1c7d079366 3	test/chat_reattach_resync_test.dart
+100644 95f39d8220567384140502ff050e6d8638330219 1	test/chat_remote_submit_failure_test.dart
+100644 222d51c7c96df2fef4a53f8c25971cff3ff657ae 2	test/chat_remote_submit_failure_test.dart
+100644 59d801d4784e90fe22c771bc45503a452ccb021f 3	test/chat_remote_submit_failure_test.dart
+100644 5c095758709c35efbe26867a3e48ac33b3906fc3 1	test/chat_turn_notification_wiring_test.dart
+100644 31093e17a1adc17113429f667baf5548da84df3f 2	test/chat_turn_notification_wiring_test.dart
+100644 0cc6e6e6c3253d30f29c2c738dc5d9d25dea89fe 3	test/chat_turn_notification_wiring_test.dart
+100644 65d75c8f0f1a9d40f7181d79d8bcf606df1cb09e 1	test/chat_turn_recovery_test.dart
+100644 a6c66605fc1d8c8c260651e6578b139d512aed95 2	test/chat_turn_recovery_test.dart
+100644 413e6e3c27376b2aefcab11300139496a6c53f9e 3	test/chat_turn_recovery_test.dart
+100644 cc2fc763623ff5c191ec4ac2a804b6bb9a80baa5 1	test/chat_voice_composer_test.dart
+100644 1ac9040ba7d35e007445e6180a504255d3f5d4f3 2	test/chat_voice_composer_test.dart
+100644 e57d2ce677c60edc0cb3a8dbc59303ced476fe75 3	test/chat_voice_composer_test.dart
+100644 26e08a48a338c2cc80b5f6c88a57c85285f7823e 1	test/config_backup_card_test.dart
+100644 38178f7eb981532a789c81dd4a37e4c595df5483 2	test/config_backup_card_test.dart
+100644 601b607256f03363a226e1b7650aaa33fd5baf4b 3	test/config_backup_card_test.dart
+100644 1d5f846cc3896415e1427d4986e676b71114774a 1	test/gateway_activity_card_test.dart
+100644 581e9a0d9a2f5aa02c69c1d33fc8b3c1e5a83bb9 2	test/gateway_activity_card_test.dart
+100644 030fd5026d174b5cbe366504b651f0ec19faa6a4 3	test/gateway_activity_card_test.dart
+100644 b75a87fd984e5010255e5dc63b82ce5b57513698 1	test/gateway_activity_test.dart
+100644 9cf2b49887bb9a2d1ed58914b0b29207b901ef1b 2	test/gateway_activity_test.dart
+100644 e5d59660656bc04ecf5521be5ec83c31c277de04 3	test/gateway_activity_test.dart
+100644 2cf20b07804656a010203aa2fbac1e8a6e96eb9c 1	test/gateway_approval_test.dart
+100644 4911195e5b7e6dab01f870691a45fb44001484ca 2	test/gateway_approval_test.dart
+100644 7616005c9fc610d25e682b06ce1bfb19a3af5c00 3	test/gateway_approval_test.dart
+100644 03ae0b3cda80e13bf7df5bddce0815fab93c0ea9 1	test/gateway_clarify_test.dart
+100644 30e0f5d39c97aee875558ac9de8b5320184ece3c 2	test/gateway_clarify_test.dart
+100644 a61e1b2e15455ad69e103374e009ba7c5a3dbb55 3	test/gateway_clarify_test.dart
+100644 82ecd204138999b528762d19d11cb363bee93004 1	test/gateway_insight_test.dart
+100644 1c5314640b2c15c28a3bc5b0cee99ecaf3932f9d 2	test/gateway_insight_test.dart
+100644 a27b0c981fe17dc4ce22c4da4aa80e35cf92f761 3	test/gateway_insight_test.dart
+100644 2888055baa3100bf9c8f46036085a9f0df24494f 1	test/gateway_sensitive_prompt_test.dart
+100644 c489dc4521babae3575d991a9b40f0d4f9a24a6d 2	test/gateway_sensitive_prompt_test.dart
+100644 7f9733773a2a27dd1c2e91c02b1cdb7bc840f819 3	test/gateway_sensitive_prompt_test.dart
+100644 5d87d45fb2a7c9771208f345371aed95a8e7ba41 1	test/gateway_turn_coordinator_test.dart
+100644 36a910f1db73d4e2e5e85bca8a020d409807a217 2	test/gateway_turn_coordinator_test.dart
+100644 ecf74c026475fb2749acf8ab0c217c8eb8c6ae21 3	test/gateway_turn_coordinator_test.dart
+100644 669a036a2651d80a9ffd4bbd7d0e83e85a47fc52 1	test/home_config_restore_test.dart
+100644 32e4d443f569b66c49fbd82fdd44f7b8bc883703 2	test/home_config_restore_test.dart
+100644 98b3ac436ed4f194278b12cf1a2ab967f1570fb0 3	test/home_config_restore_test.dart
+100644 f8da07ac1959a8bb4392e8dc202896c87250bd80 1	test/more_pane_test.dart
+100644 d05bae4671721f06d3f2804c4193f3c1f8e886b7 2	test/more_pane_test.dart
+100644 b3a63a6b8a1aa9915c50cdf65fff1e868bce79ce 3	test/more_pane_test.dart
+100644 626ec381910a490e9ee8c377f87d5ac1f85bdf3c 1	test/new_chat_options_test.dart
+100644 620a8fb4cc7e75fbf72ad9ee2eeca2547b8a1c6d 2	test/new_chat_options_test.dart
+100644 2359ba2332518986a6812eb38dab7d701bb212b6 3	test/new_chat_options_test.dart
+100644 d3c5b3eff09d61d91768bfdc798aae9b74c71df5 1	test/session_list_pinned_paging_test.dart
+100644 8a6ebb8cd9062e487f342a9a49b17c3b55792177 2	test/session_list_pinned_paging_test.dart
+100644 cbeb071ed4c39e036dfe92e8b26b0064ab7528f0 3	test/session_list_pinned_paging_test.dart
+100644 39e36047afabff26eb88b1b30915708123d9a20d 1	test/session_name_dialog_test.dart
+100644 02caf03c6f5844f229f47f6ce100758900c75e59 2	test/session_name_dialog_test.dart
+100644 58880280a496e82c1e71f40722c023a1b7237bab 3	test/session_name_dialog_test.dart
+100644 c65fc301e4aa814e07c4948653573a2b20e07606 1	test/share_text_review_sheet_test.dart
+100644 dbf8ecd96a20ba898707d0d3231cf2343fb3ea04 2	test/share_text_review_sheet_test.dart
+100644 996dfa6edd6c1f48ae695aaf7ce6571db11b5cce 3	test/share_text_review_sheet_test.dart
+100644 1e5cd35f1ce2622a1c3f2cac91570ebd82448ed2 1	test/spaces_screen_test.dart
+100644 f92794a9e94de0270159d5b8cc1b2a153c72c6bb 2	test/spaces_screen_test.dart
+100644 e6417fbcab89ce57e18fbb1633f1fe6033402948 3	test/spaces_screen_test.dart
+100644 dcdce4bed50e8de480bd1963454b6300ff4bfa24 2	test/support/l10n_test_utils.dart
+100644 03a2bc0993b58ac62bbd4b7b9a55976ed81d9616 3	test/support/l10n_test_utils.dart
+100644 b3695e8f8982cb2507a6a6654ee2fec261e5e70e 1	test/text_size_preference_test.dart
+100644 502fb8252f3bd1570c112c141739c9b9918593a6 2	test/text_size_preference_test.dart
+100644 a02a2f8dd8a5157db6d2854b54b4e7810a91726b 3	test/text_size_preference_test.dart
+100644 aaf07a59a868aa5f39e7da862d980ed54b2664c6 1	test/widget_test.dart
+100644 792975777e94517a3569c54d03760060df215f1f 2	test/widget_test.dart
+100644 6bd57de0d513d999a55b479d8c36fb1d07efa959 3	test/widget_test.dart
+100644 680963448d74221d7843769f0356dfb596ab8bf5 1	test/workspace_entry_point_test.dart
+100644 dcdbfa46ef6989873ac0b457fdeb0454fd68c5d7 2	test/workspace_entry_point_test.dart
+100644 bfb1e99dc9f890493ce5ac2637aa57eb4b08132f 3	test/workspace_entry_point_test.dart
+100644 71f30c7735d87fdefaba902aa928f629bfb67f1b 1	test/workspace_screen_test.dart
+100644 3f726026895b26e2fb3c9347514d1adcc4ce964a 2	test/workspace_screen_test.dart
+100644 ef3f31f594302d948935bfc897858bce0b67c275 3	test/workspace_screen_test.dart
+100644 b09c973b6a8d42b3d756e5d4ea1f7009df28c56a 1	test/workspace_sessions_screen_test.dart
+100644 6b71a97bf7dde7caac79cc2aeb1651800e58635a 2	test/workspace_sessions_screen_test.dart
+100644 47f9bbf3783bfe725543173ffe9a39d8f082cc45 3	test/workspace_sessions_screen_test.dart
+
+Auto-merging l10n.yaml
+CONFLICT (add/add): Merge conflict in l10n.yaml
+Auto-merging lib/core/models/gateway_sensitive_prompt.dart
+CONFLICT (content): Merge conflict in lib/core/models/gateway_sensitive_prompt.dart
+Auto-merging lib/core/screens/chat_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/chat_screen.dart
+Auto-merging lib/core/screens/cron_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/cron_screen.dart
+Auto-merging lib/core/screens/files_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/files_screen.dart
+Auto-merging lib/core/screens/memory_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/memory_screen.dart
+Auto-merging lib/core/screens/session_list_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/session_list_screen.dart
+Auto-merging lib/core/screens/settings_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/settings_screen.dart
+Auto-merging lib/core/screens/skills_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/skills_screen.dart
+Auto-merging lib/core/screens/spaces_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/spaces_screen.dart
+Auto-merging lib/core/screens/workspace_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/workspace_screen.dart
+Auto-merging lib/core/screens/workspace_sessions_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/workspace_sessions_screen.dart
+Auto-merging lib/core/services/connection_manager.dart
+Auto-merging lib/core/services/desktop_gateway_client.dart
+CONFLICT (content): Merge conflict in lib/core/services/desktop_gateway_client.dart
+Auto-merging lib/core/services/ws_client.dart
+Auto-merging lib/core/utils/activity_feed.dart
+Auto-merging lib/core/utils/home_digest.dart
+CONFLICT (content): Merge conflict in lib/core/utils/home_digest.dart
+Auto-merging lib/core/utils/new_chat_options.dart
+CONFLICT (content): Merge conflict in lib/core/utils/new_chat_options.dart
+Auto-merging lib/core/widgets/activity_pane.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/activity_pane.dart
+Auto-merging lib/core/widgets/attachment_draft_tile.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/attachment_draft_tile.dart
+Auto-merging lib/core/widgets/chat_context_header.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/chat_context_header.dart
+Auto-merging lib/core/widgets/chat_end_affordance.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/chat_end_affordance.dart
+Auto-merging lib/core/widgets/config_backup_card.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/config_backup_card.dart
+Auto-merging lib/core/widgets/gateway_activity_card.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/gateway_activity_card.dart
+Auto-merging lib/core/widgets/gateway_approval_dialog.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/gateway_approval_dialog.dart
+Auto-merging lib/core/widgets/gateway_clarify_dialog.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/gateway_clarify_dialog.dart
+Auto-merging lib/core/widgets/gateway_insight_card.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/gateway_insight_card.dart
+Auto-merging lib/core/widgets/gateway_sensitive_prompt_dialog.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/gateway_sensitive_prompt_dialog.dart
+Auto-merging lib/core/widgets/hermes_components.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/hermes_components.dart
+Auto-merging lib/core/widgets/home_pane.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/home_pane.dart
+Auto-merging lib/core/widgets/markdown_code_block.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/markdown_code_block.dart
+Auto-merging lib/core/widgets/more_pane.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/more_pane.dart
+Auto-merging lib/core/widgets/new_chat_sheet.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/new_chat_sheet.dart
+Auto-merging lib/core/widgets/project_detail_screen.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/project_detail_screen.dart
+Auto-merging lib/core/widgets/projects_pane.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/projects_pane.dart
+Auto-merging lib/core/widgets/share_text_review_sheet.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/share_text_review_sheet.dart
+Auto-merging lib/core/widgets/space_migration_preview.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/space_migration_preview.dart
+Auto-merging lib/core/widgets/text_size_settings_card.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/text_size_settings_card.dart
+Auto-merging lib/core/widgets/voice_composer_controls.dart
+CONFLICT (content): Merge conflict in lib/core/widgets/voice_composer_controls.dart
+Auto-merging lib/l10n/app_en.arb
+CONFLICT (add/add): Merge conflict in lib/l10n/app_en.arb
+Auto-merging lib/l10n/app_localizations.dart
+CONFLICT (add/add): Merge conflict in lib/l10n/app_localizations.dart
+Auto-merging lib/l10n/app_localizations_en.dart
+CONFLICT (add/add): Merge conflict in lib/l10n/app_localizations_en.dart
+Auto-merging lib/l10n/app_localizations_zh.dart
+CONFLICT (add/add): Merge conflict in lib/l10n/app_localizations_zh.dart
+Auto-merging lib/l10n/app_zh.arb
+CONFLICT (add/add): Merge conflict in lib/l10n/app_zh.arb
+Auto-merging lib/main.dart
+CONFLICT (content): Merge conflict in lib/main.dart
+Auto-merging pubspec.lock
+CONFLICT (content): Merge conflict in pubspec.lock
+Auto-merging pubspec.yaml
+Auto-merging test/activity_feed_test.dart
+CONFLICT (content): Merge conflict in test/activity_feed_test.dart
+Auto-merging test/activity_pane_test.dart
+Auto-merging test/attachment_draft_tile_test.dart
+CONFLICT (content): Merge conflict in test/attachment_draft_tile_test.dart
+Auto-merging test/chat_context_header_test.dart
+Auto-merging test/chat_history_scroll_test.dart
+CONFLICT (content): Merge conflict in test/chat_history_scroll_test.dart
+Auto-merging test/chat_reattach_resync_test.dart
+CONFLICT (content): Merge conflict in test/chat_reattach_resync_test.dart
+Auto-merging test/chat_remote_submit_failure_test.dart
+CONFLICT (content): Merge conflict in test/chat_remote_submit_failure_test.dart
+Auto-merging test/chat_turn_notification_wiring_test.dart
+CONFLICT (content): Merge conflict in test/chat_turn_notification_wiring_test.dart
+Auto-merging test/chat_turn_recovery_test.dart
+CONFLICT (content): Merge conflict in test/chat_turn_recovery_test.dart
+Auto-merging test/chat_voice_composer_test.dart
+CONFLICT (content): Merge conflict in test/chat_voice_composer_test.dart
+Auto-merging test/config_backup_card_test.dart
+CONFLICT (content): Merge conflict in test/config_backup_card_test.dart
+Auto-merging test/connection_manager_test.dart
+Auto-merging test/files_screen_test.dart
+Auto-merging test/gateway_activity_card_test.dart
+CONFLICT (content): Merge conflict in test/gateway_activity_card_test.dart
+Auto-merging test/gateway_activity_test.dart
+CONFLICT (content): Merge conflict in test/gateway_activity_test.dart
+Auto-merging test/gateway_approval_test.dart
+CONFLICT (content): Merge conflict in test/gateway_approval_test.dart
+Auto-merging test/gateway_clarify_test.dart
+CONFLICT (content): Merge conflict in test/gateway_clarify_test.dart
+Auto-merging test/gateway_insight_test.dart
+CONFLICT (content): Merge conflict in test/gateway_insight_test.dart
+Auto-merging test/gateway_sensitive_prompt_test.dart
+CONFLICT (content): Merge conflict in test/gateway_sensitive_prompt_test.dart
+Auto-merging test/gateway_turn_coordinator_test.dart
+CONFLICT (content): Merge conflict in test/gateway_turn_coordinator_test.dart
+Auto-merging test/hermes_components_test.dart
+Auto-merging test/home_config_restore_test.dart
+CONFLICT (content): Merge conflict in test/home_config_restore_test.dart
+Auto-merging test/home_pane_test.dart
+Auto-merging test/more_pane_test.dart
+CONFLICT (content): Merge conflict in test/more_pane_test.dart
+Auto-merging test/new_chat_options_test.dart
+CONFLICT (content): Merge conflict in test/new_chat_options_test.dart
+Auto-merging test/project_detail_screen_test.dart
+Auto-merging test/projects_pane_test.dart
+Auto-merging test/quick_chat_lifecycle_test.dart
+Auto-merging test/session_list_pinned_paging_test.dart
+CONFLICT (content): Merge conflict in test/session_list_pinned_paging_test.dart
+Auto-merging test/session_name_dialog_test.dart
+CONFLICT (content): Merge conflict in test/session_name_dialog_test.dart
+Auto-merging test/share_text_review_sheet_test.dart
+CONFLICT (content): Merge conflict in test/share_text_review_sheet_test.dart
+Auto-merging test/space_migration_preview_test.dart
+Auto-merging test/spaces_screen_test.dart
+CONFLICT (content): Merge conflict in test/spaces_screen_test.dart
+Auto-merging test/support/l10n_test_utils.dart
+CONFLICT (add/add): Merge conflict in test/support/l10n_test_utils.dart
+Auto-merging test/text_size_preference_test.dart
+CONFLICT (content): Merge conflict in test/text_size_preference_test.dart
+Auto-merging test/widget_test.dart
+CONFLICT (content): Merge conflict in test/widget_test.dart
+Auto-merging test/workspace_entry_point_test.dart
+CONFLICT (content): Merge conflict in test/workspace_entry_point_test.dart
+Auto-merging test/workspace_screen_test.dart
+CONFLICT (content): Merge conflict in test/workspace_screen_test.dart
+Auto-merging test/workspace_sessions_screen_test.dart
+CONFLICT (content): Merge conflict in test/workspace_sessions_screen_test.dart
