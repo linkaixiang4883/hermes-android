@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/app_localizations.dart';
-import '../../l10n/l10n.dart';
 import '../models/gateway_sensitive_prompt.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 typedef SensitivePromptResponder = Future<void> Function(String value);
 
 enum GatewaySensitivePromptDialogResult { responded, expired }
@@ -52,7 +51,7 @@ class _GatewaySensitivePromptDialogState
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = context.l10n.hermesDidNotAcceptResponse;
+        _error = context.l10n.hermes_did_not_accept_the_response_please_try_again;
       });
     }
   }
@@ -64,14 +63,14 @@ class _GatewaySensitivePromptDialogState
 
     return AlertDialog(
       icon: Icon(isSudo ? Icons.lock_outline : Icons.key_outlined),
-      title: Text(_localizedTitle(widget.request, context.l10n)),
+      title: Text(widget.request.title),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(_localizedDescription(widget.request, context.l10n)),
+            Text(widget.request.description),
             const SizedBox(height: 16),
             TextField(
               key: const Key('sensitive-prompt-field'),
@@ -85,7 +84,7 @@ class _GatewaySensitivePromptDialogState
               textInputAction: TextInputAction.done,
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                labelText: _localizedFieldLabel(widget.request, context.l10n),
+                labelText: widget.request.fieldLabel,
               ),
               onChanged: (_) => setState(() {}),
               onSubmitted: (value) {
@@ -104,7 +103,7 @@ class _GatewaySensitivePromptDialogState
             ],
             const SizedBox(height: 10),
             Text(
-              context.l10n.sensitiveValueNotice,
+              context.l10n.the_value_is_sent_directly_to_the_active_hermes_gateway,
               style: theme.textTheme.bodySmall,
             ),
           ],
@@ -131,45 +130,4 @@ class _GatewaySensitivePromptDialogState
       ],
     );
   }
-}
-
-/// Maps the client-side English defaults (used when the gateway omits these
-/// fields) to the active locale. Gateway-provided values pass through.
-String _localizedTitle(
-  GatewaySensitivePromptRequest request,
-  AppLocalizations l10n,
-) {
-  if (request.kind == GatewaySensitivePromptKind.sudo &&
-      request.title == 'Administrator password needed') {
-    return l10n.adminPasswordNeeded;
-  }
-  if (request.title == 'Secret needed') return l10n.secretNeeded;
-  return request.title;
-}
-
-String _localizedDescription(
-  GatewaySensitivePromptRequest request,
-  AppLocalizations l10n,
-) {
-  if (request.kind == GatewaySensitivePromptKind.sudo &&
-      request.description ==
-          'Hermes needs a sudo password for the pending terminal command.') {
-    return l10n.sudoPasswordDescription;
-  }
-  if (request.description == 'Hermes needs a secret for the pending skill.') {
-    return l10n.secretDescription;
-  }
-  return request.description;
-}
-
-String _localizedFieldLabel(
-  GatewaySensitivePromptRequest request,
-  AppLocalizations l10n,
-) {
-  if (request.kind == GatewaySensitivePromptKind.sudo &&
-      request.fieldLabel == 'Sudo password') {
-    return l10n.sudoPasswordField;
-  }
-  if (request.fieldLabel == 'Secret value') return l10n.secretValueField;
-  return request.fieldLabel;
 }

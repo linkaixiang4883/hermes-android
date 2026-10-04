@@ -54,12 +54,12 @@ class VoiceComposerController extends ChangeNotifier {
       );
       _status = _available
           ? null
-          : (l10n?.speechRecognitionNoService ??
-              l10n?.speechRecognitionUnavailable ??
+          : (l10n?.speech_recognition_use_keyboard ??
+              l10n?.speech_recognition_is_unavailable ??
               'Speech recognition is unavailable');
     } catch (error) {
       _available = false;
-      _status = (l10n?.voiceSetupFailed(error.toString()) ??
+      _status = (l10n?.voice_setup_failed(error.toString()) ??
           'Voice setup failed: $error');
     }
     _notify();
@@ -178,7 +178,7 @@ class VoiceComposerController extends ChangeNotifier {
         return;
       }
       _acceptResults = false;
-      _finishListening(status: l10n?.dictationReady ?? 'Dictation ready to edit');
+      _finishListening(status: l10n?.dictation_ready ?? 'Dictation ready to edit');
       _clearSession();
       unawaited(_stopAdapterAfterFinal());
     } else {
@@ -238,8 +238,8 @@ class VoiceComposerController extends ChangeNotifier {
         lower.contains('not found') && lower.contains('recognition') ||
         lower.contains('speech recognition is unavailable');
     if (isNoService) {
-      return l10n?.speechRecognitionNoService ??
-          l10n?.speechRecognitionUnavailable ??
+      return l10n?.speech_recognition_use_keyboard ??
+          l10n?.speech_recognition_is_unavailable ??
           'Speech recognition is unavailable';
     }
     return raw;

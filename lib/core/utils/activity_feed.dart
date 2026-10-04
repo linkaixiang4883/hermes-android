@@ -34,6 +34,8 @@ import '../models/gateway_turn_contract.dart';
 import '../services/gateway_turn_journal.dart';
 import '../theme/hermes_theme.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
+
 /// How long a running turn may go without a journal update before Activity
 /// reports it as stalled instead of live.
 ///
@@ -62,32 +64,19 @@ enum ActivityGroupKind {
   /// Work that finished or was stopped by the user.
   completed;
 
-  String get title {
+  String title(AppLocalizations l10n) {
     switch (this) {
       case ActivityGroupKind.needsYou:
-        return 'Needs you';
+        return l10n.needs_you;
       case ActivityGroupKind.running:
-        return 'Running now';
+        return l10n.running_now;
       case ActivityGroupKind.failed:
-        return 'Failed';
+        return l10n.status_failed;
       case ActivityGroupKind.completed:
-        return 'Completed';
+        return l10n.status_completed;
     }
   }
 
-  /// Localized variant of [title] for UI call sites.
-  String titleLocalized(AppLocalizations l10n) {
-    switch (this) {
-      case ActivityGroupKind.needsYou:
-        return l10n.homeSectionNeedsYou;
-      case ActivityGroupKind.running:
-        return l10n.homeSectionRunning;
-      case ActivityGroupKind.failed:
-        return l10n.activityGroupFailed;
-      case ActivityGroupKind.completed:
-        return l10n.activityGroupCompleted;
-    }
-  }
 }
 
 /// One turn as Activity presents it.
@@ -141,7 +130,7 @@ class ActivityGroup {
     required this.totalCount,
   });
 
-  String get title => kind.title;
+  String title(AppLocalizations l10n) => kind.title(l10n);
 
   /// How many rows the cap hid.
   int get overflow => totalCount - items.length;
@@ -294,7 +283,7 @@ _Classification _classify(
   if (entry.failure != null) {
     return _Classification(
       ActivityGroupKind.failed,
-      l10n.turnRecoveryFailed,
+      l10n.turn_recovery_failed,
       HermesStatus.failed,
     );
   }
@@ -303,25 +292,25 @@ _Classification _classify(
     case GatewayRecoveryTurnStatus.waitingInput:
       return _Classification(
         ActivityGroupKind.needsYou,
-        l10n.turnWaitingInput,
+        l10n.waiting_for_your_input,
         HermesStatus.blocked,
       );
     case GatewayRecoveryTurnStatus.failed:
       return _Classification(
         ActivityGroupKind.failed,
-        l10n.turnFailedState,
+        l10n.the_turn_failed,
         HermesStatus.failed,
       );
     case GatewayRecoveryTurnStatus.completed:
       return _Classification(
         ActivityGroupKind.completed,
-        l10n.activityGroupCompleted,
+        l10n.status_completed,
         HermesStatus.completed,
       );
     case GatewayRecoveryTurnStatus.interrupted:
       return _Classification(
         ActivityGroupKind.completed,
-        l10n.turnStopped,
+        l10n.turn_stopped,
         HermesStatus.idle,
       );
     case null:
@@ -332,7 +321,7 @@ _Classification _classify(
       if (ageMs > staleMs) {
         return _Classification(
           ActivityGroupKind.failed,
-          l10n.turnStalled,
+          l10n.stalled_no_update_from_hermes,
           HermesStatus.failed,
         );
       }
@@ -340,7 +329,7 @@ _Classification _classify(
       // but the gateway has not answered yet, so the work is outstanding.
       return _Classification(
         ActivityGroupKind.running,
-        entry.status == null ? l10n.turnSubmitted : l10n.turnRunningState,
+        entry.status == null ? l10n.submitted_waiting_for_hermes : l10n.status_running,
         HermesStatus.running,
       );
   }

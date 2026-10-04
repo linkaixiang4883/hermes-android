@@ -124,29 +124,6 @@ class StreamEvent {
        envelope = _deepFreezeJsonMap(envelope ?? const <String, dynamic>{});
 }
 
-/// A JSON-RPC request the backend sends to this client (Hermes 0.21.3+).
-///
-/// Interactive prompts — command approvals, clarify questions, sudo/secret
-/// values — arrive as `{"jsonrpc":"2.0","id":"srq-…","method":"approval",
-/// "params":{…}}` frames and must be answered with a response frame carrying
-/// the same id. The legacy `*.request` events and `*.respond` methods no
-/// longer exist upstream: a request nobody answers blocks the backend until
-/// its own timeout and then fails closed.
-class GatewayServerRequest {
-  /// The backend-minted request id (`srq-…`) every answer must echo.
-  final String id;
-  final String method;
-  final Map<String, dynamic> params;
-
-  GatewayServerRequest({
-    required this.id,
-    required this.method,
-    required Map<String, dynamic> params,
-  }) : params = _deepFreezeJsonMap(params);
-}
-
-typedef ServerRequestCallback = void Function(GatewayServerRequest request);
-
 /// Gateway-side file reference returned by `file.attach`.
 class RemoteFileAttachment {
   final String name;
@@ -192,18 +169,59 @@ class ResumedGatewaySession {
   final bool? running;
   final String? status;
   final Map<String, dynamic>? inflight;
+  final List<dynamic> openRequests;
 
   const ResumedGatewaySession({
     required this.runtimeSessionId,
     this.running,
     this.status,
     this.inflight,
+    this.openRequests = const [],
   });
 }
 
 typedef StreamCallback = void Function(StreamEvent event);
 typedef ConnectionCallback = void Function(bool connected);
 typedef GatewayReadyCallback = void Function(Map<String, dynamic> frame);
+typedef ServerRequestCallback = bool Function(GatewayServerRequest request);
+
+/// A JSON-RPC request initiated by the Hermes gateway.
+///
+/// Unlike an `event` notification, this frame carries a string request ID and
+/// must be answered with a JSON-RPC response carrying that same ID. The first
+/// [respond] or [fail] call wins so a replayed card cannot answer twice.
+class GatewayServerRequest {
+  final String id;
+  final String method;
+  final Map<String, dynamic> params;
+  final bool replayed;
+  final bool Function(Map<String, dynamic> result) _respond;
+  final bool Function(int code, String message) _fail;
+  bool _settled = false;
+
+  GatewayServerRequest._({
+    required this.id,
+    required this.method,
+    required this.params,
+    required this.replayed,
+    required this._respond,
+    required this._fail,
+  });
+
+  bool respond(Map<String, dynamic> result) {
+    if (_settled) return false;
+    if (!_respond(result)) return false;
+    _settled = true;
+    return true;
+  }
+
+  bool fail(int code, String message) {
+    if (_settled) return false;
+    if (!_fail(code, message)) return false;
+    _settled = true;
+    return true;
+  }
+}
 
 /// WebSocket client for the Hermes JSON-RPC gateway.
 class WsClient {
@@ -232,15 +250,14 @@ class WsClient {
   Map<String, dynamic>? _gatewayReadyFrame;
   String? _gatewayReadyCanonical;
   JsonRpcError? _gatewayReadyFailure;
+  bool _serverRequestsAdvertised = false;
 
   /// Global stream listener (receives all untargeted events).
   StreamCallback? onStreamEvent;
-  ConnectionCallback? onConnectionChanged;
-  GatewayReadyCallback? onGatewayReady;
-
-  /// Backend-initiated requests: approval / clarify / sudo / secret / vault.
-  /// Answer each one with [respondToServerRequest] (see [GatewayServerRequest]).
   ServerRequestCallback? onServerRequest;
+  ConnectionCallback? onConnectionChanged;
+  void Function()? onConnectionClosed;
+  GatewayReadyCallback? onGatewayReady;
 
   factory WsClient(
     String baseUrl, {
@@ -291,6 +308,7 @@ class WsClient {
     _gatewayReadyFrame = null;
     _gatewayReadyCanonical = null;
     _gatewayReadyFailure = null;
+    _serverRequestsAdvertised = false;
     final readyCompleter = Completer<Map<String, dynamic>>();
     _gatewayReadyCompleter = readyCompleter;
     // A transport can close before a caller starts waiting for gateway.ready.
@@ -388,6 +406,11 @@ class WsClient {
       }
     }
     if (wasConnected) {
+      try {
+        onConnectionClosed?.call();
+      } catch (_) {
+        // Cleanup observers cannot keep a rejected socket logically active.
+      }
       try {
         onConnectionChanged?.call(false);
       } catch (_) {
@@ -515,11 +538,25 @@ class WsClient {
       final method = data['method'] as String?;
       final params = data['params'];
 
+      // JSON-RPC is peer-to-peer. Hermes uses string IDs (`srq-...`) for
+      // server→client requests so they cannot collide with our integer IDs.
+      // Route these before the normal response path; treating them as an
+      // unknown response silently drops clarify/approval/secret prompts.
+      if (id is String && method != null && method != 'event') {
+        _deliverServerRequest(
+          id,
+          method,
+          params is Map<String, dynamic> ? params : const {},
+        );
+        return;
+      }
+
       // Server-pushed events have the JSON-RPC method `event` and carry their
       // actual type/session/payload inside params.
       if (method == 'event' && id == null && params is Map<String, dynamic>) {
         if (params['type'] == 'gateway.ready') {
           _handleGatewayReady(data, generation);
+          _advertiseServerRequestSupport();
           return;
         }
         final event = parseGatewayEvent(params);
@@ -529,7 +566,7 @@ class WsClient {
 
       // Response to a request (has id, may have method for streaming completion)
       if (id != null) {
-        final pending = id is int ? _pending[id] : null;
+        final pending = _pending[id];
         if (pending != null) {
           _pending.remove(id);
           pending.timer?.cancel();
@@ -548,27 +585,90 @@ class WsClient {
           }
           return;
         }
-        // A backend-initiated request (`srq-…`, Hermes 0.21.3+): a frame with
-        // a method and no matching pending entry is a question for this
-        // client — an approval, a clarify prompt, a sudo/secret value.
-        if (method != null && params is Map<String, dynamic>) {
-          try {
-            onServerRequest?.call(
-              GatewayServerRequest(
-                id: id.toString(),
-                method: method,
-                params: Map<String, dynamic>.from(params),
-              ),
-            );
-          } catch (_) {
-            // A request observer cannot break the socket dispatch loop.
-          }
-          return;
-        }
       }
     } catch (_) {
       // Ignore parse errors
     }
+  }
+
+  void _advertiseServerRequestSupport() {
+    // Never claim support unless this socket can actually route the requests.
+    // A recovery socket without a handler would otherwise make the gateway
+    // send prompts that this client immediately rejects with -32601.
+    if (_serverRequestsAdvertised || onServerRequest == null) return;
+    _serverRequestsAdvertised = true;
+    // This method is connection-scoped, not profile-scoped. Older gateways
+    // answer -32601; deliberately ignore that response so they keep working.
+    unawaited(
+      send('client.capabilities', const {
+        'server_requests': true,
+      }, includeProfile: false).then<void>((_) {}, onError: (_, _) {}),
+    );
+  }
+
+  void _deliverServerRequest(
+    String id,
+    String method,
+    Map<String, dynamic> params, {
+    bool replayed = false,
+  }) {
+    final request = GatewayServerRequest._(
+      id: id,
+      method: method,
+      params: Map<String, dynamic>.from(params),
+      replayed: replayed,
+      respond: (result) => _sendServerResponse(id, result: result),
+      fail: (code, message) =>
+          _sendServerResponse(id, error: {'code': code, 'message': message}),
+    );
+    final listener = onServerRequest;
+    if (listener == null) {
+      request.fail(-32601, 'no handler for server request: $method');
+      return;
+    }
+    try {
+      if (!listener(request)) {
+        request.fail(-32601, 'no handler for server request: $method');
+      }
+    } catch (_) {
+      request.fail(-32603, 'server request handler crashed: $method');
+    }
+  }
+
+  /// Re-deliver unanswered requests returned by `session.resume` or event
+  /// replay after the caller has restored its runtime-to-local session map.
+  void deliverOpenRequests(Iterable<dynamic> snapshots) {
+    for (final raw in snapshots) {
+      if (raw is! Map) continue;
+      final entry = Map<String, dynamic>.from(raw);
+      final id = entry['id'];
+      final method = entry['method'];
+      final rawParams = entry['params'];
+      if (id is! String || method is! String) continue;
+      _deliverServerRequest(
+        id,
+        method,
+        rawParams is Map ? Map<String, dynamic>.from(rawParams) : const {},
+        replayed: true,
+      );
+    }
+  }
+
+  bool _sendServerResponse(
+    String id, {
+    Map<String, dynamic>? result,
+    Map<String, dynamic>? error,
+  }) {
+    final channel = _channel;
+    if (channel == null || channel.closeCode != null) return false;
+    channel.sink.add(
+      jsonEncode({
+        'jsonrpc': '2.0',
+        'id': id,
+        if (error != null) 'error': error else 'result': result ?? const {},
+      }),
+    );
+    return true;
   }
 
   void _handleGatewayReady(Map<String, dynamic> data, int generation) {
@@ -579,10 +679,6 @@ class WsClient {
     if (pinned == null) {
       _gatewayReadyCanonical = canonical;
       _gatewayReadyFrame = frame;
-      // Hermes 0.21.5+ gates clarify/approval/... delivery on a per-connection
-      // capability advertisement (see [_advertiseServerRequests]); a fresh
-      // ready is exactly once per connection, which is the contract's cadence.
-      _advertiseServerRequests();
       final ready = _gatewayReadyCompleter;
       if (ready != null && !ready.isCompleted) ready.complete(frame);
       try {
@@ -602,39 +698,6 @@ class WsClient {
     final channel = _channel;
     _handleClosedConnection(generation);
     channel?.sink.close();
-  }
-
-  /// Advertises this client's server->client request capability (Hermes 0.21.5+).
-  ///
-  /// The backend gates clarify / approval / sudo / secret delivery on a
-  /// per-connection `client.capabilities` advertisement: a socket that never
-  /// sent `{"server_requests": true}` is treated as a build older than
-  /// server->client requests, and every question fails fast instead of
-  /// reaching this client. Sent on every fresh `gateway.ready`; a server that
-  /// predates the method answers an error this fire-and-forget write ignores.
-  ///
-  /// The params contract accepts `server_requests` alone and rejects unknown
-  /// keys, so this must NOT ride [withProfile]'s `profile` field.
-  void _advertiseServerRequests() {
-    final channel = _channel;
-    if (channel == null) return;
-    final id = _nextId++;
-    final completer = Completer<Map<String, dynamic>>();
-    completer.future.ignore();
-    _pending[id] = _Pending('client.capabilities', completer, null);
-    try {
-      channel.sink.add(
-        jsonEncode({
-          'jsonrpc': '2.0',
-          'method': 'client.capabilities',
-          'params': const {'server_requests': true},
-          'id': id,
-        }),
-      );
-    } catch (_) {
-      // A capability advertisement can never break the connect path.
-      _pending.remove(id);
-    }
   }
 
   /// Dispatch a server-pushed event to registered listeners.
@@ -759,6 +822,7 @@ class WsClient {
     Map<String, dynamic> params, {
     Duration timeout = const Duration(seconds: 30),
     void Function()? onSent,
+    bool includeProfile = true,
   }) async {
     if (!_connected || _channel == null) {
       throw Exception('Not connected');
@@ -779,7 +843,7 @@ class WsClient {
         jsonEncode({
           'jsonrpc': '2.0',
           'method': method,
-          'params': withProfile(params, _profile),
+          'params': includeProfile ? withProfile(params, _profile) : params,
           'id': id,
         }),
       );
@@ -981,10 +1045,11 @@ class WsClient {
     );
   }
 
-  Future<void> respondToClarify({
+  Future<Map<String, dynamic>> respondToClarify({
     required String requestId,
     required String answer,
     String? questionId,
+    bool lockAnswer = false,
   }) async {
     if (requestId.trim().isEmpty) {
       throw ArgumentError.value(
@@ -994,18 +1059,27 @@ class WsClient {
       );
     }
     final params = <String, dynamic>{'request_id': requestId, 'answer': answer};
-    if (questionId != null && questionId.trim().isNotEmpty) {
+    final hasQuestionId = questionId != null && questionId.trim().isNotEmpty;
+    if (hasQuestionId) {
       params['question_id'] = questionId;
     }
-    final response = await send('clarify.respond', params);
+    if (lockAnswer && !hasQuestionId) {
+      throw ArgumentError('questionId is required to lock a clarify answer');
+    }
+    final method = lockAnswer ? 'clarify.lock' : 'clarify.respond';
+    final response = await send(method, params);
     final error = response['error'];
     if (error != null) {
       throw _gatewayResponseError(
-        'clarify.respond',
+        method,
         error,
         fallbackMessage: 'Gateway clarification failed',
       );
     }
+    final rawResult = response['result'];
+    return rawResult is Map
+        ? Map<String, dynamic>.from(rawResult)
+        : const <String, dynamic>{};
   }
 
   Future<void> _respondToSensitivePrompt({
@@ -1035,75 +1109,18 @@ class WsClient {
     }
   }
 
-  /// Answers a backend-initiated request with a JSON-RPC response frame
-  /// (`{"jsonrpc":"2.0","id":"srq-…","result":{…}}`).
-  ///
-  /// This is the Hermes 0.21.3+ contract for approvals, clarify answers and
-  /// one-string prompts (sudo / secret / vault). The legacy `*.respond`
-  /// methods are gone: a request that is never answered here blocks the
-  /// backend until its own timeout and then fails closed.
-  Future<void> respondToServerRequest(
-    String requestId, {
-    Map<String, dynamic>? result,
-    String? errorMessage,
-  }) async {
-    final trimmed = requestId.trim();
-    if (trimmed.isEmpty) {
-      throw ArgumentError.value(
-        requestId,
-        'requestId',
-        'A Hermes request ID is required',
-      );
-    }
-    if (!_connected || _channel == null) {
-      throw StateError('Not connected');
-    }
-    final frame = <String, dynamic>{'jsonrpc': '2.0', 'id': trimmed};
-    if (errorMessage != null) {
-      frame['error'] = {'code': -32601, 'message': errorMessage};
-    } else {
-      frame['result'] = result ?? const <String, dynamic>{};
-    }
-    _channel!.sink.add(jsonEncode(frame));
-  }
-
-  /// Locks one answer of a batch clarify request (`clarify.lock`).
-  ///
-  /// Early locks survive a timeout — the backend merges them and the last
-  /// locked question resolves the request with the whole `{answers}` set.
-  /// Returns the question ids still unanswered, or `null` when the request
-  /// already ended (expired / cancelled).
-  Future<List<String>?> lockClarifyAnswer({
-    required String requestId,
-    required String questionId,
-    required String answer,
-  }) async {
-    final response = await send('clarify.lock', {
-      'request_id': requestId,
-      'question_id': questionId,
-      'answer': answer,
-    });
-    final error = response['error'];
-    if (error != null) {
-      throw _gatewayResponseError(
-        'clarify.lock',
-        error,
-        fallbackMessage: 'Gateway clarification failed',
-      );
-    }
-    final payload = response['result'];
-    if (payload is Map) {
-      final remaining = payload['remaining'];
-      if (remaining is List) {
-        return remaining.map((entry) => entry.toString()).toList();
-      }
-    }
-    return null;
-  }
-
   /// Resume an existing session while preserving retained turn state.
   Future<ResumedGatewaySession> resumeSessionDetails(String sessionId) async {
-    final result = await send('session.resume', {'session_id': sessionId});
+    final result = await send('session.resume', {
+      'session_id': sessionId,
+      // Session attachment must not carry the rendered transcript. Android
+      // hydrates its visible history through bounded REST requests; returning
+      // it here duplicates a potentially multi-megabyte transfer and can make
+      // the attach RPC itself exceed the request deadline.
+      'omit_messages': true,
+      'defer_history': true,
+      'inline_images': false,
+    });
     if (result['error'] != null) {
       throw _gatewayResponseError(
         'session.resume',
@@ -1116,7 +1133,6 @@ class WsClient {
       throw StateError('session.resume succeeded without a result payload.');
     }
     final payload = Map<String, dynamic>.from(rawPayload);
-    _replayOpenServerRequests(payload);
     final runtimeSessionId = payload['session_id'] as String?;
     if (runtimeSessionId == null || runtimeSessionId.isEmpty) {
       throw StateError(
@@ -1133,43 +1149,15 @@ class WsClient {
       inflight: rawInflight is Map
           ? Map<String, dynamic>.from(rawInflight)
           : null,
+      openRequests: payload['open_requests'] is List
+          ? List<dynamic>.from(payload['open_requests'] as List)
+          : const [],
     );
   }
 
   /// Backward-compatible runtime-id-only resume helper.
   Future<String> resumeSession(String sessionId) async {
     return (await resumeSessionDetails(sessionId)).runtimeSessionId;
-  }
-
-  /// Re-delivers the questions a session was still waiting on when this client
-  /// last disconnected (`open_requests` in the `session.resume` result).
-  ///
-  /// Each entry is the original frame (`{id, method, params}`, plus any batch
-  /// answers the backend already locked), so a reconnected client restores a
-  /// pending approval / question card instead of leaving it stranded until the
-  /// backend's own timeout.
-  void _replayOpenServerRequests(Object? result) {
-    if (result is! Map) return;
-    final openRequests = result['open_requests'];
-    if (openRequests is! List) return;
-    for (final entry in openRequests) {
-      if (entry is! Map) continue;
-      final id = entry['id']?.toString().trim() ?? '';
-      final method = entry['method']?.toString().trim() ?? '';
-      final params = entry['params'];
-      if (id.isEmpty || method.isEmpty || params is! Map) continue;
-      try {
-        onServerRequest?.call(
-          GatewayServerRequest(
-            id: id,
-            method: method,
-            params: Map<String, dynamic>.from(params),
-          ),
-        );
-      } catch (_) {
-        // One bad entry must not stop the remaining replays.
-      }
-    }
   }
 
   Future<void> setSessionTitle(String sessionId, String title) async {
@@ -1245,9 +1233,6 @@ class WsClient {
     required String dataUrl,
     String path = '',
   }) async {
-    // `source_channel` / `source_profile` are NOT part of Hermes'
-    // `file.attach` contract: 0.21.3 validates params strictly and rejects
-    // extra inputs, so the provenance stays local instead of riding the wire.
     final params = <String, dynamic>{
       'session_id': sessionId,
       'name': name,

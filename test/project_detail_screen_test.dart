@@ -30,8 +30,8 @@ import 'package:hermes_android/core/services/projects_repository.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/project_detail_screen.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
-import 'support/l10n_test_utils.dart';
 
 Session _session({
   String id = 's1',
@@ -95,9 +95,9 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: hermesTheme(Brightness.dark),
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
       home: ProjectDetailScreen(
         projectId: projectId,
         projectName: projectName,

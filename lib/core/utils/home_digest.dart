@@ -15,7 +15,7 @@
 ///    the rest does not exist.
 library;
 
-import '../../l10n/app_localizations.dart';
+import 'package:hermes_android/core/l10n/l10n.dart';
 import '../models/session.dart';
 import '../theme/hermes_theme.dart';
 
@@ -34,30 +34,16 @@ enum HomeSectionKind {
   /// Work that finished inside the recent window.
   completedRecently;
 
-  String get title {
+  String title(AppLocalizations l10n) {
     switch (this) {
       case HomeSectionKind.needsYou:
-        return 'Needs you';
+        return l10n.needs_you;
       case HomeSectionKind.running:
-        return 'Running now';
+        return l10n.running_now;
       case HomeSectionKind.continueWorking:
-        return 'Continue working';
+        return l10n.continue_working;
       case HomeSectionKind.completedRecently:
-        return 'Recently completed';
-    }
-  }
-
-  /// Localized variant of [title] for UI call sites.
-  String titleLocalized(AppLocalizations l10n) {
-    switch (this) {
-      case HomeSectionKind.needsYou:
-        return l10n.homeSectionNeedsYou;
-      case HomeSectionKind.running:
-        return l10n.homeSectionRunning;
-      case HomeSectionKind.continueWorking:
-        return l10n.homeSectionWorking;
-      case HomeSectionKind.completedRecently:
-        return l10n.homeSectionCompleted;
+        return l10n.recently_completed;
     }
   }
 }
@@ -103,7 +89,7 @@ class HomeSection {
     required this.totalCount,
   });
 
-  String get title => kind.title;
+  String title(AppLocalizations l10n) => kind.title(l10n);
 
   /// How many matching sessions the cap hid.
   int get overflow => totalCount - items.length;

@@ -30,6 +30,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/inert_turn_application_session.dart';
 import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
 
 Session _session({required String id, required String title}) {
   return Session(
@@ -187,8 +189,8 @@ Future<void> _pump(
 
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: hermesTheme(Brightness.dark),
       home: WorkspaceScreen(
         connection: connection,
@@ -227,9 +229,10 @@ Future<void> _pump(
 /// A plain text finder is ambiguous: `Needs you` is also the label of the
 /// blocked [StatusChip] on each row, so matching raw text would pass for the
 /// wrong reason.
-Finder _sectionHeader(HomeSectionKind kind) => find.byWidgetPredicate(
-  (widget) => widget is SectionHeader && widget.title == kind.title,
-);
+Finder _sectionHeader(HomeSectionKind kind, AppLocalizations l10n) =>
+    find.byWidgetPredicate(
+      (widget) => widget is SectionHeader && widget.title == kind.title(l10n),
+    );
 
 /// A turn session a widget test can drive: captures the workspace's
 /// onSessionBound handler and fires it on demand, like the real coordinator
@@ -248,6 +251,11 @@ class _ControllableTurnSession extends InertTurnApplicationSession {
 }
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('surfaces the local spaces still waiting to be migrated', (
@@ -268,7 +276,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.projects.label).last);
+    await tester.tap(find.text(HermesDestination.projects.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(find.text('Review local spaces'), findsOneWidget);
@@ -286,7 +294,7 @@ void main() {
 
     expect(find.byType(HermesShell), findsOneWidget);
     for (final destination in HermesDestination.values) {
-      expect(find.text(destination.label), findsWidgets);
+      expect(find.text(destination.label(l10n)), findsWidgets);
     }
   });
 
@@ -303,7 +311,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
@@ -325,7 +333,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, 'Unassigned'));
     await tester.pumpAndSettle();
@@ -336,9 +344,9 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.text(HermesDestination.home.label).last);
+    await tester.tap(find.text(HermesDestination.home.label(l10n)).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(
@@ -364,7 +372,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(find.text('Hermes Android'), findsOneWidget);
@@ -391,7 +399,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.chats.label).last);
+    await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.pump(const Duration(seconds: 9));
 
@@ -533,43 +541,6 @@ void main() {
     // starting the chat issues no assignment RPC.
     expect(assignments, isEmpty);
     expect(opened.single.projectId, 'p1');
-    // Nothing is written when the chat opens: the project rides along to the
-    // chat, which anchors its gateway session to the project's folder.
-    expect(assignments, isEmpty);
-  });
-
-  testWidgets('a folderless Project opens with an honest unassigned notice', (
-    tester,
-  ) async {
-    // Android itself allows Projects that carry only a name, so there may be
-    // no folder to be born in. The chat still opens; the user is told plainly
-    // it went unassigned and what to do about it.
-    await _pump(
-      tester,
-      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-      repository: await _repository([
-        _projectJson(id: 'p1', name: 'Folderless', primaryPath: ''),
-      ]),
-      newChatSessionIdFactory: () => 'folderless-chat',
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text('Projects').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Folderless'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(kProjectNewChatButtonKey));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-
-    expect(
-      find.textContaining('no folder to open the chat in'),
-      findsOneWidget,
-    );
-
-    final chat = tester.widget<ChatScreen>(find.byType(ChatScreen));
-    expect(chat.projectName, 'Folderless');
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('a host callback suppresses the built-in project route', (
@@ -622,7 +593,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.activity.label).last);
+    await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(find.byType(ActivityPane), findsOneWidget);
@@ -643,7 +614,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HomePane), findsOneWidget);
-    expect(find.text(HomeSectionKind.continueWorking.title), findsOneWidget);
+    expect(find.text(HomeSectionKind.continueWorking.title(l10n)), findsOneWidget);
     expect(find.text('Roadmap slice'), findsOneWidget);
     // The placeholder it replaces must be gone, not merely pushed down.
     expect(find.textContaining('Home — Coming next'), findsNothing);
@@ -835,8 +806,8 @@ void main() {
     final repository = await _repository([]);
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         theme: hermesTheme(Brightness.dark),
         home: WorkspaceScreen(
           connection: _connection(desktopGatewayUrl: 'https://host:8642'),
@@ -910,8 +881,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         theme: hermesTheme(Brightness.dark),
         home: WorkspaceScreen(
           connection: _connection(desktopGatewayUrl: 'https://host:8642'),
@@ -957,7 +928,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
 
     expect(find.byType(MorePane), findsOneWidget);
@@ -987,7 +958,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unassigned chats'));
     await tester.pumpAndSettle();
@@ -1058,7 +1029,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Unassigned chats'));
     await tester.pumpAndSettle();
@@ -1078,7 +1049,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Files'));
     await tester.pumpAndSettle();
@@ -1097,7 +1068,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Open the Hermes dashboard'),
@@ -1128,7 +1099,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text(HermesDestination.more.label).last);
+    await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('Cron'),
@@ -1193,7 +1164,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.pumpWidget(const MaterialApp(home: SizedBox.shrink()));
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,home: SizedBox.shrink()));
     await tester.pumpAndSettle();
 
     // A screen that owns an injected repository must not close it: the host
@@ -1218,9 +1191,9 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_sectionHeader(HomeSectionKind.needsYou), findsOneWidget);
+      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsOneWidget);
       expect(find.text('Waiting for your input'), findsOneWidget);
-      expect(_sectionHeader(HomeSectionKind.continueWorking), findsNothing);
+      expect(_sectionHeader(HomeSectionKind.continueWorking, l10n), findsNothing);
     });
 
     testWidgets('a running turn ranks its chat under Running now', (
@@ -1236,8 +1209,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(_sectionHeader(HomeSectionKind.running), findsOneWidget);
-      expect(_sectionHeader(HomeSectionKind.continueWorking), findsNothing);
+      expect(_sectionHeader(HomeSectionKind.running, l10n), findsOneWidget);
+      expect(_sectionHeader(HomeSectionKind.continueWorking, l10n), findsNothing);
     });
 
     testWidgets('blocked work raises the Home badge', (tester) async {
@@ -1275,7 +1248,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Roadmap slice'), findsOneWidget);
-      expect(_sectionHeader(HomeSectionKind.continueWorking), findsOneWidget);
+      expect(_sectionHeader(HomeSectionKind.continueWorking, l10n), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -1310,7 +1283,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(_sectionHeader(HomeSectionKind.needsYou), findsOneWidget);
+      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsOneWidget);
 
       await tester.tap(find.text('Roadmap slice'));
       await tester.pumpAndSettle();
@@ -1318,8 +1291,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(reads, greaterThan(1));
-      expect(_sectionHeader(HomeSectionKind.needsYou), findsNothing);
-      expect(_sectionHeader(HomeSectionKind.continueWorking), findsOneWidget);
+      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsNothing);
+      expect(_sectionHeader(HomeSectionKind.continueWorking, l10n), findsOneWidget);
     });
 
     testWidgets('a legacy connection with no gateway reads no signals', (
@@ -1356,7 +1329,7 @@ void main() {
 
       expect(find.byKey(kWorkspaceNewChatButtonKey), findsOneWidget);
 
-      await tester.tap(find.text(HermesDestination.chats.label).last);
+      await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(find.byKey(kWorkspaceNewChatButtonKey), findsOneWidget);
@@ -1373,12 +1346,12 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.more.label).last);
+      await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(find.byKey(kWorkspaceNewChatButtonKey), findsNothing);
 
-      await tester.tap(find.text(HermesDestination.projects.label).last);
+      await tester.tap(find.text(HermesDestination.projects.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(find.byKey(kWorkspaceNewChatButtonKey), findsNothing);
@@ -1401,8 +1374,8 @@ void main() {
       await tester.pumpAndSettle();
 
       for (final mode in NewChatMode.values) {
-        expect(find.text(mode.label), findsOneWidget);
-        expect(find.text(mode.description), findsOneWidget);
+        expect(find.text(mode.label(l10n)), findsOneWidget);
+        expect(find.text(mode.description(l10n)), findsOneWidget);
       }
     });
 
@@ -1416,10 +1389,10 @@ void main() {
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
 
-      expect(find.text(NewChatMode.projectChat.label), findsOneWidget);
+      expect(find.text(NewChatMode.projectChat.label(l10n)), findsOneWidget);
       final blocked = tester.widget<ListTile>(
         find.ancestor(
-          of: find.text(NewChatMode.projectChat.label),
+          of: find.text(NewChatMode.projectChat.label(l10n)),
           matching: find.byType(ListTile),
         ),
       );
@@ -1427,7 +1400,7 @@ void main() {
 
       final quick = tester.widget<ListTile>(
         find.ancestor(
-          of: find.text(NewChatMode.quickChat.label),
+          of: find.text(NewChatMode.quickChat.label(l10n)),
           matching: find.byType(ListTile),
         ),
       );
@@ -1448,7 +1421,7 @@ void main() {
 
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.quickChat.label));
+      await tester.tap(find.text(NewChatMode.quickChat.label(l10n)));
       await tester.pumpAndSettle();
 
       expect(opened, hasLength(1));
@@ -1473,7 +1446,7 @@ void main() {
       expect(opened, hasLength(1));
       expect(opened.single.isQuick, isTrue);
       expect(opened.single.projectId, isNull);
-      expect(find.text(NewChatMode.quickChat.label), findsNothing);
+      expect(find.text(NewChatMode.quickChat.label(l10n)), findsNothing);
     });
 
     testWidgets('a project chat asks which project and carries it', (
@@ -1496,7 +1469,7 @@ void main() {
 
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.projectChat.label));
+      await tester.tap(find.text(NewChatMode.projectChat.label(l10n)));
       await tester.pumpAndSettle();
 
       expect(find.text('ScriptHive'), findsOneWidget);
@@ -1534,11 +1507,9 @@ void main() {
 
         await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.text(NewChatMode.projectChat.label));
+        await tester.tap(find.text(NewChatMode.projectChat.label(l10n)));
         await tester.pumpAndSettle();
 
-        // The folder rides on the draft so the chat it opens is born inside
-        // the project — nothing has to be written to file it.
         expect(opened, hasLength(1));
         expect(opened.single.session.id, 'stock-project-chat');
         expect(opened.single.projectId, 'p1');
@@ -1571,7 +1542,7 @@ void main() {
 
         await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.text(NewChatMode.projectChat.label));
+        await tester.tap(find.text(NewChatMode.projectChat.label(l10n)));
         await tester.pumpAndSettle();
 
         expect(opened, hasLength(1));
@@ -1599,7 +1570,7 @@ void main() {
 
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.projectChat.label));
+      await tester.tap(find.text(NewChatMode.projectChat.label(l10n)));
       await tester.pumpAndSettle();
 
       expect(opened, hasLength(1));
@@ -1619,7 +1590,7 @@ void main() {
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
       Navigator.of(
-        tester.element(find.text(NewChatMode.quickChat.label)),
+        tester.element(find.text(NewChatMode.quickChat.label(l10n))),
       ).pop();
       await tester.pumpAndSettle();
 
@@ -1640,7 +1611,7 @@ void main() {
       for (var i = 0; i < 2; i++) {
         await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
         await tester.pumpAndSettle();
-        await tester.tap(find.text(NewChatMode.quickChat.label));
+        await tester.tap(find.text(NewChatMode.quickChat.label(l10n)));
         await tester.pumpAndSettle();
       }
 
@@ -1656,7 +1627,7 @@ void main() {
 
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.quickChat.label));
+      await tester.tap(find.text(NewChatMode.quickChat.label(l10n)));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
@@ -1808,11 +1779,11 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.activity.label).last);
+      await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(find.byType(ActivityPane), findsOneWidget);
-      expect(find.text(ActivityGroupKind.running.title), findsOneWidget);
+      expect(find.text(ActivityGroupKind.running.title(l10n)), findsOneWidget);
       expect(find.text('Deploy ScriptHive'), findsOneWidget);
       expect(find.textContaining('Coming next'), findsNothing);
     });
@@ -1843,7 +1814,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.activity.label).last);
+      await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(seen, isNotEmpty);
@@ -1881,7 +1852,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.activity.label).last);
+      await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Roadmap slice'));
       await tester.pumpAndSettle();
@@ -1923,7 +1894,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.activity.label).last);
+      await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Untitled chat'));
       await tester.pumpAndSettle();
@@ -1979,14 +1950,14 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text(HermesDestination.activity.label).last);
+      await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
 
       expect(find.byType(ErrorState), findsOneWidget);
       expect(tester.takeException(), isNull);
 
       // The rest of the shell must keep working while Activity is broken.
-      await tester.tap(find.text(HermesDestination.more.label).last);
+      await tester.tap(find.text(HermesDestination.more.label(l10n)).last);
       await tester.pumpAndSettle();
       expect(find.byType(MorePane), findsOneWidget);
     });
@@ -2018,7 +1989,7 @@ void main() {
 
       await tester.tap(find.byKey(kWorkspaceNewChatButtonKey));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(NewChatMode.projectChat.label));
+      await tester.tap(find.text(NewChatMode.projectChat.label(l10n)));
       await tester.pumpAndSettle();
 
       // A single Project skips the picker and opens the chat directly.

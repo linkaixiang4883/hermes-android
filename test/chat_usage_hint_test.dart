@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fake_voice_composer_adapter.dart';
-import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/core/l10n/l10n.dart';
 
 const _kUsageSse = 'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
     'data: {"usage":{"prompt_tokens":120,"completion_tokens":45,"total_tokens":165}}\n\n'
@@ -57,8 +57,8 @@ Future<void> _pumpChat(
   );
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: preferredSupportedLocales(),
       home: ChatScreen(
         connection: SavedConnection(
           id: 'usage-fixture',

@@ -6,10 +6,7 @@ import 'package:hermes_android/core/services/gateway_turn_recovery.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/utils/activity_feed.dart';
 import 'package:hermes_android/l10n/app_localizations.dart';
-
-/// English copy for feed-builder tests (mirrors the app wiring).
-AppLocalizations _enL10n() =>
-    lookupAppLocalizations(const Locale('en'));
+import 'support/l10n_test_utils.dart';
 
 const _digestA =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -87,7 +84,7 @@ ActivityFeed _feed(
   return buildActivityFeed(
     snapshot: GatewayTurnJournalSnapshot(bindings: bindings, entries: entries),
     now: now ?? _now,
-    l10n: _enL10n(),
+    l10n: lookupAppLocalizations(const Locale('en')),
     connectionId: connectionId,
     endpointDigest: endpointDigest,
     sessionTitles: sessionTitles,
@@ -99,6 +96,11 @@ ActivityGroup _group(ActivityFeed feed, ActivityGroupKind kind) =>
     feed.groups.firstWhere((group) => group.kind == kind);
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   test('an empty journal produces an empty feed rather than empty groups', () {
     final feed = _feed(const [], const []);
 
@@ -135,7 +137,7 @@ void main() {
       ActivityGroupKind.failed,
       ActivityGroupKind.completed,
     ]);
-    expect(feed.groups.map((group) => group.title), [
+    expect(feed.groups.map((group) => group.title(l10n)), [
       'Needs you',
       'Running now',
       'Failed',
@@ -539,7 +541,11 @@ void main() {
       entries: entries,
     );
 
-    buildActivityFeed(snapshot: snapshot, now: _now, l10n: _enL10n());
+    buildActivityFeed(
+      snapshot: snapshot,
+      now: _now,
+      l10n: lookupAppLocalizations(const Locale('en')),
+    );
 
     expect(identical(snapshot.entries, entries), isTrue);
     expect(snapshot.entries, hasLength(1));

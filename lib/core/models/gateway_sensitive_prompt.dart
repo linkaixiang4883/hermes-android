@@ -1,3 +1,5 @@
+import 'package:hermes_android/l10n/app_localizations.dart';
+
 enum GatewaySensitivePromptKind { sudo, secret }
 
 /// A request-ID keyed password or secret prompt emitted by Hermes.
@@ -11,25 +13,18 @@ class GatewaySensitivePromptRequest {
   final String description;
   final String fieldLabel;
 
-  /// The backend request id (`srq-…`) when this prompt arrived as a
-  /// server→client request (Hermes 0.21.3+). Answers go back as a response
-  /// frame (`{value}`, '' = skipped) for that id; `null` for the legacy
-  /// `sudo.request` / `secret.request` events.
-  final String? serverRequestId;
-
   const GatewaySensitivePromptRequest({
     required this.kind,
     required this.requestId,
     required this.title,
     required this.description,
     required this.fieldLabel,
-    this.serverRequestId,
   });
 
   static GatewaySensitivePromptRequest? fromEventData({
     required GatewaySensitivePromptKind kind,
     required Map<String, dynamic> data,
-    String? serverRequestId,
+    AppLocalizations? l10n,
   }) {
     final requestId = data['request_id']?.toString().trim() ?? '';
     if (requestId.isEmpty) return null;
@@ -38,11 +33,11 @@ class GatewaySensitivePromptRequest {
       return GatewaySensitivePromptRequest(
         kind: kind,
         requestId: requestId,
-        title: 'Administrator password needed',
+        title: l10n?.admin_password_needed ?? 'Administrator password needed',
         description:
+            l10n?.hermes_needs_a_sudo_password_for_the_pending_terminal_command ??
             'Hermes needs a sudo password for the pending terminal command.',
-        fieldLabel: 'Sudo password',
-        serverRequestId: serverRequestId,
+        fieldLabel: l10n?.sudo_password ?? 'Sudo password',
       );
     }
 
@@ -51,12 +46,14 @@ class GatewaySensitivePromptRequest {
     return GatewaySensitivePromptRequest(
       kind: kind,
       requestId: requestId,
-      title: envVar.isEmpty ? 'Secret needed' : envVar,
+      title: envVar.isEmpty ? (l10n?.secret_needed ?? 'Secret needed') : envVar,
       description: prompt.isEmpty
-          ? 'Hermes needs a secret for the pending skill.'
+          ? (l10n?.hermes_needs_a_secret_for_the_pending_skill ??
+                'Hermes needs a secret for the pending skill.')
           : prompt,
-      fieldLabel: envVar.isEmpty ? 'Secret value' : envVar,
-      serverRequestId: serverRequestId,
+      fieldLabel: envVar.isEmpty
+          ? (l10n?.secret_value ?? 'Secret value')
+          : envVar,
     );
   }
 }

@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/app_localizations.dart';
-import '../../l10n/l10n.dart';
 import '../theme/hermes_theme.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 /// Transport state shown in the sticky chat context header.
 enum ChatConnectionStatus {
   connecting('connecting'),
@@ -58,7 +57,7 @@ class ChatContextHeader extends StatelessWidget {
               _ContextChip(
                 icon: Icons.folder_outlined,
                 label: project == null || project.isEmpty
-                    ? context.l10n.spaceUnassigned
+                    ? context.l10n.unassigned
                     : project,
               ),
               const SizedBox(width: HermesSpacing.sm),
@@ -66,11 +65,14 @@ class ChatContextHeader extends StatelessWidget {
               const SizedBox(width: HermesSpacing.sm),
               _ContextChip(
                 icon: Icons.psychology_outlined,
-                label: _reasoningLabel(context.l10n, reasoningEffort),
+                label: _reasoningLabel(context, reasoningEffort),
               ),
               const SizedBox(width: HermesSpacing.sm),
               Semantics(
-                label: '$connectionLabel ${connectionStatus.label}',
+                label: context.l10n.connection_status_label(
+                  connectionLabel,
+                  connectionStatus.label,
+                ),
                 container: true,
                 child: ExcludeSemantics(
                   child: _ContextChip(
@@ -97,10 +99,19 @@ class ChatContextHeader extends StatelessWidget {
     };
   }
 
-  String _reasoningLabel(AppLocalizations l10n, String value) {
+  String _reasoningLabel(BuildContext context, String value) {
     final normalized = value.trim().toLowerCase();
-    if (normalized.isEmpty || normalized == 'none') return l10n.offLabel;
-    return normalized[0].toUpperCase() + normalized.substring(1);
+    return switch (normalized) {
+      '' || 'none' => context.l10n.reasoning_off,
+      'minimal' => context.l10n.reasoning_minimal,
+      'low' => context.l10n.reasoning_low,
+      'medium' => context.l10n.reasoning_medium,
+      'high' => context.l10n.reasoning_high,
+      'xhigh' => context.l10n.extra_high,
+      'max' => context.l10n.reasoning_max,
+      'ultra' => context.l10n.reasoning_ultra,
+      _ => value,
+    };
   }
 }
 

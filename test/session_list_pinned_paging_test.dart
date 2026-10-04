@@ -25,6 +25,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/inert_turn_application_session.dart';
 import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
 
 const _now = 1750000000.0;
 
@@ -229,6 +231,11 @@ SavedConnection _connection(String id) => SavedConnection(
 );
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   group('SessionListScreen paging vs pinned back-fill', () {
@@ -247,8 +254,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: l10nTestDelegates,
-          supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           home: SessionListScreen(
             connection: _connection('paging-1'),
             turnApplicationController: controller,
@@ -337,8 +344,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: l10nTestDelegates,
-            supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
             home: SessionListScreen(
               connection: _connection('paging-inwin'),
               turnApplicationController: controller,
@@ -405,8 +412,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: l10nTestDelegates,
-          supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           home: SessionListScreen(
             connection: _connection('paging-inwin-later'),
             turnApplicationController: controller,
@@ -485,8 +492,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: l10nTestDelegates,
-            supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
             home: SessionListScreen(
               connection: _connection('paging-pinonly'),
               turnApplicationController: controller,
@@ -572,8 +579,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: l10nTestDelegates,
-            supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
             home: SessionListScreen(
               connection: _connection('paging-generation'),
               turnApplicationController: controller,
@@ -667,8 +674,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: l10nTestDelegates,
-          supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           theme: hermesTheme(Brightness.dark),
           home: WorkspaceScreen(
             connection: _connection('paging-2'),
@@ -680,7 +687,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Open the Chats browser over the same paged list.
-      await tester.tap(find.text(HermesDestination.chats.label).last);
+      await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
       await tester.pumpAndSettle();
       expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
 
@@ -799,8 +806,8 @@ void main() {
 
         await tester.pumpWidget(
           MaterialApp(
-            localizationsDelegates: l10nTestDelegates,
-            supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
             theme: hermesTheme(Brightness.dark),
             home: WorkspaceScreen(
               connection: _connection('paging-inwin-home'),
@@ -811,7 +818,7 @@ void main() {
         );
         await tester.pumpAndSettle();
 
-        await tester.tap(find.text(HermesDestination.chats.label).last);
+        await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
         await tester.pumpAndSettle();
         expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
 

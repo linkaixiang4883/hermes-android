@@ -7,9 +7,9 @@
 //
 // API: GET /api/config returns the full config including memory.
 import 'package:flutter/material.dart';
-import '../../l10n/l10n.dart';
 import '../services/connection_manager.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 class MemoryScreen extends StatefulWidget {
   final SavedConnection connection;
   const MemoryScreen({required this.connection, super.key});
@@ -114,10 +114,10 @@ class _MemoryScreenState extends State<MemoryScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(context.l10n.memoryTab),
+            Text(context.l10n.memory),
             if (_source != null)
               Text(
-                context.l10n.sourceLabel(_source ?? ''),
+                context.l10n.source(_source ?? ''),
                 style: const TextStyle(fontSize: 11, color: Colors.grey),
               ),
           ],
@@ -148,7 +148,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
               const Icon(Icons.error_outline, size: 48, color: Colors.orange),
               const SizedBox(height: 16),
               Text(
-                context.l10n.failedToLoadMemory,
+                context.l10n.failed_to_load_memory,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
               const SizedBox(height: 8),
@@ -176,12 +176,12 @@ class _MemoryScreenState extends State<MemoryScreen> {
             Icon(Icons.psychology, size: 48, color: Colors.grey),
             const SizedBox(height: 16),
             Text(
-              context.l10n.noMemoryEntries,
+              context.l10n.no_memory_entries,
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 8),
             Text(
-              context.l10n.memoryHelp,
+              context.l10n.memory_entries_are_cross_session_facts_the_agent_remembers_they,
               textAlign: TextAlign.center,
               style: Theme.of(
                 context,
@@ -214,12 +214,7 @@ class _MemoryScreenState extends State<MemoryScreen> {
                       Chip(
                         label: Text(
                           target,
-                          // Chip 背景是深色（blue/grey.shade800），必须显式浅色字，
-                          // 否则跟随主题的默认深色字会糊进背景里看不见。
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Colors.white,
-                          ),
+                          style: const TextStyle(fontSize: 11),
                         ),
                         padding: EdgeInsets.zero,
                         visualDensity: VisualDensity.compact,

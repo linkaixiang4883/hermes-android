@@ -157,12 +157,12 @@ String? _attentionReason(AppLocalizations l10n, GatewayTurnJournalEntry entry) {
   // A recovery failure outranks the reported status: the turn may well have
   // completed server-side, but the client could not reconcile it and the
   // composer stays blocked, which is exactly what Home must surface.
-  if (entry.failure != null) return l10n.attentionRecoveryFailed;
+  if (entry.failure != null) return l10n.turn_recovery_failed;
   switch (entry.status) {
     case GatewayRecoveryTurnStatus.waitingInput:
-      return l10n.attentionWaitingInput;
+      return l10n.waiting_for_your_input;
     case GatewayRecoveryTurnStatus.failed:
-      return l10n.attentionLastFailed;
+      return l10n.the_last_turn_failed;
     case GatewayRecoveryTurnStatus.accepted:
     case GatewayRecoveryTurnStatus.running:
     case GatewayRecoveryTurnStatus.completed:

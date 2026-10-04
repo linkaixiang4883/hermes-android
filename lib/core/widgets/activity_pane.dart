@@ -24,11 +24,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/activity_feed.dart';
 import 'hermes_components.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 /// Reads the timeline. Injectable so the pane can be tested — and later
 /// re-pointed at a cache or a gateway feed — without reaching for a journal.
 typedef ActivityFeedLoader = Future<ActivityFeed> Function();
@@ -114,8 +114,9 @@ class ActivityPaneState extends State<ActivityPane> {
     if (feed == null) {
       if (_error != null) {
         return ErrorState(
-          title: context.l10n.activityUnreadable,
-          message: context.l10n.activityJournalHint,
+          title: context.l10n.could_not_read_activity,
+          message:
+              context.l10n.activity_reads_the_durable_turn_journal_to_know_what_hermes,
           onRetry: _load,
         );
       }
@@ -152,11 +153,11 @@ class ActivityPaneState extends State<ActivityPane> {
                     ? Icons.inbox_outlined
                     : Icons.bolt_outlined,
                 title: widget.actionableOnly
-                    ? context.l10n.inboxClear
-                    : context.l10n.activityNothingRunning,
+                    ? context.l10n.inbox_is_clear
+                    : context.l10n.nothing_is_running,
                 message: widget.actionableOnly
-                    ? context.l10n.activityNoAttention
-                    : context.l10n.activityEmptyHint,
+                    ? context.l10n.no_turn_needs_your_input_or_has_failed
+                    : context.l10n.no_turn_is_blocked_in_flight_or_recently_finished_work,
               ),
             )
           else
@@ -169,7 +170,7 @@ class ActivityPaneState extends State<ActivityPane> {
   List<Widget> _group(ActivityGroup group) {
     return [
       SectionHeader(
-        title: group.kind.titleLocalized(context.l10n),
+        title: group.title(context.l10n),
         count: group.totalCount,
       ),
       for (final item in group.items)
@@ -211,7 +212,7 @@ class _OverflowNote extends StatelessWidget {
         HermesSpacing.lg,
       ),
       child: Text(
-        context.l10n.andCountMore(count),
+        context.l10n.and_more(count),
         style: tokens.typography.label.copyWith(color: tokens.muted),
       ),
     );
@@ -241,7 +242,7 @@ class _OfflineBanner extends StatelessWidget {
             const SizedBox(width: HermesSpacing.sm),
             Expanded(
               child: Text(
-                context.l10n.offlineShowingLastKnown,
+                context.l10n.offline_showing_the_last_known_activity,
                 style: tokens.typography.label.copyWith(color: tokens.muted),
               ),
             ),
@@ -281,9 +282,7 @@ class _ActivityItemCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  title == null || title.isEmpty
-                      ? context.l10n.untitledChat
-                      : title,
+                  title == null || title.isEmpty ? context.l10n.untitled_chat : title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: tokens.typography.section.copyWith(
@@ -310,7 +309,7 @@ class _ActivityItemCard extends StatelessWidget {
               ),
               const SizedBox(width: HermesSpacing.sm),
               Text(
-                formatActivityAge(item.updatedAt, now),
+                formatActivityAge(context.l10n, item.updatedAt, now),
                 style: tokens.typography.label.copyWith(color: tokens.muted),
               ),
             ],
@@ -327,10 +326,14 @@ class _ActivityItemCard extends StatelessWidget {
 /// first-class part of the presentation rather than a decoration. A timestamp
 /// ahead of [now] — a skewed device clock — reads as `now` rather than as a
 /// negative duration.
-String formatActivityAge(DateTime updatedAt, DateTime now) {
+String formatActivityAge(
+  AppLocalizations l10n,
+  DateTime updatedAt,
+  DateTime now,
+) {
   final elapsed = now.difference(updatedAt);
-  if (elapsed.isNegative || elapsed.inMinutes < 1) return 'now';
-  if (elapsed.inMinutes < 60) return '${elapsed.inMinutes}m ago';
-  if (elapsed.inHours < 24) return '${elapsed.inHours}h ago';
-  return '${elapsed.inDays}d ago';
+  if (elapsed.isNegative || elapsed.inMinutes < 1) return l10n.now_label;
+  if (elapsed.inMinutes < 60) return l10n.minutes_ago(elapsed.inMinutes);
+  if (elapsed.inHours < 24) return l10n.hours_ago(elapsed.inHours);
+  return l10n.days_ago(elapsed.inDays);
 }

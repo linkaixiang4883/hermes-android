@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_activity.dart';
 import 'package:hermes_android/core/widgets/gateway_activity_card.dart';
-import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
 void main() {
   group('GatewayToolActivity', () {
@@ -112,8 +112,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: GatewayActivityCard(
               activities: [
@@ -141,8 +141,8 @@ void main() {
     ) async {
       await tester.pumpWidget(
         MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: GatewayActivityCard(
               verbose: true,
@@ -173,8 +173,8 @@ void main() {
           'Line two with additional context. Line three. Line four.';
       await tester.pumpWidget(
         MaterialApp(
-          localizationsDelegates: l10nTestDelegates,
-          supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: GatewayActivityCard(
               verbose: true,

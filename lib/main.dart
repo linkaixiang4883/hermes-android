@@ -2,8 +2,6 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'l10n/app_localizations.dart';
-import 'l10n/l10n.dart';
 import 'core/services/android_launch_intent_service.dart';
 import 'core/services/android_share_intent_service.dart';
 import 'core/services/config_backup.dart';
@@ -17,6 +15,7 @@ import 'core/theme/hermes_theme.dart';
 import 'core/utils/responsive.dart';
 import 'core/widgets/config_backup_card.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final prefs = await SharedPreferences.getInstance();
@@ -72,65 +71,77 @@ class _StartupRecoveryApp extends StatelessWidget {
     return MaterialApp(
       key: _rootKey,
       debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.storage_rounded, size: 48),
-                const SizedBox(height: 16),
-                Text(
-                  context.l10n.couldNotLoadSavedConnections,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: preferredSupportedLocales(),
+      localeListResolutionCallback: resolvePreferredLocale,
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.storage_rounded, size: 48),
+                  const SizedBox(height: 16),
+                  Text(
+                    context.l10n.hermes_could_not_load_your_saved_connections,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  context.l10n.damagedConnectionStore(
-                    '${error.runtimeType}',
+                  const SizedBox(height: 8),
+                  Text(
+                    context.l10n.the_local_connection_store_looks_damaged_you_can_reset_the(
+                      error.runtimeType,
+                    ),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 13),
                   ),
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 13),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () async {
-                    await prefs.remove('saved_connections');
-                    try {
-                      final retry = await ConnectionManager.create(prefs);
-                      runApp(
-                        HermesApp(
-                          connManager: retry,
-                          shareIntents: shareIntents,
-                          launchIntents: launchIntents,
-                        ),
-                      );
-                    } catch (retryError) {
-                      // Re-read the key after the await: the recovery
-                      // screen may already have been replaced by the
-                      // retried app.
-                      final context = _rootKey.currentContext;
-                      if (context != null) {
-                        // ignore: use_build_context_synchronously
-                        final message = context.l10n.resetConnectionsFailed(
-                          '$retryError',
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () async {
+                      await prefs.remove('saved_connections');
+                      try {
+                        final retry = await ConnectionManager.create(prefs);
+                        runApp(
+                          HermesApp(
+                            connManager: retry,
+                            shareIntents: shareIntents,
+                            launchIntents: launchIntents,
+                          ),
                         );
-                        // ignore: use_build_context_synchronously
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(message)),
-                        );
+                      } catch (retryError) {
+                        // Re-read the key after the await: the recovery
+                        // screen may already have been replaced by the
+                        // retried app.
+                        final rootContext = _rootKey.currentContext;
+                        if (rootContext != null) {
+                          // The context is re-read from the root key after
+                          // the await and null-checked immediately above.
+                          // ignore: use_build_context_synchronously
+                          ScaffoldMessenger.of(rootContext).showSnackBar(
+                            SnackBar(
+                              content: Builder(
+                                builder: (snackContext) => Text(
+                                  snackContext.l10n
+                                      .reset_failed_the_secure_storage_may_need_reinstall(
+                                        retryError,
+                                      ),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                       }
-                    }
-                  },
-                  icon: const Icon(Icons.restart_alt),
-                  label: Text(context.l10n.resetSavedConnections),
-                ),
-              ],
+                    },
+                    icon: const Icon(Icons.restart_alt),
+                    label: Text(context.l10n.reset_saved_connections),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -180,22 +191,6 @@ class HermesApp extends StatefulWidget {
   static TextSizePreference getTextSizePreference(SharedPreferences prefs) {
     return TextSizePreferenceStore(prefs).read();
   }
-
-  /// Resolves the explicit app locale, or `null` to follow the system locale.
-  /// Mirrors [getThemeMode]: `'system'` (default) keeps the device language.
-  static Locale? getLocale(SharedPreferences prefs) {
-    final stored = prefs.getString('app_locale') ?? 'system';
-    return switch (stored) {
-      'en' => const Locale('en'),
-      'zh' => const Locale('zh'),
-      _ => null,
-    };
-  }
-
-  /// Persists the app language preference. Same pattern as [setThemeMode].
-  static Future<void> setLocale(SharedPreferences prefs, String locale) async {
-    await prefs.setString('app_locale', locale);
-  }
 }
 
 class HermesAppState extends State<HermesApp> {
@@ -212,24 +207,16 @@ class HermesAppState extends State<HermesApp> {
     if (mounted) setState(() {});
   }
 
-  /// Persists the app language and rebuilds [MaterialApp] with the new
-  /// [locale], so labels switch immediately — same pattern as
-  /// [setTextSizePreference] and the theme toggle.
-  Future<void> setLocale(String locale) async {
-    await HermesApp.setLocale(widget.connManager.prefs, locale);
-    if (mounted) setState(() {});
-  }
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Hermes Agent',
+      onGenerateTitle: (context) => context.l10n.hermes_agent,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: preferredSupportedLocales(),
+      localeListResolutionCallback: resolvePreferredLocale,
       themeMode: HermesApp.getThemeMode(widget.connManager.prefs),
       theme: hermesTheme(Brightness.light),
       darkTheme: hermesTheme(Brightness.dark),
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      locale: HermesApp.getLocale(widget.connManager.prefs),
       builder: (context, child) {
         final systemMediaQuery = MediaQuery.of(context);
         final preference = HermesApp.getTextSizePreference(
@@ -384,7 +371,7 @@ class HomeScreenState extends State<HomeScreen> {
   void _showRestoreError(Object error) {
     final message = error is ConfigBackupException
         ? error.message
-        : 'The backup could not be restored.';
+        : context.l10n.the_backup_could_not_be_restored;
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -565,7 +552,7 @@ class HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(context.l10n.updateApiKey),
+          title: Text(context.l10n.update_api_key),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -604,8 +591,8 @@ class HomeScreenState extends State<HomeScreen> {
               TextField(
                 controller: ctrl,
                 decoration: InputDecoration(
-                  labelText: context.l10n.apiKeyField,
-                  hintText: context.l10n.apiKeyHint,
+                  labelText: context.l10n.api_key,
+                  hintText: context.l10n.api_server_key_from_hermes_env,
                 ),
                 obscureText: true,
                 enabled: !validating,
@@ -654,13 +641,13 @@ class HomeScreenState extends State<HomeScreen> {
                       } on CredentialStorageException {
                         if (!ctx.mounted) return;
                         setDialogState(() {
-                          error = ctx.l10n.apiKeyNotStoredSecurely;
+                          error = context.l10n.the_api_key_could_not_be_stored_securely;
                           validating = false;
                         });
                       } catch (_) {
                         if (!ctx.mounted) return;
                         setDialogState(() {
-                          error = ctx.l10n.cannotReachHostPort(conn.host, conn.port);
+                          error = context.l10n.cannot_reach(conn.host, conn.port);
                           validating = false;
                         });
                       }
@@ -702,7 +689,7 @@ class HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(context.l10n.dashboardProxySettings),
+          title: Text(context.l10n.dashboard_proxy_settings),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -710,10 +697,7 @@ class HomeScreenState extends State<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: Text(
-                    'Used for hosted path prefixes and for the Settings, '
-                    'Memory, Skills and Cron tabs. Leave username/password '
-                    'blank for an open dashboard, or enable proxied mode when '
-                    'your reverse proxy injects dashboard auth.',
+                    context.l10n.used_for_hosted_path_prefixes_and_for_the_settings_memory,
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
                   ),
                 ),
@@ -752,8 +736,8 @@ class HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: gatewayPrefixCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.gatewayPathPrefix,
-                    hintText: context.l10n.egGatewayPrefix,
+                    labelText: context.l10n.gateway_path_prefix,
+                    hintText: context.l10n.e_g_profile_peter,
                   ),
                   autocorrect: false,
                   enabled: !validating,
@@ -762,8 +746,8 @@ class HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: dashboardPrefixCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.dashboardPathPrefix,
-                    hintText: context.l10n.egDashboardPrefix,
+                    labelText: context.l10n.dashboard_path_prefix,
+                    hintText: context.l10n.e_g_dashboard,
                   ),
                   autocorrect: false,
                   enabled: !validating,
@@ -772,9 +756,9 @@ class HomeScreenState extends State<HomeScreen> {
                 SwitchListTile(
                   value: proxied,
                   contentPadding: EdgeInsets.zero,
-                  title: Text(context.l10n.dashboardBehindProxy),
-                  subtitle: const Text(
-                    'Proxy injects auth; app sends clean requests',
+                  title: Text(context.l10n.dashboard_behind_proxy),
+                  subtitle: Text(
+                    context.l10n.proxy_injects_auth_app_sends_clean_requests,
                   ),
                   onChanged: validating
                       ? null
@@ -784,8 +768,8 @@ class HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: portCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.dashboardPort,
-                    hintText: context.l10n.dashboardPortHint,
+                    labelText: context.l10n.dashboard_port,
+                    hintText: context.l10n.leave_blank_for_default_9119,
                   ),
                   keyboardType: TextInputType.number,
                   enabled: !validating,
@@ -794,7 +778,7 @@ class HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: userCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.usernameOptional,
+                    labelText: context.l10n.username_optional,
                   ),
                   autocorrect: false,
                   enabled: !validating,
@@ -803,7 +787,7 @@ class HomeScreenState extends State<HomeScreen> {
                 TextField(
                   controller: passCtrl,
                   decoration: InputDecoration(
-                    labelText: context.l10n.passwordOptional,
+                    labelText: context.l10n.password_optional,
                   ),
                   obscureText: true,
                   enabled: !validating,
@@ -825,7 +809,7 @@ class HomeScreenState extends State<HomeScreen> {
                           ? null
                           : int.tryParse(portText);
                       if (portText.isNotEmpty && (port == null || port <= 0)) {
-                        setDialogState(() => error = 'Invalid port number.');
+                        setDialogState(() => error = context.l10n.invalid_port_number);
                         return;
                       }
                       final user = userCtrl.text.trim();
@@ -886,17 +870,19 @@ class HomeScreenState extends State<HomeScreen> {
                         client.close();
                         if (!ctx.mounted) return;
                         setDialogState(() {
-                          error = ctx.l10n.dashboardCredsNotStoredSecurely;
+                          error =
+                              context.l10n.the_dashboard_credentials_could_not_be_stored_securely;
                           validating = false;
                         });
                       } catch (_) {
                         client.close();
                         if (!ctx.mounted) return;
                         setDialogState(() {
-                          error = ctx.l10n.couldNotReachDashboardAt(
-                            conn.host,
-                            port ?? conn.dashboardPort,
-                          );
+                          error =
+                              context.l10n.could_not_reach_authenticate_the_dashboard_at_check_the_port(
+                                port ?? conn.dashboardPort,
+                                conn.host,
+                              );
                           validating = false;
                         });
                       }
@@ -931,8 +917,10 @@ class HomeScreenState extends State<HomeScreen> {
         leading: const Icon(Icons.router, color: Color(0xFFD4AF37)),
         title: Text(conn.label),
         subtitle: Text(
-          '${conn.host}:${conn.port}${conn.gatewayPrefix != null && conn.gatewayPrefix!.isNotEmpty ? conn.gatewayPrefix! : ''}'
-          '  • ${context.l10n.key}: ${conn.apiKey.isNotEmpty ? "✓" : "✗"}',
+          context.l10n.connection_address_key(
+            '${conn.host}:${conn.port}${conn.gatewayPrefix != null && conn.gatewayPrefix!.isNotEmpty ? conn.gatewayPrefix! : ''}',
+            conn.apiKey.isNotEmpty ? "\u2713" : "\u2717",
+          ),
           style: TextStyle(color: Colors.grey[600]),
         ),
         trailing: PopupMenuButton<String>(
@@ -945,7 +933,9 @@ class HomeScreenState extends State<HomeScreen> {
                 if (!mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
-                    content: Text(context.l10n.connectionNotDeletedSafely),
+                    content: Text(
+                      context.l10n.the_connection_could_not_be_deleted_safely,
+                    ),
                   ),
                 );
               }
@@ -958,11 +948,11 @@ class HomeScreenState extends State<HomeScreen> {
             }
           },
           itemBuilder: (_) => [
-            PopupMenuItem(value: 'edit', child: Text(context.l10n.editConnection)),
-            PopupMenuItem(value: 'apikey', child: Text(context.l10n.updateApiKey)),
+            PopupMenuItem(value: 'edit', child: Text(context.l10n.edit_connection)),
+            PopupMenuItem(value: 'apikey', child: Text(context.l10n.update_api_key)),
             PopupMenuItem(
               value: 'dashboard',
-              child: Text(context.l10n.dashboardProxySettings),
+              child: Text(context.l10n.dashboard_proxy_settings),
             ),
             PopupMenuItem(
               value: 'delete',
@@ -993,7 +983,7 @@ class HomeScreenState extends State<HomeScreen> {
           if (_connections.isNotEmpty)
             IconButton(
               key: const Key('home_restore_config_menu'),
-              tooltip: context.l10n.restoreConfiguration,
+              tooltip: context.l10n.restore_configuration,
               onPressed: _showRestoreConfig,
               icon: const Icon(Icons.settings_backup_restore),
             ),
@@ -1007,12 +997,12 @@ class HomeScreenState extends State<HomeScreen> {
                   Icon(Icons.cloud_outlined, size: 64, color: Colors.grey[800]),
                   const SizedBox(height: 16),
                   Text(
-                    context.l10n.noConnections,
+                    context.l10n.no_connections,
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    context.l10n.tapPlusToAdd,
+                    context.l10n.tap_to_add_a_remote_hermes_gateway_api_server_port,
                     style: Theme.of(
                       context,
                     ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -1023,7 +1013,7 @@ class HomeScreenState extends State<HomeScreen> {
                     key: const Key('home_restore_config_button'),
                     onPressed: _showRestoreConfig,
                     icon: const Icon(Icons.settings_backup_restore),
-                    label: Text(context.l10n.restoreConfiguration),
+                    label: Text(context.l10n.restore_configuration),
                   ),
                 ],
               ),
@@ -1051,7 +1041,7 @@ class HomeScreenState extends State<HomeScreen> {
               },
             ),
       floatingActionButton: FloatingActionButton(
-        tooltip: context.l10n.addConnection,
+        tooltip: context.l10n.add_connection,
         onPressed: _showAddDialog,
         child: const Icon(Icons.add, color: Colors.black),
       ),
@@ -1064,7 +1054,7 @@ class _AddDialog extends StatefulWidget {
   final Future<void> Function(
     String label,
     String host,
-    int port,
+    int? port,
     String apiKey, {
     String? gatewayPrefix,
     String? dashboardPrefix,
@@ -1113,7 +1103,7 @@ class _AddDialogState extends State<_AddDialog> {
           ? 'https://${conn.host}'
           : conn.host,
     );
-    _port = TextEditingController(text: (conn?.port ?? 8642).toString());
+    _port = TextEditingController(text: conn?.port.toString() ?? '');
     _apiKey = TextEditingController(text: conn?.apiKey ?? '');
     _gatewayPrefix = TextEditingController(text: conn?.gatewayPrefix ?? '');
     _dashboardPrefix = TextEditingController(text: conn?.dashboardPrefix ?? '');
@@ -1146,12 +1136,14 @@ class _AddDialogState extends State<_AddDialog> {
   Future<void> _validateAndSave() async {
     final label = _label.text.trim();
     final host = _host.text.trim();
-    final port = int.tryParse(_port.text.trim()) ?? 8642;
+    final port = int.tryParse(_port.text.trim());
     final apiKey = _apiKey.text.trim();
     final gatewayPrefix = _gatewayPrefix.text.trim();
     final dashboardPrefix = _dashboardPrefix.text.trim();
 
-    if (label.isEmpty || host.isEmpty || port <= 0) return;
+    // A blank Port field means "not supplied": normalizeHostAndPort then infers
+    // 8642 for HTTP and 443 for HTTPS.
+    if (label.isEmpty || host.isEmpty || (port != null && port <= 0)) return;
 
     setState(() {
       _validating = true;
@@ -1195,8 +1187,7 @@ class _AddDialogState extends State<_AddDialog> {
           gatewayProfile.contains(RegExp(r'\s'))) {
         setState(() {
           _error =
-              'Hermes profile must be a plain profile name such as "sol", '
-              'not a path.';
+              context.l10n.hermes_profile_must_be_a_plain_profile_name_such_as;
           _validating = false;
           _showDashboard = true;
         });
@@ -1236,8 +1227,7 @@ class _AddDialogState extends State<_AddDialog> {
           if (!mounted) return;
           setState(() {
             _error =
-                'Gateway connected, but the dashboard could not be reached or '
-                'authenticated. Check the dashboard details, or clear them to skip.';
+                context.l10n.gateway_connected_but_the_dashboard_could_not_be_reached_or;
             _validating = false;
             _showDashboard = true;
           });
@@ -1265,13 +1255,16 @@ class _AddDialogState extends State<_AddDialog> {
     } on CredentialStorageException {
       if (!mounted) return;
       setState(() {
-        _error = 'The connection could not be stored securely.';
+        _error = context.l10n.the_connection_could_not_be_stored_securely;
         _validating = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _error = context.l10n.cannotReachHostPortCheck(host, port);
+        _error = context.l10n.cannot_reach_check_the_host_and_port(
+          host,
+          port ?? '',
+        );
         _validating = false;
       });
     }
@@ -1281,7 +1274,7 @@ class _AddDialogState extends State<_AddDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Text(
-        _isEditing ? context.l10n.editGatewayConnection : context.l10n.addGatewayConnection,
+        _isEditing ? context.l10n.edit_gateway_connection : context.l10n.add_gateway_connection,
       ),
       content: SingleChildScrollView(
         child: Column(
@@ -1317,14 +1310,15 @@ class _AddDialogState extends State<_AddDialog> {
             ],
             TextField(
               controller: _label,
-              decoration: InputDecoration(labelText: context.l10n.connectionLabel),
+              decoration: InputDecoration(labelText: context.l10n.label),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _host,
               decoration: InputDecoration(
-                labelText: context.l10n.hostField,
-                hintText: context.l10n.hostHint
+                labelText: context.l10n.host,
+                hintText:
+                    '192.168.1.50, 100.x.y.z, or hermes-machine.tailnet.ts.net',
               ),
               keyboardType: TextInputType.text,
               autocorrect: false,
@@ -1333,8 +1327,8 @@ class _AddDialogState extends State<_AddDialog> {
             TextField(
               controller: _port,
               decoration: InputDecoration(
-                labelText: context.l10n.portField,
-                hintText: context.l10n.portHint,
+                labelText: context.l10n.port,
+                hintText: context.l10n.leave_blank_for_default_8642_443_with_https,
               ),
               keyboardType: TextInputType.number,
             ),
@@ -1342,8 +1336,8 @@ class _AddDialogState extends State<_AddDialog> {
             TextField(
               controller: _apiKey,
               decoration: InputDecoration(
-                labelText: context.l10n.apiKeyField,
-                hintText: context.l10n.apiKeyHint,
+                labelText: context.l10n.api_key,
+                hintText: context.l10n.api_server_key_from_hermes_env,
               ),
               obscureText: true,
             ),
@@ -1363,7 +1357,7 @@ class _AddDialogState extends State<_AddDialog> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      'Custom proxy and dashboard details',
+                      context.l10n.custom_proxy_and_dashboard_details,
                       style: TextStyle(color: Colors.grey[500], fontSize: 13),
                     ),
                   ],
@@ -1375,8 +1369,8 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _gatewayPrefix,
                 decoration: InputDecoration(
-                  labelText: context.l10n.gatewayPathPrefix,
-                  hintText: context.l10n.gatewayPrefixHint
+                  labelText: context.l10n.gateway_path_prefix,
+                  hintText: context.l10n.example_profile_prefix_hint_full,
                 ),
                 autocorrect: false,
               ),
@@ -1384,8 +1378,8 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _dashboardPrefix,
                 decoration: InputDecoration(
-                  labelText: context.l10n.dashboardPathPrefix,
-                  hintText: context.l10n.dashboardPrefixHint,
+                  labelText: context.l10n.dashboard_path_prefix,
+                  hintText: context.l10n.e_g_dashboard_proxy_path_before_api,
                 ),
                 autocorrect: false,
               ),
@@ -1393,25 +1387,24 @@ class _AddDialogState extends State<_AddDialog> {
               SwitchListTile(
                 value: _dashboardProxied,
                 contentPadding: EdgeInsets.zero,
-                title: Text(context.l10n.dashboardBehindProxy),
-                subtitle: const Text(
-                  'Nginx injects auth — app sends clean requests',
+                title: Text(context.l10n.dashboard_behind_proxy),
+                subtitle: Text(
+                  context.l10n.nginx_injects_auth_app_sends_clean_requests,
                 ),
                 onChanged: (v) => setState(() => _dashboardProxied = v),
               ),
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: Text(
-                  'Optional. For the Memory/Cron/Skills/Settings tabs. Leave '
-                  'blank to use the default dashboard port (9119) with no login.',
+                  context.l10n.optional_for_the_memory_cron_skills_settings_tabs_leave_blank,
                   style: TextStyle(color: Colors.grey[600], fontSize: 12),
                 ),
               ),
               TextField(
                 controller: _dashPort,
                 decoration: InputDecoration(
-                  labelText: context.l10n.dashboardPort,
-                  hintText: context.l10n.dashboardPortHint,
+                  labelText: context.l10n.dashboard_port,
+                  hintText: context.l10n.leave_blank_for_default_9119,
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -1419,7 +1412,7 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _dashUser,
                 decoration: InputDecoration(
-                  labelText: context.l10n.dashboardUsernameOptional,
+                  labelText: context.l10n.dashboard_username_optional,
                 ),
                 autocorrect: false,
               ),
@@ -1427,7 +1420,7 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _dashPass,
                 decoration: InputDecoration(
-                  labelText: context.l10n.dashboardPasswordOptional,
+                  labelText: context.l10n.dashboard_password_optional,
                 ),
                 obscureText: true,
               ),
@@ -1435,9 +1428,10 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _desktopGatewayUrl,
                 decoration: InputDecoration(
-                  labelText: context.l10n.desktopGatewayUrlOptional,
+                  labelText: context.l10n.desktop_gateway_url_optional,
                   hintText: 'https://hermes-desktop.example.lan',
-                  helperText: context.l10n.desktopGatewayHelper,
+                  helperText:
+                      context.l10n.enables_file_attachments_through_the_desktop_remote_gateway,
                 ),
                 keyboardType: TextInputType.url,
                 autocorrect: false,
@@ -1446,9 +1440,10 @@ class _AddDialogState extends State<_AddDialog> {
               TextField(
                 controller: _gatewayProfile,
                 decoration: InputDecoration(
-                  labelText: context.l10n.gatewayProfileField,
-                  hintText: context.l10n.gatewayProfileHint,
-                  helperText: context.l10n.gatewayProfileHelper,
+                  labelText: context.l10n.hermes_profile_optional,
+                  hintText: context.l10n.e_g_sol,
+                  helperText:
+                      context.l10n.profile_this_connection_chats_as_when_the_dashboard_serves_several,
                   helperMaxLines: 3,
                 ),
                 autocorrect: false,
@@ -1473,7 +1468,7 @@ class _AddDialogState extends State<_AddDialog> {
                     color: Colors.white,
                   ),
                 )
-              : Text(_isEditing ? 'Save Changes' : 'Connect'),
+              : Text(_isEditing ? context.l10n.save_changes : context.l10n.connect),
         ),
       ],
     );

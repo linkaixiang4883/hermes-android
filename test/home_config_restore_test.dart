@@ -15,6 +15,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/inert_turn_application_session.dart';
 import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
 
 class _MemoryCredentialStore implements CredentialStore {
   final Map<String, String> values = <String, String>{};
@@ -66,8 +68,8 @@ Future<void> pumpHome(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: HomeScreen(
         connManager: manager,
         turnApplicationController: GatewayTurnApplicationController(
@@ -84,6 +86,11 @@ Future<void> pumpHome(
 }
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
 
   testWidgets('a device with no connections can still reach restore', (
@@ -112,7 +119,7 @@ void main() {
     expect(find.byType(WorkspaceScreen), findsOneWidget);
     expect(find.byType(SessionListScreen), findsNothing);
     for (final destination in HermesDestination.values) {
-      expect(find.text(destination.label), findsWidgets);
+      expect(find.text(destination.label(l10n)), findsWidgets);
     }
   });
 
@@ -163,8 +170,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         home: HomeScreen(
           connManager: manager,
           turnApplicationController: GatewayTurnApplicationController(
@@ -219,8 +226,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         home: HomeScreen(
           connManager: manager,
           turnApplicationController: GatewayTurnApplicationController(

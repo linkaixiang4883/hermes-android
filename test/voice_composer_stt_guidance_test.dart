@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/controllers/voice_composer_controller.dart';
-import 'package:hermes_android/l10n/app_localizations.dart';
 
 import 'support/fake_voice_composer_adapter.dart';
-import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/core/l10n/l10n.dart';
 
 void main() {
   testWidgets('no-service error is localized to keyboard hint (zh)', (tester) async {
@@ -16,8 +15,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: preferredSupportedLocales(),
         locale: const Locale('zh'),
         home: Builder(builder: (context) {
           controller.l10n = AppLocalizations.of(context);
@@ -44,8 +43,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: preferredSupportedLocales(),
         locale: const Locale('en'),
         home: Builder(builder: (context) {
           controller.l10n = AppLocalizations.of(context);
@@ -85,8 +84,8 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: preferredSupportedLocales(),
         locale: const Locale('zh'),
         home: Builder(builder: (context) {
           controller.l10n = AppLocalizations.of(context);

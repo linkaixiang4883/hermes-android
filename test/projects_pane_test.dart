@@ -11,8 +11,8 @@ import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/projects_pane.dart';
 import 'package:hermes_android/core/widgets/space_migration_preview.dart';
 
-import 'support/l10n_test_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
 Map<String, dynamic> _projectJson({
   required String id,
@@ -155,9 +155,9 @@ Future<void> _pumpPane(
 
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: hermesTheme(brightness),
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(

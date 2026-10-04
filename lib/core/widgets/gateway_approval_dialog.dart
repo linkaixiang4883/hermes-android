@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
 import '../models/gateway_approval.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 typedef ApprovalResponder = Future<void> Function(GatewayApprovalChoice choice);
 
 class GatewayApprovalDialog extends StatefulWidget {
@@ -45,29 +45,29 @@ class _GatewayApprovalDialogState extends State<GatewayApprovalDialog> {
       if (!mounted) return;
       setState(() {
         _submitting = null;
-        _error = context.l10n.couldNotSendApproval(error.toString());
+        _error = context.l10n.could_not_send_the_approval(error);
       });
     }
   }
 
   String _labelFor(GatewayApprovalChoice choice) {
     return switch (choice) {
-      GatewayApprovalChoice.once => context.l10n.allowOnce,
-      GatewayApprovalChoice.session => context.l10n.allowForSession,
+      GatewayApprovalChoice.once => context.l10n.allow_once,
+      GatewayApprovalChoice.session => context.l10n.allow_for_this_session,
       GatewayApprovalChoice.always =>
-        _confirmAlways ? context.l10n.confirmAlwaysAllow : context.l10n.alwaysAllow,
+        _confirmAlways ? context.l10n.confirm_always_allow : context.l10n.always_allow,
       GatewayApprovalChoice.deny => context.l10n.deny,
     };
   }
 
   String _scopeFor(GatewayApprovalChoice choice) {
     return switch (choice) {
-      GatewayApprovalChoice.once => context.l10n.runOnlyThisCommand,
+      GatewayApprovalChoice.once => context.l10n.run_only_this_command,
       GatewayApprovalChoice.session =>
-        context.l10n.allowMatchingCommands,
+        context.l10n.allow_matching_commands_until_this_hermes_session_ends,
       GatewayApprovalChoice.always =>
-        context.l10n.savePermanentRule,
-      GatewayApprovalChoice.deny => context.l10n.doNotRunCommand,
+        context.l10n.save_a_permanent_rule_in_the_hermes_configuration,
+      GatewayApprovalChoice.deny => context.l10n.do_not_run_this_command,
     };
   }
 
@@ -88,7 +88,7 @@ class _GatewayApprovalDialogState extends State<GatewayApprovalDialog> {
 
     return AlertDialog(
       icon: const Icon(Icons.gpp_maybe_outlined),
-      title: Text(context.l10n.approvalNeeded),
+      title: Text(context.l10n.approval_needed),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
@@ -96,10 +96,7 @@ class _GatewayApprovalDialogState extends State<GatewayApprovalDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(request.description ==
-                      'Hermes wants to run a command.'
-                  ? context.l10n.approvalFallbackDescription
-                  : request.description),
+              Text(request.description),
               if (request.command.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(context.l10n.command, style: theme.textTheme.labelLarge),
@@ -121,7 +118,7 @@ class _GatewayApprovalDialogState extends State<GatewayApprovalDialog> {
               if (_confirmAlways) ...[
                 const SizedBox(height: 14),
                 Text(
-                  context.l10n.permanentRuleWarning,
+                  context.l10n.this_creates_a_permanent_rule_in_hermes_review_the_full,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.error,
                   ),

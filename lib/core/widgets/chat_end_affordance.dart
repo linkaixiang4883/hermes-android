@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
-
+import 'package:hermes_android/core/l10n/l10n.dart';
 /// Accessible floating action that returns a chat to its current end.
 class ChatEndAffordance extends StatelessWidget {
   static const buttonKey = Key('chat-go-to-end');
@@ -19,15 +18,16 @@ class ChatEndAffordance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasNewMessages = newMessageCount > 0;
-    final indicatorText = hasNewMessages ? context.l10n.newCount(newMessageCount) : context.l10n.latest;
+    final indicatorText = hasNewMessages
+        ? context.l10n.new_count_indicator(newMessageCount)
+        : context.l10n.latest_label;
     final semanticsValue = switch (newMessageCount) {
-      0 => context.l10n.noNewMessages,
-      1 => context.l10n.oneNewMessage,
-      _ => context.l10n.newMessages(newMessageCount),
+      0 => context.l10n.no_new_messages,
+      _ => context.l10n.new_messages(newMessageCount),
     };
 
     return Semantics(
-      label: context.l10n.goToEnd,
+      label: context.l10n.go_to_end,
       value: semanticsValue,
       button: true,
       excludeSemantics: true,

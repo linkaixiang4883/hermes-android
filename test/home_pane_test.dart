@@ -7,6 +7,8 @@ import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/utils/home_digest.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/home_pane.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
+
 
 import 'support/l10n_test_utils.dart';
 
@@ -52,9 +54,9 @@ Future<void> _pump(
 
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: hermesTheme(Brightness.dark),
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
       home: Scaffold(
         body: HomePane(
           loadSessions: loadSessions,
@@ -70,6 +72,11 @@ Future<void> _pump(
 }
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   testWidgets('holds a loading skeleton until the first read lands', (
     tester,
   ) async {
@@ -112,16 +119,16 @@ void main() {
     double topOf(String text) => tester.getTopLeft(find.text(text).first).dy;
 
     expect(
-      topOf(HomeSectionKind.needsYou.title),
-      lessThan(topOf(HomeSectionKind.running.title)),
+      topOf(HomeSectionKind.needsYou.title(l10n)),
+      lessThan(topOf(HomeSectionKind.running.title(l10n))),
     );
     expect(
-      topOf(HomeSectionKind.running.title),
-      lessThan(topOf(HomeSectionKind.continueWorking.title)),
+      topOf(HomeSectionKind.running.title(l10n)),
+      lessThan(topOf(HomeSectionKind.continueWorking.title(l10n))),
     );
     expect(
-      topOf(HomeSectionKind.continueWorking.title),
-      lessThan(topOf(HomeSectionKind.completedRecently.title)),
+      topOf(HomeSectionKind.continueWorking.title(l10n)),
+      lessThan(topOf(HomeSectionKind.completedRecently.title(l10n))),
     );
   });
 
@@ -141,7 +148,7 @@ void main() {
 
       expect(find.text('Approval needed'), findsOneWidget);
       expect(find.text('Waiting on you'), findsOneWidget);
-      expect(find.text(HomeSectionKind.running.title), findsNothing);
+      expect(find.text(HomeSectionKind.running.title(l10n)), findsNothing);
     },
   );
 
@@ -267,7 +274,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text(HomeSectionKind.needsYou.title), findsNothing);
+    expect(find.text(HomeSectionKind.needsYou.title(l10n)), findsNothing);
     expect(find.text('Roadmap'), findsOneWidget);
   });
 }

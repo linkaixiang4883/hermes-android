@@ -9,7 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fake_voice_composer_adapter.dart';
-import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/core/l10n/l10n.dart';
 
 /// The model's own thinking, streamed through `reasoning.delta`.
 const _thinking = 'Look at the gateway contract before answering.';
@@ -123,8 +123,8 @@ Future<void> _pumpChat(
   );
   await tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: preferredSupportedLocales(),
       home: ChatScreen(
         connection: SavedConnection(
           id: 'reasoning-fixture',

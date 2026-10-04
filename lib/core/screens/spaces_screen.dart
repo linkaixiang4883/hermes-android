@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
 import '../models/session.dart';
 import '../services/chat_space_store.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 class SpacesScreen extends StatefulWidget {
   final ChatSpaceStore store;
   final List<Session> sessions;
@@ -41,21 +41,18 @@ class _SpacesScreenState extends State<SpacesScreen> {
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(context.l10n.newSpace),
+          title: Text(context.l10n.new_space),
           content: TextField(
             key: const Key('space-name'),
             autofocus: true,
             maxLength: 80,
             textCapitalization: TextCapitalization.sentences,
-            decoration: InputDecoration(
-              labelText: context.l10n.nameField,
-              errorText: error,
-            ),
+            decoration: InputDecoration(labelText: context.l10n.name, errorText: error),
             onChanged: (value) => draft = value,
             onSubmitted: (value) {
               final normalized = value.trim();
               if (normalized.isEmpty) {
-                setDialogState(() => error = context.l10n.enterName);
+                setDialogState(() => error = context.l10n.enter_a_name);
               } else {
                 Navigator.pop(dialogContext, normalized);
               }
@@ -70,12 +67,12 @@ class _SpacesScreenState extends State<SpacesScreen> {
               onPressed: () {
                 final normalized = draft.trim();
                 if (normalized.isEmpty) {
-                  setDialogState(() => error = context.l10n.enterName);
+                  setDialogState(() => error = context.l10n.enter_a_name);
                 } else {
                   Navigator.pop(dialogContext, normalized);
                 }
               },
-              child: Text(context.l10n.createAction),
+              child: Text(context.l10n.create),
             ),
           ],
         ),
@@ -98,7 +95,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: Text(context.l10n.renameSpace),
+        title: Text(context.l10n.rename_space),
         content: TextFormField(
           key: const Key('rename-space-name'),
           initialValue: space.name,
@@ -132,16 +129,14 @@ class _SpacesScreenState extends State<SpacesScreen> {
     }
   }
 
-  String _countLabel(int count) => count == 1
-      ? context.l10n.oneChat
-      : context.l10n.countChats(count);
+  String _countLabel(int count) => context.l10n.chats_count(count);
 
   String? _activityLabel(double? timestamp) {
     if (timestamp == null) return null;
     final date = DateTime.fromMillisecondsSinceEpoch(
       (timestamp * 1000).toInt(),
     );
-    return context.l10n.lastActivityDate(date.month, date.day, date.year);
+    return context.l10n.last_activity(date.day, date.month, date.year);
   }
 
   Widget _scopeTile({
@@ -171,11 +166,11 @@ class _SpacesScreenState extends State<SpacesScreen> {
     final state = _state;
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.spacesTitle),
+        title: Text(context.l10n.spaces),
         actions: [
           IconButton(
             key: const Key('create-space'),
-            tooltip: context.l10n.newSpace,
+            tooltip: context.l10n.new_space,
             onPressed: _createSpace,
             icon: const Icon(Icons.create_new_folder_outlined),
           ),
@@ -189,14 +184,14 @@ class _SpacesScreenState extends State<SpacesScreen> {
                 _scopeTile(
                   key: const Key('space-all'),
                   icon: Icons.forum_outlined,
-                  title: context.l10n.spaceAllChats,
+                  title: context.l10n.all_chats,
                   count: widget.sessions.length,
                   scope: const ChatSpaceScope.all(),
                 ),
                 _scopeTile(
                   key: const Key('space-unassigned'),
                   icon: Icons.inbox_outlined,
-                  title: context.l10n.spaceUnassigned,
+                  title: context.l10n.unassigned,
                   count: state
                       .sessionsFor(
                         widget.sessions,
@@ -223,7 +218,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
                     ),
                     trailing: PopupMenuButton<String>(
                       key: Key('space-menu-${space.id}'),
-                      tooltip: context.l10n.spaceActions,
+                      tooltip: context.l10n.space_actions,
                       onSelected: (action) {
                         if (action == 'rename') _renameSpace(space);
                       },
@@ -242,7 +237,7 @@ class _SpacesScreenState extends State<SpacesScreen> {
                   Padding(
                     padding: EdgeInsets.all(24),
                     child: Text(
-                      context.l10n.createSpaceHint,
+                      context.l10n.create_a_space_to_separate_related_conversations,
                       textAlign: TextAlign.center,
                     ),
                   ),

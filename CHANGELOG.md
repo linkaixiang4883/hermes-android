@@ -4,6 +4,91 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [2.1.12] - 2026-10-04
+
+### Added
+
+- Android 13 and newer now expose a per-app language picker for all nine shipped
+  locales (PR #125).
+
+### Fixed
+
+- Unended sessions no longer appear permanently active when the Gateway omits
+  an authoritative liveness flag. Recent activity keeps them active for five
+  minutes, while fixed `is_active: false` placeholders in Projects responses
+  are ignored (PR #123).
+
+### Thanks
+
+- @maebahesioru for the Android locale declaration, session-liveness fix, and
+  focused regression coverage in PRs #125 and #123.
+
+## [2.1.11] - 2026-10-04
+
+### Added
+
+- Added complete app localisation for Japanese, Simplified Chinese, Korean,
+  Spanish, French, German, Brazilian Portuguese, and Russian, with English kept
+  as the fallback for unsupported locales (PR #115).
+
+### Changed
+
+- App copy now uses generated Flutter localisation catalogues, including
+  locale-aware Russian plurals and region-safe Chinese and Portuguese
+  resolution.
+
+### Thanks
+
+- @maebahesioru for the localisation implementation, regression coverage,
+  on-device Japanese QA, and thorough review follow-up in PR #115.
+
+## [2.1.10] - 2026-10-02
+
+### Fixed
+
+- Sending from an existing server-side chat now targets that exact session
+  instead of opening and submitting into a new sibling session (#120, PR #122).
+- Local drafts no longer race legacy `session.create` against recovery v2
+  `session.open`; explicit legacy fallback still establishes one session.
+
+### Thanks
+
+- No external contributors in this patch.
+
+## [2.1.9] - 2026-10-02
+
+### Fixed
+
+- Gateway clarification, approval, sudo, and secret requests now reach the
+  phone during a running turn, with safe socket ownership and reconnect replay
+  (#116, PR #118).
+- Large server-side chats open with a bounded recent transcript, keep the
+  composer usable during hydration, and preserve authoritative history across
+  failed, concurrent, completed, and stopped turns (#117, PR #119).
+- Session activity now follows the Gateway's explicit `is_active` state while
+  retaining compatibility with older gateways that omit it (PR #121).
+
+### Thanks
+
+- @maebahesioru for correcting session liveness handling and adding focused
+  regression coverage in PR #121.
+
+## [2.1.8] - 2026-09-30
+
+### Fixed
+
+- HTTPS connections now honour an explicit Port field value, including `8642`;
+  scheme defaults are inferred only when the field is blank (#110, PR #111).
+- Leaving a chat during a running turn no longer closes its SSE connection and
+  interrupts the work server-side. Detached clients now remain open until the
+  stream settles, with failure and timeout paths still releasing them (#112,
+  PR #113).
+
+### Thanks
+
+- @igitur for diagnosing and fixing both connection-lifecycle issues and for
+  the comprehensive regression coverage in PRs #111 and #113.
+
 ## [2.1.7] - 2026-09-28
 
 ### Added

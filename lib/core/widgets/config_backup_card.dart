@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
 import '../services/config_backup.dart';
 import '../services/config_backup_service.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 /// Result of the export sheet: the passphrase the user chose.
 class ExportPassphraseChoice {
   final String passphrase;
@@ -44,15 +44,15 @@ class _ExportPassphraseSheetState extends State<ExportPassphraseSheet> {
   void _submit() {
     final value = _passphrase.text;
     if (value.trim().isEmpty) {
-      setState(() => _error = context.l10n.enterPassphrase);
+      setState(() => _error = context.l10n.enter_a_passphrase);
       return;
     }
     if (value.length < 8) {
-      setState(() => _error = context.l10n.useEightChars);
+      setState(() => _error = context.l10n.use_at_least_8_characters);
       return;
     }
     if (value != _confirm.text) {
-      setState(() => _error = context.l10n.passphrasesMismatch);
+      setState(() => _error = context.l10n.the_two_passphrases_do_not_match);
       return;
     }
     Navigator.of(context).pop(ExportPassphraseChoice(value));
@@ -72,12 +72,12 @@ class _ExportPassphraseSheetState extends State<ExportPassphraseSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.l10n.protectBackupTitle,
+            context.l10n.protect_this_backup,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 8),
           Text(
-            context.l10n.protectBackupDesc,
+            context.l10n.the_file_contains_your_api_keys_and_dashboard_password_so,
             style: TextStyle(color: Colors.grey),
           ),
           const SizedBox(height: 16),
@@ -87,14 +87,12 @@ class _ExportPassphraseSheetState extends State<ExportPassphraseSheet> {
             obscureText: _obscure,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: context.l10n.passphraseField,
+              labelText: context.l10n.passphrase,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
                 onPressed: () => setState(() => _obscure = !_obscure),
-                tooltip: _obscure
-                    ? context.l10n.showPassphrase
-                    : context.l10n.hidePassphrase,
+                tooltip: _obscure ? context.l10n.show_passphrase : context.l10n.hide_passphrase,
               ),
             ),
           ),
@@ -104,7 +102,7 @@ class _ExportPassphraseSheetState extends State<ExportPassphraseSheet> {
             controller: _confirm,
             obscureText: _obscure,
             decoration: InputDecoration(
-              labelText: context.l10n.confirmPassphraseField,
+              labelText: context.l10n.confirm_passphrase,
               border: OutlineInputBorder(),
             ),
             onSubmitted: (_) => _submit(),
@@ -128,7 +126,7 @@ class _ExportPassphraseSheetState extends State<ExportPassphraseSheet> {
                 key: const Key('export_confirm_button'),
                 onPressed: _submit,
                 icon: const Icon(Icons.lock),
-                label: Text(context.l10n.exportAction),
+                label: Text(context.l10n.export_label),
               ),
             ],
           ),
@@ -160,7 +158,7 @@ class _ImportOptionsSheetState extends State<ImportOptionsSheet> {
 
   void _submit() {
     if (_passphrase.text.trim().isEmpty) {
-      setState(() => _error = context.l10n.enterBackupPassphrase);
+      setState(() => _error = context.l10n.enter_the_passphrase_for_this_backup);
       return;
     }
     Navigator.of(
@@ -182,7 +180,7 @@ class _ImportOptionsSheetState extends State<ImportOptionsSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            context.l10n.restoreConfiguration,
+            context.l10n.restore_configuration,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
@@ -192,14 +190,12 @@ class _ImportOptionsSheetState extends State<ImportOptionsSheet> {
             obscureText: _obscure,
             autofocus: true,
             decoration: InputDecoration(
-              labelText: context.l10n.passphraseField,
+              labelText: context.l10n.passphrase,
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
                 icon: Icon(_obscure ? Icons.visibility : Icons.visibility_off),
                 onPressed: () => setState(() => _obscure = !_obscure),
-                tooltip: _obscure
-                    ? context.l10n.showPassphrase
-                    : context.l10n.hidePassphrase,
+                tooltip: _obscure ? context.l10n.show_passphrase : context.l10n.hide_passphrase,
               ),
             ),
             onSubmitted: (_) => _submit(),
@@ -214,18 +210,18 @@ class _ImportOptionsSheetState extends State<ImportOptionsSheet> {
                 RadioListTile<ConfigImportMode>(
                   key: Key('import_mode_merge'),
                   value: ConfigImportMode.merge,
-                  title: Text(context.l10n.mergeAction),
+                  title: Text(context.l10n.merge),
                   subtitle: Text(
-                    context.l10n.mergeDesc,
+                    context.l10n.add_and_update_connections_from_the_backup_keep_the_rest,
                   ),
                   contentPadding: EdgeInsets.zero,
                 ),
                 RadioListTile<ConfigImportMode>(
                   key: Key('import_mode_replace'),
                   value: ConfigImportMode.replace,
-                  title: Text(context.l10n.replaceAction),
+                  title: Text(context.l10n.replace),
                   subtitle: Text(
-                    context.l10n.replaceDesc,
+                    context.l10n.delete_connections_that_are_not_in_the_backup,
                   ),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -251,7 +247,7 @@ class _ImportOptionsSheetState extends State<ImportOptionsSheet> {
                 key: const Key('import_confirm_button'),
                 onPressed: _submit,
                 icon: const Icon(Icons.restore),
-                label: Text(context.l10n.restoreBackup),
+                label: Text(context.l10n.restore),
               ),
             ],
           ),
@@ -320,9 +316,7 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = destination == null
-            ? null
-            : context.l10n.backupExportedTo(destination);
+        _status = destination == null ? null : context.l10n.backup_exported(destination);
       });
     } on ConfigBackupException catch (error) {
       if (!mounted) return;
@@ -334,7 +328,7 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = context.l10n.backupExportFailed;
+        _error = context.l10n.the_backup_could_not_be_exported;
       });
     }
   }
@@ -376,7 +370,7 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = 'The backup could not be restored.';
+        _error = context.l10n.the_backup_could_not_be_restored;
       });
     }
   }
@@ -397,14 +391,14 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  context.l10n.backupRestoreTitle,
+                  context.l10n.backup_restore,
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
               ],
             ),
             const SizedBox(height: 8),
             Text(
-              context.l10n.backupCardDesc,
+              context.l10n.save_your_connections_and_settings_to_an_encrypted_file_then,
               style: TextStyle(color: Colors.grey),
             ),
             const SizedBox(height: 16),
@@ -421,7 +415,7 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
                       key: const Key('config_export_button'),
                       onPressed: _runExport,
                       icon: const Icon(Icons.upload_file),
-                      label: Text(context.l10n.exportAction),
+                      label: Text(context.l10n.export_label),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -430,7 +424,7 @@ class _ConfigBackupCardState extends State<ConfigBackupCard> {
                       key: const Key('config_import_button'),
                       onPressed: _runImport,
                       icon: const Icon(Icons.download),
-                      label: Text(context.l10n.importAction),
+                      label: Text(context.l10n.import_label),
                     ),
                   ),
                 ],

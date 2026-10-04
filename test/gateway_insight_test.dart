@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_insight.dart';
 import 'package:hermes_android/core/widgets/gateway_insight_card.dart';
-import 'support/l10n_test_utils.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
 void main() {
   group('GatewayReasoningUpdate', () {
@@ -41,47 +41,6 @@ void main() {
         }),
         isNull,
       );
-    });
-  });
-
-  group('GatewayReasoningUpdate.isAnswerPreview', () {
-    test('flags the reply opening the gateway relays as reasoning', () {
-      const answer = 'The gateway groups chats by the session cwd.';
-      expect(GatewayReasoningUpdate.isAnswerPreview(answer, answer), isTrue);
-      expect(
-        GatewayReasoningUpdate.isAnswerPreview(
-          'The gateway groups chats by the session cwd.',
-          '$answer And it keeps the streamed thinking.',
-        ),
-        isTrue,
-      );
-      // The gateway truncates its echo at 500 characters: still a prefix.
-      expect(
-        GatewayReasoningUpdate.isAnswerPreview('Ver', 'Verified the contract.'),
-        isTrue,
-      );
-    });
-
-    test('ignores insignificant whitespace differences', () {
-      expect(
-        GatewayReasoningUpdate.isAnswerPreview(
-          'Verified  the\ncontract.',
-          'Verified the contract. Plus more.',
-        ),
-        isTrue,
-      );
-    });
-
-    test('does not flag real thinking, an empty reply, or blank payloads', () {
-      expect(
-        GatewayReasoningUpdate.isAnswerPreview(
-          'Check the gateway contract first.',
-          'Verified the contract.',
-        ),
-        isFalse,
-      );
-      expect(GatewayReasoningUpdate.isAnswerPreview('Verified', ''), isFalse);
-      expect(GatewayReasoningUpdate.isAnswerPreview('   ', 'Verified'), isFalse);
     });
   });
 
@@ -178,8 +137,8 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: ListView(
             children: const [
@@ -213,8 +172,8 @@ void main() {
   testWidgets('subagent card exposes delegated progress', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
-        localizationsDelegates: l10nTestDelegates,
-        supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: GatewaySubagentCard(
             activities: [

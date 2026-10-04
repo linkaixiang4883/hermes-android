@@ -3,9 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/session.dart';
 import 'package:hermes_android/core/screens/spaces_screen.dart';
 import 'package:hermes_android/core/services/chat_space_store.dart';
-
-import 'support/l10n_test_utils.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:hermes_android/l10n/app_localizations.dart';
 
 Session testSession(String id, {double startedAt = 1}) => Session(
   id: id,
@@ -26,8 +25,8 @@ Future<void> pumpSpaces(
 }) {
   return tester.pumpWidget(
     MaterialApp(
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: SpacesScreen(
         store: store,
         sessions: sessions,

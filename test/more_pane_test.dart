@@ -2,13 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/widgets/more_pane.dart';
+import 'support/l10n_test_utils.dart';
 import 'package:hermes_android/l10n/app_localizations.dart';
 
-import 'support/l10n_test_utils.dart';
-
-/// English copy for pure-builder tests (mirrors the app wiring).
-AppLocalizations _enL10n() =>
-    lookupAppLocalizations(const Locale('en'));
 
 Future<void> _pumpPane(
   WidgetTester tester, {
@@ -26,9 +22,9 @@ Future<void> _pumpPane(
 
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: hermesTheme(brightness),
-      localizationsDelegates: l10nTestDelegates,
-      supportedLocales: l10nTestSupportedLocales,
       home: Builder(
         builder: (context) => MediaQuery(
           data: MediaQuery.of(
@@ -45,9 +41,14 @@ Future<void> _pumpPane(
 }
 
 void main() {
+  late AppLocalizations l10n;
+
+  setUpAll(() async {
+    l10n = await loadTestL10n();
+  });
   group('buildMoreSections', () {
     test('exposes every roadmap destination exactly once', () {
-      final sections = buildMoreSections(l10n: _enL10n(), dashboardReachable: true);
+      final sections = buildMoreSections(dashboardReachable: true, l10n: l10n);
       final ids = [
         for (final section in sections)
           for (final entry in section.entries) entry.id,
@@ -71,7 +72,7 @@ void main() {
     });
 
     test('Unassigned chats is not mislabeled as the action Inbox', () {
-      final entry = buildMoreSections(l10n: _enL10n(), dashboardReachable: true)
+      final entry = buildMoreSections(dashboardReachable: true, l10n: l10n)
           .expand((section) => section.entries)
           .firstWhere((candidate) => candidate.id == 'unassigned');
 
@@ -80,7 +81,7 @@ void main() {
     });
 
     test('every section has a title and at least one entry', () {
-      for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: true)) {
+      for (final section in buildMoreSections(dashboardReachable: true, l10n: l10n)) {
         expect(section.title, isNotEmpty);
         expect(section.entries, isNotEmpty);
       }
@@ -88,7 +89,7 @@ void main() {
 
     test('dashboard-backed entries are available when the dashboard is', () {
       final entries = {
-        for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: true))
+        for (final section in buildMoreSections(dashboardReachable: true, l10n: l10n))
           for (final entry in section.entries) entry.id: entry,
       };
 
@@ -103,7 +104,7 @@ void main() {
 
     test('a missing dashboard disables its entries with a reason', () {
       final entries = {
-        for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: false))
+        for (final section in buildMoreSections(dashboardReachable: false, l10n: l10n))
           for (final entry in section.entries) entry.id: entry,
       };
 
@@ -125,7 +126,7 @@ void main() {
 
     test('local settings stay reachable without a dashboard', () {
       final entries = {
-        for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: false))
+        for (final section in buildMoreSections(dashboardReachable: false, l10n: l10n))
           for (final entry in section.entries) entry.id: entry,
       };
 
@@ -137,7 +138,7 @@ void main() {
 
     test('contract-gated organization stays visible with exact reasons', () {
       final entries = {
-        for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: true))
+        for (final section in buildMoreSections(dashboardReachable: true, l10n: l10n))
           for (final entry in section.entries) entry.id: entry,
       };
 
@@ -151,7 +152,7 @@ void main() {
       'native Smart Views are available and only contract gaps are disabled',
       () {
         final entries = {
-          for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: true))
+          for (final section in buildMoreSections(dashboardReachable: true, l10n: l10n))
             for (final entry in section.entries) entry.id: entry,
         };
 
@@ -164,7 +165,7 @@ void main() {
 
     test('Files follows the dashboard it depends on', () {
       final entries = {
-        for (final section in buildMoreSections(l10n: _enL10n(), dashboardReachable: false))
+        for (final section in buildMoreSections(dashboardReachable: false, l10n: l10n))
           for (final entry in section.entries) entry.id: entry,
       };
 
@@ -175,7 +176,10 @@ void main() {
 
   group('MorePane', () {
     List<MoreSection> sections({bool dashboardReachable = true}) =>
-        buildMoreSections(l10n: _enL10n(), dashboardReachable: dashboardReachable);
+        buildMoreSections(
+          dashboardReachable: dashboardReachable,
+          l10n: l10n,
+        );
 
     testWidgets('renders every section title and entry', (tester) async {
       final built = sections();

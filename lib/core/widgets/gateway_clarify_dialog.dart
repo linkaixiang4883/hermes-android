@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../l10n/l10n.dart';
 import '../models/gateway_clarify.dart';
 
+import 'package:hermes_android/core/l10n/l10n.dart';
 typedef ClarifyResponder = Future<void> Function(String answer);
 
 class GatewayClarifyDialog extends StatefulWidget {
@@ -76,7 +76,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
       if (!mounted) return;
       setState(() {
         _submitting = false;
-        _error = context.l10n.couldNotAcceptAnswer;
+        _error = context.l10n.hermes_could_not_accept_the_answer_please_try_again;
       });
     }
   }
@@ -89,7 +89,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
 
     return AlertDialog(
       icon: const Icon(Icons.help_outline_rounded),
-      title: Text(context.l10n.hermesNeedsInput),
+      title: Text(context.l10n.hermes_needs_your_input),
       content: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 560, maxHeight: 620),
         child: SingleChildScrollView(
@@ -98,9 +98,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SelectableText(
-                request.question == 'Hermes needs more information to continue.'
-                    ? context.l10n.clarifyFallbackDescription
-                    : request.question,
+                request.question,
                 key: const Key('clarify-question'),
                 style: theme.textTheme.titleMedium,
               ),
@@ -108,8 +106,8 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                 const SizedBox(height: 12),
                 Text(
                   request.multiSelect
-                      ? context.l10n.selectOneOrMore
-                      : context.l10n.selectOneOrEnterOther,
+                      ? context.l10n.select_one_or_more_options_then_continue
+                      : context.l10n.select_one_option_or_enter_another_answer,
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: 6),
@@ -151,8 +149,8 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   labelText: request.hasChoices
-                      ? context.l10n.otherAnswer
-                      : context.l10n.yourAnswer,
+                      ? context.l10n.other_answer
+                      : context.l10n.your_answer,
                 ),
                 onChanged: (value) {
                   setState(() {
@@ -197,7 +195,7 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(context.l10n.continueLabel),
+              : Text(context.l10n.continue_label),
         ),
       ],
     );
