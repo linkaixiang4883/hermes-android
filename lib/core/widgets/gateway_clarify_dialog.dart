@@ -71,7 +71,17 @@ class _GatewayClarifyDialogState extends State<GatewayClarifyDialog> {
     });
     try {
       await widget.onRespond(answer);
-      if (mounted) Navigator.of(context).pop(true);
+      if (mounted) {
+        // A locked answer makes the gateway layer synthesize
+        // `clarify.remaining`; on the final question the chat screen's
+        // reconcile pops this route first, so popping again here would
+        // dismiss the chat screen underneath (back to the list). Only pop
+        // when this dialog is still the top route.
+        final route = ModalRoute.of(context);
+        if (route?.isCurrent ?? false) {
+          Navigator.of(context).pop(true);
+        }
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
