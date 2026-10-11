@@ -44,7 +44,7 @@
 | clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1162**（2026-10-05 合 v2.1.12 + clarify 双-pop 修复后）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1274**（2026-10-11 合 v2.1.17 后）。
 
 
 
@@ -110,6 +110,15 @@
 - **打法**：`take-upstream 为基 + keep-list 重打`（全量 72 文件 `checkout --theirs` 后，重打 6 文件 29 处 + ARB 补 key + 测试迁移）——见 `.hermes/plans/2026-10-05_011843-merge-upstream-v2.1.12.md`（附件含 merge-tree 预演）
 - **本次新坑（复用时注意）**：① **多占位符 key 必须 @metadata**（不声明 → 字母序重排位置参数，编译期无感；`usage_bar_summary` 真机前被 zh_smoke 单测抓出）② 脚本按 CRLF `split` 处理**混合换行**文件会错位插入（用正则按行匹配；本次弄坏过 `chat_reasoning_replace_test`）③ 两侧各加一次的同名 import/参数在自动合并里会**翻倍**（`localizationsDelegates` 重复、`support/l10n_test_utils.dart` 双 import——清到分析器 0 告警）④ 上游严格 fixture 已被上游自己的 srq 协商适配取代，我方 v2.1.7 的帧适配随 theirs 退役 ⑤ 测试 `+1159/-2`（新增 zh_smoke 断言先挂）→ 修到 1161 全绿；真机 QA 又修 clarify 双-pop 竞态（`2081bb6`，+1 回归）→ **1162**
 - 版本/CI：`2.1.12+2152`（CI `REQUIRED_BASE_VERSION_CODE=2152`）；门禁 analyze 0 + `flutter test` **1162**（含 clarify 双-pop 回归）
+
+### 4c) 上游 merge 记录与基线（2026-10-11，`b8d6f91`，v2.1.13→2.1.17）
+
+- 已合入上游 **2.1.17+2157**（38 commits / 5 releases）——**桌面级通知**（#128：回合完成/审批/clarify/插件事件/额度变更 + 分类开关）、**`MEDIA:` 文件卡片**（#137）、**逐会话草稿持久化**（#131）、长按消息选文本复制（#127）、底栏标签单行（#126）、聊天页项目头修复（#132/#133）、模型选择器 API-only（#129/#138）
+- **冲突面史上最小：1 文件 / 3 段**（`chat_screen` 的导入块、测试钩子字段、构造器参数——全部"两边都留"型）；merge-tree 预演预判全中；一次平推完成（无 take-upstream 大动作）
+- **零 overlay 被上游取代**（复检：上游仍无 clarify 守卫/用量条/TTS/STT/heroTag/reasoning 守卫）——全部存续（预演树逐项核验 + 真机复验）
+- **决议**：全部继承 v2.1.12 决议（overlay 全保留、上游新功能整体吸收、版本随上游、只推 fork）——用户 2026-10-11「好，开搞」批准计划
+- **门禁**：analyze 0 + `flutter test` **1274**（1162 → +112，上游新功能测试）
+- **本窗口新坑**：① **"假干净"双重坑**——`python 脚本 && … || echo 干净` 链条：脚本因 MSYS 路径喂给原生 python 没跑成（`D:\c\...`），`||` 却输出了"干净"，且随后把仍带冲突标记的文件 `git add`（伪装已解决）。正解：原生工具参数用 `C:/` 路径、关键步骤只用 `;` 分隔 + 裸命令复核、误操作后 `git reset -- <file>` 回未解重跑；② gen-l10n 后**零增量** = 自动合并的生成件已 canonical，属正常；③ 双侧自动合并文件（connection_manager/desktop_gateway_client/l10n 全套）仍需过门禁 + 抽查 overlay 区块。
 
 ### 5) Hermes 0.21.5：server→client 请求要先"广告"能力（2026-09-29，`d312bef`，真机复验 ✅）
 
