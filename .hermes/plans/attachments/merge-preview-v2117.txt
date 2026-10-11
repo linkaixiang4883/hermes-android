@@ -1,0 +1,25 @@
+252c69988b7a2cfd4d1e1713bb0e3fbb7f5d0f50
+100644 305bc5a531a667e8ae7fb17330c4dd45755ea559 1	lib/core/screens/chat_screen.dart
+100644 f41307718124b9f797c36061a0a1c4a920ba506a 2	lib/core/screens/chat_screen.dart
+100644 08b5e48adacb284eb9920ac5e8925ba3b195ae0e 3	lib/core/screens/chat_screen.dart
+
+Auto-merging lib/core/screens/chat_screen.dart
+CONFLICT (content): Merge conflict in lib/core/screens/chat_screen.dart
+Auto-merging lib/core/screens/workspace_screen.dart
+Auto-merging lib/core/services/connection_manager.dart
+Auto-merging lib/core/services/desktop_gateway_client.dart
+Auto-merging lib/l10n/app_en.arb
+Auto-merging lib/l10n/app_localizations.dart
+Auto-merging lib/l10n/app_localizations_de.dart
+Auto-merging lib/l10n/app_localizations_en.dart
+Auto-merging lib/l10n/app_localizations_es.dart
+Auto-merging lib/l10n/app_localizations_fr.dart
+Auto-merging lib/l10n/app_localizations_ja.dart
+Auto-merging lib/l10n/app_localizations_ko.dart
+Auto-merging lib/l10n/app_localizations_pt.dart
+Auto-merging lib/l10n/app_localizations_ru.dart
+Auto-merging lib/l10n/app_localizations_zh.dart
+Auto-merging lib/l10n/app_zh.arb
+Auto-merging lib/l10n/app_zh_Hans.arb
+Auto-merging pubspec.yaml
+Auto-merging test/connection_manager_test.dart
