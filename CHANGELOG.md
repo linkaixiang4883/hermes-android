@@ -4,6 +4,89 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [2.1.17] - 2026-10-11
+
+### Fixed
+
+- The model picker now works on API-server-only connections over port `8642`
+  without requiring the Desktop Dashboard on port `9119`. The selected provider
+  and model are applied to subsequent chat turns while preserving the current
+  session and normal automatic chat titles (#129, PR #138).
+
+### Thanks
+
+- @HorCyChangGenitek for the detailed API-only reproduction that identified the
+  model picker's unintended Dashboard dependency (#129).
+
+## [2.1.16] - 2026-10-10
+
+### Fixed
+
+- Chat headers now resolve the authoritative server-side Project instead of
+  remaining **Unassigned** when navigation context is missing. Project metadata
+  refreshes after durable-session binding and reconnect without blocking turn
+  recovery, and stale or disposed routes cannot overwrite a newer label (#132,
+  PR #133).
+
+### Thanks
+
+- No external contributors in this patch.
+
+## [2.1.15] - 2026-10-10
+
+### Added
+
+- Android notifications now match the Desktop experience for completed and
+  failed turns, approvals, clarifications, plugin events, credit changes, and
+  other background activity, with per-kind controls and safe routing back to
+  the owning chat (PR #128).
+- `MEDIA:` deliveries now render as authenticated, tappable file cards with
+  safe streaming detection, complete gateway file-type support, and coalesced
+  downloads (PR #137).
+- Composer drafts now persist per saved connection and session, survive route
+  changes and process restarts, and are removed when their chat or connection
+  is deleted (PR #131).
+
+### Changed
+
+- Session status chips refresh while their pane is visible without overlapping
+  requests or continuing to poll under another route (PR #131).
+
+### Thanks
+
+- @maebahesioru for the desktop-parity notification system, durable composer
+  drafts, live session refresh, and extensive lifecycle regression coverage in
+  PRs #128 and #131.
+- @Thaeland for the secure inline `MEDIA:` delivery cards, complete extension
+  contract, and streaming/download race coverage in PR #137.
+
+## [2.1.14] - 2026-10-08
+
+### Fixed
+
+- Bottom navigation labels now stay on one line on narrow phones at every
+  supported text size and across every shipped locale. Concise Russian bar
+  labels preserve the full pane titles (PR #126).
+
+### Thanks
+
+- @maebahesioru for the responsive navigation-label implementation,
+  localisation updates, accessibility handling, and focused regression
+  coverage in PR #126.
+
+## [2.1.13] - 2026-10-05
+
+### Added
+
+- Long-pressing a chat message now opens a selectable-text dialog so any part
+  of the message can be copied, with readable light and dark themes and
+  complete localisation across all shipped languages (PR #127).
+
+### Thanks
+
+- @maebahesioru for the selectable-message-text implementation, localisation,
+  dark-theme handling, and focused regression coverage in PR #127.
+
 ## [2.1.12] - 2026-10-04
 
 ### Added

@@ -1,8 +1,9 @@
 // Review blocker #3: a mid-turn socket drop must actually reattach, with
 // the REAL production close ordering. WsClient._handleClosedConnection
 // rejects every pending RPC the instant the socket closes — so the submit
-// catch fires BEFORE the reconnect (composer restore, optimistic turn
-// stripped), and the resync runs later, on the fresh socket, while the
+// catch fires BEFORE the reconnect. Once onSent has confirmed wire acceptance,
+// that uncertain close must keep the composer cleared and the optimistic turn;
+// the resync runs later, on the fresh socket, while the
 // detached server turn may still be settling. The resync must therefore:
 // - fetch by the gateway's STORED session key (a newly created stock
 //   session's DB row is not addressable by the mobile session id),
@@ -13,6 +14,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hermes_android/core/models/projects_tree_overview.dart';
 import 'package:hermes_android/core/screens/chat_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
@@ -86,8 +88,9 @@ void main() {
       expect(history.messageRequestCount, 1);
 
       // PRODUCTION ORDERING: WsClient rejects the pending prompt.submit AT
-      // CLOSE, before any reconnect. The catch restores the composer and
-      // strips the optimistic turn — this happens BEFORE the resync runs.
+      // CLOSE, before any reconnect. onSent already confirmed wire acceptance,
+      // so the catch keeps the composer cleared and the optimistic turn while
+      // the later resync reconciles the uncertain acknowledgement.
       history.includeCompletedTurn = true;
       submission.completeError(
         JsonRpcError('prompt.submit', 'Desktop gateway connection closed'),
@@ -96,9 +99,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'Long running task',
-        reason:
-            'the catch-at-close path restores the composer before reconnect',
+        isEmpty,
+        reason: 'an accepted prompt must not be restored and submitted twice',
       );
       expect(
         history.messageRequestCount,
@@ -137,6 +139,76 @@ void main() {
       expect(history.messageRequestCount, 2);
     },
   );
+
+  testWidgets('reattach history recovery does not wait for Project metadata', (
+    tester,
+  ) async {
+    final hook = TestDesktopConnectionHook();
+    final submission = Completer<void>();
+    final metadataRelease = Completer<void>();
+    final history = _ReattachChatHttpClient();
+    var metadataLoads = 0;
+    await _pumpChat(
+      tester,
+      hook: hook,
+      apiClient: ApiClient(
+        baseUrl: 'http://reattach.fixture',
+        apiKey: 'synthetic-key',
+        httpClient: history,
+      ),
+      ensureCount: () {},
+      storedKey: 'stored_sess_latency',
+      projectOverviewLoader: () async {
+        metadataLoads += 1;
+        await metadataRelease.future;
+        return ProjectsTreeOverview.fromJson({
+          'projects': [
+            {
+              'id': 'project-latency',
+              'label': 'Metadata arrived later',
+              'sessionIds': ['stored_sess_latency'],
+            },
+          ],
+        });
+      },
+      remoteSubmit:
+          ({
+            required sessionId,
+            required text,
+            required onEvent,
+            required onSent,
+          }) {
+            onSent();
+            return submission.future;
+          },
+    );
+
+    hook.handler?.call(DesktopConnectionState.connected);
+    await tester.pump();
+    await tester.enterText(find.byType(TextField), 'Recover before metadata');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    hook.handler?.call(DesktopConnectionState.reconnecting);
+    submission.completeError(
+      JsonRpcError('prompt.submit', 'Desktop gateway connection closed'),
+    );
+    await tester.pump();
+    await tester.pumpAndSettle();
+
+    history.includeCompletedTurn = true;
+    hook.handler?.call(DesktopConnectionState.connected);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(metadataRelease.isCompleted, isFalse);
+    expect(metadataLoads, greaterThanOrEqualTo(2));
+    expect(find.text('Server-side final response'), findsOneWidget);
+
+    metadataRelease.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Metadata arrived later'), findsOneWidget);
+  });
 
   testWidgets(
     'resync retries while the detached turn settles and never clears the '
@@ -177,7 +249,8 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // Close-ordering: submit fails at close, composer restored.
+      // Close-ordering: submit fails at close after wire acceptance, so the
+      // composer stays cleared while reattachment reconciles the turn.
       hook.handler?.call(DesktopConnectionState.reconnecting);
       await tester.pump();
       submission.completeError(
@@ -197,8 +270,8 @@ void main() {
       expect(afterFirstResync, 2, reason: 'first resync fetch attempted');
       expect(
         tester.widget<TextField>(find.byType(TextField)).controller!.text,
-        'Slow settling turn',
-        reason: 'a failed resync must not touch the composer either',
+        isEmpty,
+        reason: 'a failed resync must not resurrect an accepted prompt',
       );
 
       // The row becomes readable: the next retry must land the reply.
@@ -955,6 +1028,7 @@ Future<void> _pumpChat(
   required VoidCallback ensureCount,
   required TestRemotePromptSubmit remoteSubmit,
   String? storedKey,
+  TestProjectOverviewLoader? projectOverviewLoader,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -984,6 +1058,7 @@ Future<void> _pumpChat(
         testDesktopAsyncEventHook: asyncHook,
         testDesktopSessionEnsured: ensureCount,
         testStoredSessionKey: storedKey == null ? null : (_) => storedKey,
+        testProjectOverviewLoader: projectOverviewLoader,
         testVoiceComposerAdapter: FakeVoiceComposerAdapter(),
       ),
     ),

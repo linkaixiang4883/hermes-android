@@ -59,6 +59,7 @@ class DesktopGatewayClient {
   DesktopAsyncEventCallback? _asyncEventListener;
   DesktopAsyncEventSessionPredicate? _asyncEventAcceptsSession;
   DesktopConnectionCallback? _connectionListener;
+  GatewayTurnSessionBoundCallback? _sessionBoundListener;
   GatewayTurnCoordinatorRegistry? _turnCoordinatorRegistry;
   ProjectsGatewayClient? _projects;
   final CapabilityRegistry _capabilities = CapabilityRegistry();
@@ -426,8 +427,14 @@ class DesktopGatewayClient {
     String mobileSessionId,
     _DesktopGatewayBinding binding,
   ) {
+    final bindingChanged =
+        _gatewaySessionIds[mobileSessionId] != binding.runtimeSessionId ||
+        _storedSessionIds[mobileSessionId] != binding.storedSessionId;
     _gatewaySessionIds[mobileSessionId] = binding.runtimeSessionId;
     _storedSessionIds[mobileSessionId] = binding.storedSessionId;
+    if (bindingChanged) {
+      _sessionBoundListener?.call(mobileSessionId, binding.storedSessionId);
+    }
     final resumed = binding.resumed;
     if (resumed != null && resumed.openRequests.isNotEmpty) {
       // The resume payload carries unanswered server→client requests. Deliver
@@ -601,6 +608,15 @@ class DesktopGatewayClient {
 
   void setConnectionListener(DesktopConnectionCallback? listener) {
     _connectionListener = listener;
+  }
+
+  /// Observes each authoritative legacy session binding.
+  ///
+  /// A stock gateway can create the durable session lazily during the first
+  /// attachment or prompt call, so consumers must not rely on an eager
+  /// [ensureSession] having already exposed the stored identity.
+  void setSessionBoundListener(GatewayTurnSessionBoundCallback? listener) {
+    _sessionBoundListener = listener;
   }
 
   Future<RemoteFileAttachment> attachFile({
@@ -841,10 +857,15 @@ class DesktopGatewayClient {
       _serverRequests[requestId]?.method == method;
 
   /// Whether this client owns the active approval for [sessionId].
-  bool ownsApprovalRequest(String sessionId) {
-    final requestId = _serverApprovalByMobileSession[sessionId];
-    return requestId != null &&
-        _serverRequests[requestId]?.method == 'approval';
+  ///
+  /// When [requestId] is supplied, both identities must match. This lets a
+  /// queued UI callback prove the request was not answered by another route
+  /// before it opens a stale approval dialog.
+  bool ownsApprovalRequest(String sessionId, {String? requestId}) {
+    final activeRequestId = _serverApprovalByMobileSession[sessionId];
+    return activeRequestId != null &&
+        (requestId == null || activeRequestId == requestId) &&
+        _serverRequests[activeRequestId]?.method == 'approval';
   }
 
   /// Interrupts the active turn in the Desktop gateway runtime.

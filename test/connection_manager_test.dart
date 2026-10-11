@@ -623,6 +623,99 @@ void main() {
       },
     );
 
+    test('loads and changes a session model through the API Server', () async {
+      final requests = <http.Request>[];
+      final client = ApiClient(
+        baseUrl: 'http://hermes.local:8642',
+        apiKey: 'valid-key',
+        pathPrefix: '/gateway',
+        httpClient: MockClient((request) async {
+          requests.add(request);
+          expect(request.url.host, 'hermes.local');
+          expect(request.url.port, 8642);
+          expect(request.headers['authorization'], 'Bearer valid-key');
+          if (request.method == 'GET' &&
+              request.url.path == '/gateway/api/sessions/mob-123') {
+            return http.Response(
+              jsonEncode({
+                'object': 'hermes.session',
+                'session': {'id': 'mob-123', 'model': 'old-model'},
+              }),
+              200,
+            );
+          }
+          if (request.method == 'GET' &&
+              request.url.path == '/gateway/api/model/options') {
+            return http.Response(
+              jsonEncode({
+                'model': 'profile-default',
+                'provider': 'nous',
+                'providers': [
+                  {
+                    'slug': 'nous',
+                    'models': ['old-model', 'new-model'],
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          if (request.method == 'POST' &&
+              request.url.path == '/gateway/api/sessions/mob-123/model') {
+            expect(jsonDecode(request.body), {
+              'provider': 'nous',
+              'model': 'new-model',
+              'require_model_lock': true,
+            });
+            return http.Response(
+              jsonEncode({
+                'object': 'hermes.session.model_lock',
+                'session_id': 'mob-123',
+              }),
+              200,
+            );
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+
+      final session = await client.getSession('mob-123');
+      final options = await client.getModelOptions();
+      await client.setSessionModel(
+        sessionId: 'mob-123',
+        provider: 'nous',
+        model: 'new-model',
+      );
+
+      expect(session['model'], 'old-model');
+      expect(options['provider'], 'nous');
+      expect(
+        requests.map((request) => '${request.method} ${request.url.path}'),
+        [
+          'GET /gateway/api/sessions/mob-123',
+          'GET /gateway/api/model/options',
+          'POST /gateway/api/sessions/mob-123/model',
+        ],
+      );
+      client.close();
+    });
+
+    test('rejects a malformed single-session response', () async {
+      final client = ApiClient(
+        baseUrl: 'http://hermes.local:8642',
+        apiKey: 'valid-key',
+        httpClient: MockClient(
+          (_) async => http.Response('{"object":"hermes.session"}', 200),
+        ),
+      );
+
+      await expectLater(
+        client.getSession('mob-123'),
+        throwsA(isA<FormatException>()),
+      );
+      client.close();
+    });
+
     test('deleteSession deletes a remote Hermes session', () async {
       final client = ApiClient(
         baseUrl: 'http://hermes.local:8642',
@@ -3184,6 +3277,39 @@ void main() {
           'cwd': '/srv/projects/hermes-android',
         });
         expect(createCalls[1]['params'], isNot(contains('session_id')));
+      });
+
+      test('a lazy stock-gateway submit publishes its durable binding before '
+          'the prompt completes', () async {
+        final client = buildClient();
+        addTearDown(client.close);
+        final bindings = <(String, String)>[];
+        client.setSessionBoundListener((localSessionId, storedSessionId) {
+          bindings.add((localSessionId, storedSessionId));
+        });
+
+        await client
+            .submitPrompt(
+              sessionId: 'mobile-draft',
+              text: 'Create the durable chat lazily',
+              onEvent: (_) {},
+              onSent: () {},
+            )
+            .then<void>((_) {}, onError: (_) {});
+
+        expect(bindings, [('mobile-draft', 'stored-project')]);
+        expect(client.storedSessionKeyFor('mobile-draft'), 'stored-project');
+        final methods = fixture.requests
+            .map((request) => request['method'])
+            .toList();
+        expect(
+          methods,
+          containsAllInOrder([
+            'session.resume',
+            'session.create',
+            'prompt.submit',
+          ]),
+        );
       });
 
       test(

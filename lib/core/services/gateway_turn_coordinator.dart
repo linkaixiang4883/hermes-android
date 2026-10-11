@@ -18,9 +18,9 @@ typedef GatewayTurnStateCallback =
 typedef GatewayTurnSettledCallback =
     void Function(GatewayTurnRecoveryState state);
 
-/// Fired when `session.open` first binds a draft (local) session id to the
-/// server's durable stored id. Lets an owning layer reconcile server-side
-/// records that were keyed by the draft id before the binding existed.
+/// Fired whenever `session.open` authoritatively binds a draft (local) session
+/// id to the server's durable stored id. Lets an owning layer reconcile
+/// server-side records after both first persistence and reconnect.
 typedef GatewayTurnSessionBoundCallback =
     void Function(String localSessionId, String storedSessionId);
 
@@ -132,17 +132,12 @@ class GatewayTurnCoordinatorRegistry {
   final Map<String, GatewayTurnCoordinator> _coordinators = {};
   final Expando<bool> _leasedSockets = Expando<bool>();
   final Map<String, int> _sessionGenerations = {};
+  final Map<String, _GatewayTurnSettledRegistration> _turnSettledListeners = {};
+  final Map<String, _GatewayTurnSessionBoundRegistration>
+  _sessionBoundListeners = {};
   Future<void> _tail = Future<void>.value();
   int _generation = 0;
   bool _closed = false;
-
-  /// Set on every newly opened coordinator so the application layer can
-  /// observe turn settlement without reaching into internal state.
-  GatewayTurnSettledCallback? onTurnSettled;
-
-  /// Set on every newly opened coordinator so an owner can reconcile
-  /// server-side records once a draft session gains its durable stored id.
-  GatewayTurnSessionBoundCallback? onSessionBound;
 
   /// Set on every coordinator so request/event routing can translate the live
   /// runtime session id back to the app's local session id.
@@ -160,6 +155,78 @@ class GatewayTurnCoordinatorRegistry {
     if (!_boundedIdentity(connectionId) || !_lowerHexDigest(endpointDigest)) {
       throw ArgumentError('Invalid coordinator registry identity.');
     }
+  }
+
+  /// Registers the current route owner for one local session's settlements.
+  ///
+  /// Replacing a route returns a new token. A late dispose from the previous
+  /// route cannot unregister its replacement because removal is token-checked.
+  Object setTurnSettledListener(
+    String localSessionId,
+    GatewayTurnSettledCallback listener,
+  ) {
+    if (!_boundedIdentity(localSessionId)) {
+      throw ArgumentError.value(
+        localSessionId,
+        'localSessionId',
+        'Invalid local session identity.',
+      );
+    }
+    if (_closed) {
+      throw const GatewayTurnCoordinatorException(
+        GatewayTurnCoordinatorFailure.closed,
+      );
+    }
+    final token = Object();
+    _turnSettledListeners[localSessionId] = _GatewayTurnSettledRegistration(
+      token,
+      listener,
+    );
+    return token;
+  }
+
+  /// Removes a route's listener only when [registration] still owns it.
+  void removeTurnSettledListener(String localSessionId, Object registration) {
+    final current = _turnSettledListeners[localSessionId];
+    if (current == null || !identical(current.token, registration)) return;
+    _turnSettledListeners.remove(localSessionId);
+  }
+
+  /// Registers the current route owner for one local session's bindings.
+  ///
+  /// Retained coordinators dispatch through this map, so replacing a route
+  /// takes effect without rebuilding its recovery transport.
+  Object setSessionBoundListener(
+    String localSessionId,
+    GatewayTurnSessionBoundCallback listener,
+  ) {
+    if (!_boundedIdentity(localSessionId)) {
+      throw ArgumentError.value(
+        localSessionId,
+        'localSessionId',
+        'Invalid local session identity.',
+      );
+    }
+    if (_closed) {
+      throw const GatewayTurnCoordinatorException(
+        GatewayTurnCoordinatorFailure.closed,
+      );
+    }
+    final token = Object();
+    _sessionBoundListeners[localSessionId] =
+        _GatewayTurnSessionBoundRegistration(token, listener);
+    final durable = _coordinators[localSessionId]?.durableBinding;
+    if (durable != null) {
+      listener(localSessionId, durable.storedSessionId);
+    }
+    return token;
+  }
+
+  /// Removes a route's listener only when [registration] still owns it.
+  void removeSessionBoundListener(String localSessionId, Object registration) {
+    final current = _sessionBoundListeners[localSessionId];
+    if (current == null || !identical(current.token, registration)) return;
+    _sessionBoundListeners.remove(localSessionId);
   }
 
   Future<GatewayTurnCoordinator> open(String localSessionId) {
@@ -190,8 +257,12 @@ class GatewayTurnCoordinatorRegistry {
                 uuidFactory: uuidFactory,
                 clock: clock,
               )
-              ..onTurnSettled = onTurnSettled
-              ..onSessionBound = onSessionBound
+              ..onTurnSettled = (state) {
+                _turnSettledListeners[localSessionId]?.listener(state);
+              }
+              ..onSessionBound = (local, stored) {
+                _sessionBoundListeners[localSessionId]?.listener(local, stored);
+              }
               ..onRuntimeBound = onRuntimeBound,
       );
       Object? firstError;
@@ -292,6 +363,8 @@ class GatewayTurnCoordinatorRegistry {
   Future<void> close(String localSessionId) {
     _sessionGenerations[localSessionId] =
         (_sessionGenerations[localSessionId] ?? 0) + 1;
+    _turnSettledListeners.remove(localSessionId);
+    _sessionBoundListeners.remove(localSessionId);
     return _serialized(() async {
       final coordinator = _coordinators[localSessionId];
       if (coordinator == null) return;
@@ -309,6 +382,8 @@ class GatewayTurnCoordinatorRegistry {
     if (_closed) return _tail;
     _closed = true;
     _generation += 1;
+    _turnSettledListeners.clear();
+    _sessionBoundListeners.clear();
     return _serialized(() async {
       final coordinators = _coordinators.values.toList(growable: false);
       Object? firstError;
@@ -358,6 +433,20 @@ class GatewayTurnCoordinatorRegistry {
   }
 }
 
+class _GatewayTurnSettledRegistration {
+  final Object token;
+  final GatewayTurnSettledCallback listener;
+
+  const _GatewayTurnSettledRegistration(this.token, this.listener);
+}
+
+class _GatewayTurnSessionBoundRegistration {
+  final Object token;
+  final GatewayTurnSessionBoundCallback listener;
+
+  const _GatewayTurnSessionBoundRegistration(this.token, this.listener);
+}
+
 /// Serializes one local chat's open/submit/event/reconcile lifecycle.
 class GatewayTurnCoordinator {
   static const int maxSettledTombstones = GatewayTurnJournal.maxEntries;
@@ -389,7 +478,7 @@ class GatewayTurnCoordinator {
   /// whether completed successfully or fail-closed.
   GatewayTurnSettledCallback? onTurnSettled;
 
-  /// Called when `session.open` first binds this draft session to a stored id.
+  /// Called after every authoritative durable `session.open` binding.
   GatewayTurnSessionBoundCallback? onSessionBound;
 
   /// Called whenever this coordinator binds to a live runtime session id.
@@ -896,11 +985,10 @@ class GatewayTurnCoordinator {
       );
       await journal.upsertBinding(durable);
       _requireOperational();
-      if (previous == null) {
-        // First binding for this draft session: the durable id now exists,
-        // so an owner can reconcile records that were keyed by the draft id.
-        onSessionBound?.call(localSessionId, durable.storedSessionId);
-      }
+      // The binding version is authoritative even when this is a reconnect.
+      // Notify after its journal write so consumers can safely reconcile
+      // metadata against the current durable identity.
+      onSessionBound?.call(localSessionId, durable.storedSessionId);
       _invalidateStagedAttachments();
       _transportGeneration += 1;
       _client = client;
