@@ -44,7 +44,7 @@
 | clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1274**（2026-10-11 合 v2.1.17 后）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1288**（2026-10-13 合 v2.1.19 后）。
 
 
 
@@ -119,6 +119,15 @@
 - **决议**：全部继承 v2.1.12 决议（overlay 全保留、上游新功能整体吸收、版本随上游、只推 fork）——用户 2026-10-11「好，开搞」批准计划
 - **门禁**：analyze 0 + `flutter test` **1274**（1162 → +112，上游新功能测试）
 - **本窗口新坑**：① **"假干净"双重坑**——`python 脚本 && … || echo 干净` 链条：脚本因 MSYS 路径喂给原生 python 没跑成（`D:\c\...`），`||` 却输出了"干净"，且随后把仍带冲突标记的文件 `git add`（伪装已解决）。正解：原生工具参数用 `C:/` 路径、关键步骤只用 `;` 分隔 + 裸命令复核、误操作后 `git reset -- <file>` 回未解重跑；② gen-l10n 后**零增量** = 自动合并的生成件已 canonical，属正常；③ 双侧自动合并文件（connection_manager/desktop_gateway_client/l10n 全套）仍需过门禁 + 抽查 overlay 区块。
+
+### 4d) 上游 merge 记录与基线（2026-10-13，`74e9ad8`，v2.1.18→2.1.19）
+
+- 已合入上游 **2.1.19+2159**（6 commits / 2 releases）——**composer 键盘/溢出重构**（#139：`_buildInputBar(availableHeight:)` 滚动区/固定控件分层，多行/多附件/大字号/软键盘不再把输入框顶出视口）与**本机聊天置顶**（#140：`local_chat_pin_store` 按连接本地存、不动网关、随 app 备份走）
+- **冲突 14 文件**：`chat_screen`（1）+ l10n 13（en/zh/zh_Hans arb 各 1 + 10 生成件）——arb = 双方尾部追加（全留 + 逗号修补 + `json.loads` 全文件校验）；生成件以 `gen-l10n` 重生成消解
+- **重要教训（本窗口新增）**：**ort 真冲突形态可能与 merge-file 预演不同**——chat_screen 预演为"双方各持内容"，真 merge 是"**ours 非空 / theirs 空**"（上游把该段整体搬迁进新方法 `_buildInputBar`）。处置模式 = **丢弃 ours 侧旧内容（重复体），把 overlay 块按新结构重插**（usage 条 +8 缩进插入新滚动列，模型行与附件块之间）；先看真标记两侧内容再写解析脚本，勿只按预演动手
+- **overlay**：全数存续（usage/TTS/STT/推理守卫/heroTag/clarify 守卫/8 keys）——guard 复核通过
+- **门禁**：analyze 0 + `flutter test` **1288**（1274 → +14）
+- **本窗口决议**：**跳过真机 QA**（用户 2026-10-13：USB 不可用）——真机首验由用户装 release 完成
 
 ### 5) Hermes 0.21.5：server→client 请求要先"广告"能力（2026-09-29，`d312bef`，真机复验 ✅）
 
