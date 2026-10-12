@@ -670,5 +670,9 @@
   "project_move_context_pending": "项目文档将在该会话下次压缩上下文或重新打开后加载",
   "speech_recognition_use_keyboard": "语音识别服务不可用，请使用输入法键盘上的语音按钮",
   "dictation_ready": "听写完成，可编辑",
-  "turn_stopped": "已停止"
+  "turn_stopped": "已停止",
+  "pin_on_this_device": "在此设备上置顶",
+  "unpin_on_this_device": "在此设备上取消置顶",
+  "pinned_on_this_device": "在此设备上置顶的聊天",
+  "could_not_save_chat_pin": "无法在此设备上保存聊天置顶"
 }

@@ -4,6 +4,34 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [2.1.19] - 2026-10-12
+
+### Added
+
+- Android-only chat pins now keep chosen conversations above the Chats browser
+  and classic session list. Pins are per connection, survive app restarts and
+  compression continuations, and travel with app backups without changing the
+  Gateway's server-side pinned flag or other clients. Filters and search still
+  apply (PR #140).
+
+### Thanks
+
+- No external contributors in this patch.
+
+## [2.1.18] - 2026-10-12
+
+### Fixed
+
+- Multiline captions, multiple attachment drafts, large text, gateway notices,
+  and the on-screen keyboard no longer push the chat editor or Send button
+  below the visible viewport. Composer extras scroll before the fixed controls,
+  including in narrow landscape and unusually short layouts (PR #139).
+
+### Thanks
+
+- @simplaerai-sv for the responsive composer implementation and regression
+  coverage across portrait, landscape, narrow-screen, and large-text layouts.
+
 ## [2.1.17] - 2026-10-11
 
 ### Fixed

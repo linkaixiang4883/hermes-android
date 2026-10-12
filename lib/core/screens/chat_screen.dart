@@ -4367,23 +4367,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 ),
               Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(child: _buildBody()),
-                    if (_endAffordanceController.isVisible)
-                      Positioned(
-                        right: 12,
-                        bottom: 12,
-                        child: ChatEndAffordance(
-                          newMessageCount:
-                              _endAffordanceController.newMessageCount,
-                          onPressed: _goToEnd,
+                child: LayoutBuilder(
+                  builder: (context, viewport) => Column(
+                    children: [
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            Positioned.fill(child: _buildBody()),
+                            if (_endAffordanceController.isVisible)
+                              Positioned(
+                                right: 12,
+                                bottom: 12,
+                                child: ChatEndAffordance(
+                                  newMessageCount:
+                                      _endAffordanceController.newMessageCount,
+                                  onPressed: _goToEnd,
+                                ),
+                              ),
+                          ],
                         ),
                       ),
-                  ],
+                      _buildInputBar(availableHeight: viewport.maxHeight),
+                    ],
+                  ),
                 ),
               ),
-              _buildInputBar(),
             ],
           ),
         ),
@@ -4415,9 +4423,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildInputBar() {
+  Widget _buildInputBar({required double availableHeight}) {
+    const minimumControlsHeight = 56.0;
+    final composerMaxHeight = availableHeight <= minimumControlsHeight
+        ? availableHeight
+        : (availableHeight * 0.85)
+              .clamp(minimumControlsHeight, availableHeight)
+              .toDouble();
     return Container(
       key: const Key('chat-input-bar'),
+      // Leave some transcript visible when space permits. At very small
+      // heights, the fixed controls take priority and extras scroll away.
+      constraints: BoxConstraints(maxHeight: composerMaxHeight),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
@@ -4429,174 +4446,198 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (_gatewayTurnStatus != null && (_sending || _streaming))
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
-                decoration: BoxDecoration(
-                  color: Theme.of(
-                    context,
-                  ).colorScheme.secondaryContainer.withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    const SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(strokeWidth: 1.8),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        _gatewayTurnStatus!.text,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
-                child: Semantics(
-                  label: context.l10n.choose_chat_model,
-                  value: _sessionModel ?? widget.session.model,
-                  button: true,
-                  enabled:
-                      !(_sending ||
-                          _streaming ||
-                          _pendingReattachResync ||
-                          _loadingModelOptions ||
-                          _changingModel),
-                  excludeSemantics: true,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: TextButton.icon(
-                      onPressed:
-                          (_sending ||
-                              _streaming ||
-                              _pendingReattachResync ||
-                              _loadingModelOptions ||
-                              _changingModel)
-                          ? null
-                          : _showModelSelector,
-                      icon: _loadingModelOptions || _changingModel
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.tune, size: 18),
-                      label: Text(
-                        context.l10n.model_scope_label(
-                          _sessionModel ?? widget.session.model,
-                          _sessionModelOverride
-                              ? context.l10n.this_chat
-                              : context.l10n.profile_default,
+                    if (_gatewayTurnStatus != null && (_sending || _streaming))
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            if (_contextUsage != null || _lastTurnUsage != null)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest
-                      .withValues(alpha: 0.55),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Semantics(
-                  label: context.l10n.usage_title,
-                  value: _hintLabel(),
-                  button: true,
-                  excludeSemantics: true,
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 48),
-                    child: InkWell(
-                      key: const Key('usage-hint-bar'),
-                      borderRadius: BorderRadius.circular(12),
-                      onTap: _showUsageDialog,
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .secondaryContainer
+                              .withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                         child: Row(
                           children: [
+                            const SizedBox.square(
+                              dimension: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 1.8,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                _hintLabel(),
-                                maxLines: 1,
+                                _gatewayTurnStatus!.text,
+                                maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                             ),
-                            Icon(
-                              Icons.chevron_right,
-                              size: 14,
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.onSurfaceVariant,
-                            ),
                           ],
                         ),
                       ),
-                    ),
-                  ),
-                ),
-              ),
-            if (_attachmentDrafts.isNotEmpty)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Semantics(
-                  label: context.l10n.attachment_drafts,
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(context).height * 0.32,
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: _attachmentDrafts.length,
-                      itemBuilder: (context, index) => AttachmentDraftTile(
-                        draft: _attachmentDrafts[index],
-                        index: index,
-                        total: _attachmentDrafts.length,
-                        busy: _sending,
-                        onMovePrevious: () =>
-                            _moveAttachment(_attachmentDrafts[index], -1),
-                        onMoveNext: () =>
-                            _moveAttachment(_attachmentDrafts[index], 1),
-                        onRetry: () =>
-                            _retryAttachment(_attachmentDrafts[index]),
-                        onRemove: () =>
-                            _removeAttachment(_attachmentDrafts[index]),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
+                        child: Semantics(
+                          label: context.l10n.choose_chat_model,
+                          value: _sessionModel ?? widget.session.model,
+                          button: true,
+                          enabled:
+                              !(_sending ||
+                                  _streaming ||
+                                  _pendingReattachResync ||
+                                  _loadingModelOptions ||
+                                  _changingModel),
+                          excludeSemantics: true,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: TextButton.icon(
+                              onPressed:
+                                  (_sending ||
+                                      _streaming ||
+                                      _pendingReattachResync ||
+                                      _loadingModelOptions ||
+                                      _changingModel)
+                                  ? null
+                                  : _showModelSelector,
+                              icon: _loadingModelOptions || _changingModel
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.tune, size: 18),
+                              label: Text(
+                                context.l10n.model_scope_label(
+                                  _sessionModel ?? widget.session.model,
+                                  _sessionModelOverride
+                                      ? context.l10n.this_chat
+                                      : context.l10n.profile_default,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    if (_contextUsage != null || _lastTurnUsage != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Semantics(
+                          label: context.l10n.usage_title,
+                          value: _hintLabel(),
+                          button: true,
+                          excludeSemantics: true,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(minHeight: 48),
+                            child: InkWell(
+                              key: const Key('usage-hint-bar'),
+                              borderRadius: BorderRadius.circular(12),
+                              onTap: _showUsageDialog,
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        _hintLabel(),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: Theme.of(context).textTheme.bodySmall,
+                                      ),
+                                    ),
+                                    Icon(
+                                      Icons.chevron_right,
+                                      size: 14,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_attachmentDrafts.isNotEmpty)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Semantics(
+                          label: context.l10n.attachment_drafts,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(
+                              // Scaffold has already subtracted the keyboard and app bar.
+                              maxHeight: availableHeight * 0.32,
+                            ),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: _attachmentDrafts.length,
+                              itemBuilder: (context, index) =>
+                                  AttachmentDraftTile(
+                                    draft: _attachmentDrafts[index],
+                                    index: index,
+                                    total: _attachmentDrafts.length,
+                                    busy: _sending,
+                                    onMovePrevious: () => _moveAttachment(
+                                      _attachmentDrafts[index],
+                                      -1,
+                                    ),
+                                    onMoveNext: () => _moveAttachment(
+                                      _attachmentDrafts[index],
+                                      1,
+                                    ),
+                                    onRetry: () => _retryAttachment(
+                                      _attachmentDrafts[index],
+                                    ),
+                                    onRemove: () => _removeAttachment(
+                                      _attachmentDrafts[index],
+                                    ),
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_voiceComposer.listening)
+                      VoiceComposerIndicator(
+                        controller: _voiceComposer,
+                        onStop: () => unawaited(_voiceComposer.stop()),
+                        onCancel: () => unawaited(_voiceComposer.cancel()),
+                      ),
+                  ],
                 ),
               ),
-            if (_voiceComposer.listening)
-              VoiceComposerIndicator(
-                controller: _voiceComposer,
-                onStop: () => unawaited(_voiceComposer.stop()),
-                onCancel: () => unawaited(_voiceComposer.cancel()),
-              ),
+            ),
             Row(
               children: [
                 Semantics(
@@ -4628,30 +4669,35 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   child: Semantics(
                     label: context.l10n.message,
                     textField: true,
-                    child: TextField(
-                      key: const Key('chat-message-composer'),
-                      controller: _textController,
-                      decoration: InputDecoration(
-                        hintText: context.l10n.message_hermes,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        isDense: true,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: (availableHeight * 0.30).clamp(48.0, 160.0),
                       ),
-                      minLines: 1,
-                      maxLines: 5,
-                      textCapitalization: TextCapitalization.sentences,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.send,
-                      enabled:
-                          !_transcriptLoadBlocksComposer &&
-                          !_streaming &&
-                          !_pendingReattachResync,
-                      onSubmitted: (_) => _sendMessage(),
+                      child: TextField(
+                        key: const Key('chat-message-composer'),
+                        controller: _textController,
+                        decoration: InputDecoration(
+                          hintText: context.l10n.message_hermes,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(24),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          isDense: true,
+                        ),
+                        minLines: 1,
+                        maxLines: 5,
+                        textCapitalization: TextCapitalization.sentences,
+                        keyboardType: TextInputType.multiline,
+                        textInputAction: TextInputAction.send,
+                        enabled:
+                            !_transcriptLoadBlocksComposer &&
+                            !_streaming &&
+                            !_pendingReattachResync,
+                        onSubmitted: (_) => _sendMessage(),
+                      ),
                     ),
                   ),
                 ),

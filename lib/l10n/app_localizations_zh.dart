@@ -2389,6 +2389,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get turn_stopped => '已停止';
+
+  @override
+  String get pin_on_this_device => '在此设备上置顶';
+
+  @override
+  String get unpin_on_this_device => '在此设备上取消置顶';
+
+  @override
+  String get pinned_on_this_device => '在此设备上置顶的聊天';
+
+  @override
+  String get could_not_save_chat_pin => '无法在此设备上保存聊天置顶';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -4770,4 +4782,16 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get turn_stopped => '已停止';
+
+  @override
+  String get pin_on_this_device => '在此设备上置顶';
+
+  @override
+  String get unpin_on_this_device => '在此设备上取消置顶';
+
+  @override
+  String get pinned_on_this_device => '在此设备上置顶的聊天';
+
+  @override
+  String get could_not_save_chat_pin => '无法在此设备上保存聊天置顶';
 }

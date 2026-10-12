@@ -2455,4 +2455,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get turn_stopped => 'Stopped';
+
+  @override
+  String get pin_on_this_device => 'Pin on this device';
+
+  @override
+  String get unpin_on_this_device => 'Unpin on this device';
+
+  @override
+  String get pinned_on_this_device => 'Pinned on this device';
+
+  @override
+  String get could_not_save_chat_pin =>
+      'Could not save chat pin on this device';
 }

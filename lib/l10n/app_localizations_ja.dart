@@ -2409,4 +2409,16 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get turn_stopped => 'Stopped';
+
+  @override
+  String get pin_on_this_device => 'この端末でピン留め';
+
+  @override
+  String get unpin_on_this_device => 'この端末でピン留めを解除';
+
+  @override
+  String get pinned_on_this_device => 'この端末でピン留め中';
+
+  @override
+  String get could_not_save_chat_pin => 'この端末でチャットのピン留めを保存できませんでした';
 }

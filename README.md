@@ -1,4 +1,4 @@
-# Hermes Android — v2.1.17
+# Hermes Android — v2.1.19
 
 Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — chat with your Hermes sessions from a phone or tablet over local Wi-Fi or a private Tailscale network.
 
@@ -14,7 +14,7 @@ Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — ch
 
 ## Current release
 
-- Version: **2.1.17** (build 2157)
+- Version: **2.1.19** (build 2159)
 - Package: `com.hermesagent.hermes_android`
 - Recommended APK for modern phones: ARM64 release build from the
   [Releases](https://github.com/rusty4444/hermes-android/releases) page.
@@ -36,6 +36,10 @@ Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — ch
 - Legacy REST remains fail-closed to one image and does not expose multi-select.
 - Per-chat model and thinking effort without changing the profile default.
 - Search, Rename, Branch, and Delete for remote conversations.
+- Pin and unpin chats on this device from the Chats action menu. Local pins
+  stay above the dated chat list, including when a chat has moved past the
+  first page; they do not change Hermes's server-side pinned flag or another
+  device's ordering. Pins are saved per connection and included in app backups.
 - Native approval, sudo/secret, clarification, reasoning, tool activity,
   notifications, background results, reviews, and subagent status.
 - Persistent reconnect/session resume and defensive retry handling.
@@ -54,9 +58,24 @@ while Android is backgrounded, the app re-syncs that session's server-side
 history on resume. The durable exactly-once recovery path activates only when a
 gateway explicitly advertises the compatible recovery contract.
 
-See [CHANGELOG.md](CHANGELOG.md) for the complete `.17` change list and
+See [CHANGELOG.md](CHANGELOG.md) for the complete `.19` change list and
 [docs/HERMESAPK_DEVELOPMENT_LOG.md](docs/HERMESAPK_DEVELOPMENT_LOG.md) for the
 sanitized implementation and validation record.
+
+## What's new in v2.1.19
+
+- **Pin chats on this device** — use a chat's action menu to keep it above the
+  dated Workspace Chats list or classic session list. Pins persist per saved
+  connection, survive app restarts and chat compression, and are included in
+  app backups. Pinning does not alter Hermes's server-side state or another
+  device's order; search and chat filters still apply (PR #140).
+
+## What's new in v2.1.18
+
+- **Composer controls stay above the keyboard** — multiline captions and
+  multiple attachment drafts now remain usable in portrait, landscape, narrow
+  screens, large text, and layouts containing gateway notices. Drafts and
+  status details scroll before the editor and Send button move off-screen.
 
 ## What's new in v2.1.17
 
@@ -565,6 +584,10 @@ Spoken replies require Google Text-to-Speech to be installed and configured on y
 
 - Browse all Hermes sessions.
 - Tap a session to open its chat.
+- Use a chat's **⋮** menu to **Pin on this device** or **Unpin on this device**.
+  Pinned chats appear first in the Workspace Chats browser and the classic
+  session list. Filters and search still apply, and the pin is only stored in
+  the Android app, not synced to the Hermes server.
 - Pull to refresh the session list.
 - Create a new session from the session list header.
 
@@ -617,7 +640,7 @@ cp build/app/outputs/flutter-apk/app-*-release.apk release-apks/
 block in `android/app/build.gradle.kts` derives per-ABI codes as
 `base * 10 + ABI code` (armeabi-v7a = 1, arm64-v8a = 2, x86_64 = 3), so the
 codes stay ordered armeabi-v7a < arm64-v8a < x86_64 as fdroiddata requires.
-For v2.1.17, base `2157` therefore produces codes `21571`/`21572`/`21573`.
+For v2.1.19, base `2159` therefore produces codes `21591`/`21592`/`21593`.
 CI reads the completed arm64 APK with `aapt` and fails if that relationship
 drifts. Release-floor checks continue to apply to the base value and must not
 be weakened to rely on the ABI code.
@@ -728,6 +751,9 @@ lib/
 
 ## Credits
 
+- **simplaerai-sv** — kept the attachment composer, multiline captions, and
+  Send button usable above the keyboard across narrow, landscape, and
+  large-text layouts, with focused widget regressions in PR #139 (v2.1.18).
 - **HorCyChangGenitek** — reported and documented the API-only model-picker
   failure that incorrectly required the Desktop Dashboard on port `9119`
   (#129). Fixed in v2.1.17.
