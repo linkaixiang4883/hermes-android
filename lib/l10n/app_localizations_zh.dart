@@ -1614,10 +1614,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get starting_hermes => '正在启动 Hermes…';
 
   @override
-  String get media_card_download => 'Download file';
+  String get media_card_download => '下载文件';
 
   @override
-  String get media_card_tap_to_download => 'Tap to download';
+  String get media_card_tap_to_download => '点按下载';
 
   @override
   String get still_loading_your_projects => '正在加载你的项目。';
@@ -4014,6 +4014,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get starting_hermes => '正在启动 Hermes…';
+
+  @override
+  String get media_card_download => '下载文件';
+
+  @override
+  String get media_card_tap_to_download => '点按下载';
 
   @override
   String get still_loading_your_projects => '正在加载你的项目。';

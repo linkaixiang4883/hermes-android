@@ -466,6 +466,8 @@
   "start_something_new": "开启新任务",
   "start_voice_input": "开始语音输入",
   "starting_hermes": "正在启动 Hermes…",
+  "media_card_download": "下载文件",
+  "media_card_tap_to_download": "点按下载",
   "still_loading_your_projects": "正在加载你的项目。",
   "stop": "停止",
   "stop_response": "停止响应",
