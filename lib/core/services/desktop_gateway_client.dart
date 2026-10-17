@@ -23,6 +23,14 @@ typedef DesktopConnectionCallback =
 typedef DesktopLiveTurnCallback =
     void Function(String mobileSessionId, LiveTurnProjection? projection);
 
+/// A replay window the gateway could not deliver hole-free, reported with the
+/// mobile session id whose transcript has to be re-read to repair it.
+///
+/// The transport asks nothing further and delivers nothing else for that gap,
+/// so a re-read of history is the only repair there is.
+typedef DesktopReplayTruncatedCallback =
+    void Function(String mobileSessionId);
+
 enum DesktopConnectionState {
   disconnected,
   connecting,
@@ -107,6 +115,27 @@ class DesktopGatewayClient {
   /// Per-token `acceptsSession` predicates, absent for uncapped listeners.
   final Map<Object, DesktopAsyncEventSessionPredicate>
   _liveTurnListenerAccepts = {};
+
+  /// Replay-truncation listeners keyed by their registration token, in
+  /// delivery order.
+  ///
+  /// Multiplexed for the same reason as [_liveTurnListeners]: the shared
+  /// connection is observed by the mounted chat screen and, later, by whatever
+  /// else reads history for the same session.
+  final Map<Object, DesktopReplayTruncatedCallback> _replayTruncatedListeners =
+      {};
+
+  /// Gateway session ids whose replay window was reported truncated before this
+  /// client could name their mobile chat.
+  ///
+  /// A hole is reported by the socket while its greeting folds in — i.e. during
+  /// a reconnect, right after [_openSocket] dropped the runtime bindings — so a
+  /// report can arrive for a session this client cannot name yet. Nothing
+  /// replays that report, so the gateway id is parked here and delivered the
+  /// moment the binding that names it appears (see [_rememberBinding]). Every
+  /// reconnect starts a new numbering and drops the parked ids with it, and
+  /// [close] clears them.
+  final Set<String> _unmappedReplayTruncations = {};
   GatewayTurnCoordinatorRegistry? _turnCoordinatorRegistry;
   ProjectsGatewayClient? _projects;
   final CapabilityRegistry _capabilities = CapabilityRegistry();
@@ -335,6 +364,9 @@ class DesktopGatewayClient {
           : DesktopConnectionState.reconnecting,
     );
     _gatewaySessionIds.clear();
+    // A parked truncation names a numbering of the socket that is being
+    // replaced; the new socket reports the holes it finds on its own round.
+    _unmappedReplayTruncations.clear();
     _serverRequests.clear();
     _serverRequestClients.clear();
     _serverRequestMobileSessionIds.clear();
@@ -538,6 +570,13 @@ class DesktopGatewayClient {
     _storedSessionIds[mobileSessionId] = binding.storedSessionId;
     if (bindingChanged) {
       _dispatchSessionBound(mobileSessionId, binding.storedSessionId);
+    }
+    // A hole the socket reported while this session was still nameless — the
+    // reconnect re-binds after its replay round has already started, and the
+    // report names a runtime id nothing maps yet — is delivered here, the
+    // moment that report can name the chat whose transcript has to be re-read.
+    if (_unmappedReplayTruncations.remove(binding.runtimeSessionId)) {
+      _dispatchReplayTruncated(mobileSessionId);
     }
     final resumed = binding.resumed;
     if (resumed != null && resumed.openRequests.isNotEmpty) {
@@ -752,6 +791,68 @@ class DesktopGatewayClient {
   /// callback that fires into a disposed screen returns immediately anyway.
   @visibleForTesting
   int get liveTurnListenerCount => _liveTurnListeners.length;
+
+  /// Registers a replay-truncation listener and returns its removal token.
+  ///
+  /// The listener is told the mobile session id whose replay window the
+  /// gateway's ring evicted: the retained tail has a hole (a missing message
+  /// prefix, tool state or terminal frame), so this chat's transcript has to be
+  /// re-read — the transport asks nothing further and delivers nothing else for
+  /// that gap. Listeners coexist instead of replacing one another, delivery
+  /// order is registration order, and each detaches by its own token: the same
+  /// contract as [addLiveTurnListener].
+  Object addReplayTruncatedListener(DesktopReplayTruncatedCallback callback) {
+    final token = Object();
+    _replayTruncatedListeners[token] = callback;
+    return token;
+  }
+
+  /// Detaches exactly the listener [token] was returned for.
+  ///
+  /// A stale token — one already removed, or belonging to a closed client — is
+  /// a no-op, so a teardown path can run twice safely.
+  void removeReplayTruncatedListener(Object token) {
+    _replayTruncatedListeners.remove(token);
+  }
+
+  /// How many replay-truncation listeners are attached.
+  ///
+  /// Exposed for the same reason as [liveTurnListenerCount].
+  @visibleForTesting
+  int get replayTruncatedListenerCount => _replayTruncatedListeners.length;
+
+  /// Fans a truncated-replay report out to every listener.
+  ///
+  /// Registration order is delivery order. The set is snapshotted first, and a
+  /// listener that throws is swallowed: the same contract as
+  /// [_dispatchAsyncEvent]. Unlike the async bridge there is no
+  /// `acceptsSession` predicate — the report names the mobile session, and the
+  /// consumer that owns its transcript is the one that can act on it.
+  void _dispatchReplayTruncated(String mobileSessionId) {
+    if (_replayTruncatedListeners.isEmpty) return;
+    for (final listener in List.of(_replayTruncatedListeners.values)) {
+      try {
+        listener(mobileSessionId);
+      } catch (_) {
+        // Swallowed on purpose: see the contract above.
+      }
+    }
+  }
+
+  /// Reports a replay hole the socket found on [gatewaySessionId]'s window.
+  ///
+  /// The socket names the session the way the gateway does (its runtime id);
+  /// listeners are told the mobile chat id they know. A session this client
+  /// cannot name yet — the reconnect reports the hole before it has re-bound
+  /// anything — is parked and delivered by [_rememberBinding].
+  void _handleReplayTruncated(String gatewaySessionId) {
+    final mobileSessionId = _mobileSessionIdFor(gatewaySessionId);
+    if (mobileSessionId == null) {
+      _unmappedReplayTruncations.add(gatewaySessionId);
+      return;
+    }
+    _dispatchReplayTruncated(mobileSessionId);
+  }
 
   /// The gateway's latest live-turn projection for [mobileSessionId], or null
   /// when it reports no running turn.
@@ -1103,6 +1204,14 @@ class DesktopGatewayClient {
       // ignores the duplicate unless legacy reattach recovery is pending.
       _dispatchAsyncEvent(mobileSessionId, deliveredEvent);
     };
+    // A replay window the gateway's ring evicted leaves a hole no frame will
+    // repair. The socket says so once per round, on the session whose gap it is
+    // — and that report is what makes the owning consumer re-read history. The
+    // handler is an instance field of [client], so this assignment is the only
+    // registration: a reconnect reuses the same WsClient (see [_openSocket])
+    // and a later `_installAsyncEventBridge` call would install it on a
+    // different socket, never stack a second one here.
+    client.onReplayTruncated = _handleReplayTruncated;
   }
 
   String _serverRequestKey(WsClient client, String wireRequestId) =>
@@ -1533,6 +1642,8 @@ class DesktopGatewayClient {
     _liveTurnListeners.clear();
     _liveTurnListenerAccepts.clear();
     _liveProjections.clear();
+    _replayTruncatedListeners.clear();
+    _unmappedReplayTruncations.clear();
     _projects = null;
     _ws?.close();
     _ws = null;

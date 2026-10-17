@@ -182,6 +182,68 @@ void main() {
     expect(unscoped, ['$_mobileB#1', '$_mobileA#2']);
   });
 
+  test('the bridge carries the stream frames a following screen renders', () async {
+    final gateway = await _MultiplexFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(client.close);
+
+    final delivered = <String>[];
+    client.addAsyncEventListener(
+      (sessionId, event) =>
+          delivered.add('$sessionId#${event.type}#${event.seq}'),
+    );
+
+    await client.ensureSession(_mobileA);
+
+    // Phase 4 put a followed turn's own frames on this bridge — a screen that
+    // follows a turn it did NOT submit has no submit listener to receive them —
+    // and the tool family is matched by PREFIX, so a tool name this client has
+    // never heard of still reaches the activity card. Both facts are invisible
+    // to a test of the predicate alone: what has to hold is that the SOCKET
+    // hands these frames to the registered listeners, which is the wiring a
+    // revert to the pre-Phase-4 whitelist at the call site would silently undo.
+    // (The notification below is the control: it is on both whitelists, so a
+    // delivery list missing only the stream frames reads as exactly that.)
+    await gateway.sendEvent(
+      sessionId: _runtimeSession(1),
+      seq: 1,
+      text: 'notice',
+      type: 'notification.show',
+    );
+    await gateway.sendEvent(
+      sessionId: _runtimeSession(1),
+      seq: 2,
+      text: 'partial',
+      type: 'message.delta',
+    );
+    await gateway.sendEvent(
+      sessionId: _runtimeSession(1),
+      seq: 3,
+      text: 'web_search',
+      type: 'tool.start',
+    );
+    // Everything else keeps the pre-Phase-4 filtering: `message.start` has no
+    // consumer on the bridge and must be dropped before any listener sees it.
+    await gateway.sendEvent(
+      sessionId: _runtimeSession(1),
+      seq: 4,
+      text: 'ignored',
+      type: 'message.start',
+    );
+
+    await _waitFor(() => delivered.isNotEmpty);
+    await _settle();
+
+    expect(delivered, [
+      '$_mobileA#notification.show#1',
+      '$_mobileA#message.delta#2',
+      '$_mobileA#tool.start#3',
+    ]);
+  });
+
   test('session-bound bindings fan out and survive a removal', () async {
     final gateway = await _MultiplexFakeGateway.start();
     addTearDown(gateway.stop);
@@ -389,11 +451,16 @@ class _MultiplexFakeGateway {
     }
   }
 
-  /// Pushes one durable event frame for [sessionId] on the live socket.
+  /// Pushes one event frame for [sessionId] on the live socket.
+  ///
+  /// [type] is what the socket classifies the frame as, so a test can push any
+  /// event family through the real bridge instead of only the notification the
+  /// earlier cases needed.
   Future<void> sendEvent({
     required String sessionId,
     required int seq,
     required String text,
+    String type = 'notification.show',
   }) async {
     await _waitFor(() => _sockets.isNotEmpty);
     _safeAdd(_sockets.last,
@@ -401,7 +468,7 @@ class _MultiplexFakeGateway {
         'jsonrpc': '2.0',
         'method': 'event',
         'params': <String, dynamic>{
-          'type': 'notification.show',
+          'type': type,
           'session_id': sessionId,
           'seq': seq,
           'payload': <String, dynamic>{'text': text},

@@ -271,6 +271,17 @@ class TestDesktopLiveTurnHook {
   handler;
 }
 
+/// Test seam for the truncated-replay reports the shared gateway client
+/// forwards from the transport (Phase 5).
+///
+/// The screen fills [handler] in `initState`, where it also registers its
+/// listener on the client; a test then hands it the mobile session id a
+/// truncated `session.events.since` would have reported, without a socket.
+@visibleForTesting
+class TestDesktopReplayTruncatedHook {
+  void Function(String mobileSessionId)? handler;
+}
+
 /// Repeat usage frames share the incoming total; skipping them avoids a
 /// redundant rebuild for the same turn snapshot.
 @visibleForTesting
@@ -374,6 +385,13 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final TestDesktopLiveTurnHook? testDesktopLiveTurnHook;
 
+  /// Passed by tests when no real Desktop gateway is configured: the screen
+  /// attaches its truncated-replay handler to this hook in `initState`, so a
+  /// test can deliver the report a `session.events.since` window that the
+  /// gateway's ring evicted would have produced, without a live socket.
+  @visibleForTesting
+  final TestDesktopReplayTruncatedHook? testDesktopReplayTruncatedHook;
+
   /// Supplies an authoritative Projects tree without a real gateway.
   @visibleForTesting
   final TestProjectOverviewLoader? testProjectOverviewLoader;
@@ -433,6 +451,7 @@ class ChatScreen extends StatefulWidget {
     this.testDesktopConnectionHook,
     this.testDesktopAsyncEventHook,
     this.testDesktopLiveTurnHook,
+    this.testDesktopReplayTruncatedHook,
     this.testProjectOverviewLoader,
     this.testDesktopSessionEnsured,
     this.testDesktopEnsureSessionHook,
@@ -474,6 +493,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Object? _desktopSessionBoundToken;
   Object? _desktopConnectionListenerToken;
   Object? _desktopLiveTurnToken;
+  Object? _desktopReplayTruncatedToken;
 
   /// Whether this screen built the gateway client it bound to, and is
   /// therefore the one that closes it.
@@ -742,6 +762,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // snapshot this screen rebuilds its bubbles from.
         _desktopLiveTurnToken = gateway.addLiveTurnListener(_onDesktopLiveTurn);
         widget.testDesktopLiveTurnHook?.handler = _onDesktopLiveTurn;
+        // A replay window the gateway's ring evicted leaves a hole in this
+        // chat's stream that no frame will fill: the report is what makes this
+        // screen re-read history (see [_onDesktopReplayTruncated]).
+        _desktopReplayTruncatedToken = gateway.addReplayTruncatedListener(
+          _onDesktopReplayTruncated,
+        );
+        widget.testDesktopReplayTruncatedHook?.handler =
+            _onDesktopReplayTruncated;
         widget.testDesktopGatewayObserver?.call(gateway);
         // Entering the chat asks for the CURRENT snapshot: the binding this
         // client already holds may predate the turn the user came back for.
@@ -871,6 +899,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _clearPendingReattachResync();
     widget.testDesktopConnectionHook?.handler = null;
     widget.testDesktopAsyncEventHook?.handler = null;
+    widget.testDesktopReplayTruncatedHook?.handler = null;
     _savedGatewayNotices[_gatewayNoticeIdentity] = List.unmodifiable(
       _gatewayNotices,
     );
@@ -904,6 +933,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final desktopLiveTurnToken = _desktopLiveTurnToken;
     if (desktopLiveTurnToken != null) {
       _desktopGateway?.removeLiveTurnListener(desktopLiveTurnToken);
+    }
+    final desktopReplayTruncatedToken = _desktopReplayTruncatedToken;
+    if (desktopReplayTruncatedToken != null) {
+      _desktopGateway?.removeReplayTruncatedListener(
+        desktopReplayTruncatedToken,
+      );
     }
     // Only a client this screen built is a client this screen closes. A client
     // borrowed from the application registry stays open — with its socket, its
@@ -1222,6 +1257,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     _enterFollowMode(projection);
+  }
+
+  /// A replay window this chat was catching up on was truncated by the
+  /// gateway's ring.
+  ///
+  /// The frames the window would have delivered are gone — the retained tail
+  /// has a hole — and nothing else will ever repair it, so the only backfill is
+  /// a history re-read. [_fetchMessages] is that read, and its reconcile keeps a
+  /// followed turn on top of the rows that land (see
+  /// [_reconcileFollowAfterTranscriptReplace]), so a hole that opens while this
+  /// screen is following a running turn does not cost it the bubble it shows.
+  ///
+  /// Only this chat's own report is acted on: the shared connection carries
+  /// every session, and another chat's hole is another chat's refetch.
+  void _onDesktopReplayTruncated(String mobileSessionId) {
+    if (!mounted || mobileSessionId != widget.session.id) return;
+    unawaited(_fetchMessages());
   }
 
   /// Rebuilds the running turn from a resume snapshot and follows it.
@@ -3929,6 +3981,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// and the replayable snapshot all go with it, and the committed rows take
   /// the transcript back (see [_exitFollowMode]). A turn that FAILED says so
   /// first, with the same notice the detached-turn recovery shows.
+  ///
+  /// A pending legacy reattach watches the SAME terminal frame, and this branch
+  /// is the one that consumes it ([_handleDesktopAsyncEvent] returns here before
+  /// the resync ever sees it). The two cannot both run their own history fetch:
+  /// the reconcile that follows a replacement is written for the turn on screen,
+  /// and the resync's retry tick would keep pulling a transcript this follow
+  /// already re-read. So the follow's exit is the capture — it is cleared FIRST,
+  /// because [_fetchMessages] refuses to run while a resync is pending, and the
+  /// exit's own refetch is exactly the read that resync was waiting for; left
+  /// armed, it would both suppress that read and schedule a second one.
   void _handleFollowTerminalFrame(StreamEvent event) {
     if (_terminalFrameReportsFailure(event)) {
       final rawError = event.data['error'] ?? event.data['message'];
@@ -3946,6 +4008,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         );
     }
+    if (_pendingReattachResync) _clearPendingReattachResync();
     _exitFollowMode();
   }
 

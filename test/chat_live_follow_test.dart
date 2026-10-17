@@ -22,6 +22,7 @@ import 'package:hermes_android/core/screens/chat_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 import 'package:hermes_android/core/services/gateway_live_turn.dart';
+import 'package:hermes_android/core/services/ws_client.dart';
 import 'package:hermes_android/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -201,12 +202,87 @@ void main() {
     expect(find.text('partial'), findsNothing);
     expect(history.messageRequestCount, refetchesWhileFollowing + 1);
   });
+  testWidgets('a cold start follows a running turn and settles it', (
+    tester,
+  ) async {
+    // Deliberately the FIRST thing this screen ever does with this chat: the
+    // machine has been asleep, the app was just opened onto a chat that has
+    // never been loaded, and the resume it issues as it mounts is the only
+    // history this route has. (The entry case above pins the rebuild and its
+    // idempotence; this one pins the whole cold lifetime — rebuild, live
+    // settle, and the single refetch that hands the transcript back.)
+    final hook = TestDesktopLiveTurnHook();
+    final asyncHook = TestDesktopAsyncEventHook();
+    final history = _FollowChatHttpClient();
+    await _pumpChat(tester, hook: hook, history: history, asyncHook: asyncHook);
+
+    expect(history.messageRequestCount, 1, reason: 'the initial hydration');
+    expect(find.text('partial'), findsNothing);
+
+    // The gateway was already running a turn for this chat when the screen
+    // opened: nothing on screen precedes it.
+    hook.handler?.call(
+      _sessionId,
+      const LiveTurnProjection(
+        running: true,
+        status: 'running',
+        user: 'hi',
+        assistant: 'partial',
+        streaming: true,
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text(_followingCopy), findsOneWidget);
+    expect(find.text('partial'), findsOneWidget);
+    expect(find.text('hi'), findsOneWidget);
+    expect(
+      find.byIcon(Icons.stop_rounded),
+      findsOneWidget,
+      reason: 'the followed turn is live: it keeps the stop affordance',
+    );
+    final refetchesWhileFollowing = history.messageRequestCount;
+
+    // It settles on the live stream: the terminal frame is the only
+    // end-of-turn signal a followed turn gets (Phase 4's branch).
+    history.rows = const [
+      {'id': 1, 'role': 'user', 'content': 'hi'},
+      {'id': 2, 'role': 'assistant', 'content': 'the whole reply'},
+    ];
+    asyncHook.handler?.call(
+      StreamEvent(
+        type: 'message.complete',
+        data: {'session_id': _sessionId, 'seq': 7, 'text': 'the whole reply'},
+        sessionId: _sessionId,
+        seq: 7,
+        isComplete: true,
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      find.text(_followingCopy),
+      findsNothing,
+      reason: 'the turn settled: nothing is left to follow',
+    );
+    expect(find.text('partial'), findsNothing);
+    expect(
+      history.messageRequestCount,
+      refetchesWhileFollowing + 1,
+      reason:
+          'the committed rows, not the cold-start snapshot, own the settled '
+          'reply',
+    );
+    expect(find.text('the whole reply'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpChat(
   WidgetTester tester, {
   required TestDesktopLiveTurnHook hook,
   required _FollowChatHttpClient history,
+  TestDesktopAsyncEventHook? asyncHook,
   ValueChanged<DesktopGatewayClient>? onGatewayBound,
 }) async {
   await tester.pumpWidget(
@@ -222,6 +298,7 @@ Future<void> _pumpChat(
           httpClient: history,
         ),
         testDesktopLiveTurnHook: hook,
+        testDesktopAsyncEventHook: asyncHook,
         testDesktopGatewayObserver: onGatewayBound,
         testVoiceComposerAdapter: FakeVoiceComposerAdapter(),
       ),
