@@ -340,6 +340,12 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final VoidCallback? testDesktopSessionEnsured;
 
+  /// Receives the `refresh` flag of every `_ensureDesktopSession()` call, so a
+  /// test can pin that a chat entry and an app resume ask the gateway for the
+  /// CURRENT live-turn snapshot instead of reusing the stored one.
+  @visibleForTesting
+  final void Function(bool refresh)? testDesktopEnsureSessionHook;
+
   /// Receives the gateway client this screen bound to, so a test can assert
   /// ownership — borrowed from [gatewayRegistry] or built here — without a
   /// live gateway.
@@ -386,6 +392,7 @@ class ChatScreen extends StatefulWidget {
     this.testDesktopLiveTurnHook,
     this.testProjectOverviewLoader,
     this.testDesktopSessionEnsured,
+    this.testDesktopEnsureSessionHook,
     this.testDesktopGatewayObserver,
     this.testStoredSessionKey,
     this.testContextUsageFetcher,
@@ -479,6 +486,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// that one: the turn-recovery path publishes its own `recovery` status, and
   /// an exit must not wipe it.
   GatewayTurnStatus? _followLiveTurnStatus;
+
+  /// The last projection [_enterFollowMode] rebuilt the turn from.
+  ///
+  /// Held because the transcript and the followed turn have different owners:
+  /// every authoritative history response replaces [_messages] wholesale, and
+  /// such a response knows nothing about the running turn. Replaying this
+  /// snapshot on top of the fresh rows is what keeps the reply the user is
+  /// watching on screen (see [_reapplyFollowedProjection]). Null while nothing
+  /// is followed, and cleared on exit: the snapshot is stale the moment the
+  /// gateway stops reporting the turn.
+  LiveTurnProjection? _followProjectionSource;
   _ResponseTransport _activeResponseTransport = _ResponseTransport.none;
   String? _activeClientTurnId;
   bool _recoveringTurn = false;
@@ -1088,10 +1106,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     final gateway = _desktopGateway;
     widget.testDesktopSessionEnsured?.call();
+    widget.testDesktopEnsureSessionHook?.call(refresh);
     if (gateway == null) {
       unawaited(_refreshProjectName());
       return;
     }
+    var sessionEnsured = false;
     try {
       await gateway.ensureSession(
         widget.session.id,
@@ -1101,9 +1121,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // current one, not the one taken when the socket came up.
         refresh: refresh,
       );
+      sessionEnsured = true;
     } catch (_) {
       // The composer remains available. The next send retries with a fresh
       // single-use ticket and surfaces an actionable error if it still fails.
+    }
+    if (!sessionEnsured) {
+      // The refresh FAILED, so the client's stored live-turn snapshot is
+      // whatever the last successful resume published — possibly a turn that
+      // has settled since. Entering (or refreshing) a follow from it would pin
+      // this screen to a ghost turn, so the failure path stays inert and waits
+      // for the next listener-published projection: a successful resume, or
+      // the gateway reporting the turn's end.
       return;
     }
     unawaited(_refreshProjectName());
@@ -1163,6 +1192,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _followLiveTurnStatus = followStatus;
       _gatewayTurnStatus = followStatus;
       if (localPending) return;
+      // Recorded so a later history response can put this reconstruction back
+      // (see [_reapplyFollowedProjection]). A locally pending reply is never
+      // recorded: it owns its bubbles, and it is not a followed turn.
+      _followProjectionSource = projection;
       final lastUser = _messages.lastWhere(
         (message) => message['role'] == 'user',
         orElse: () => const <String, dynamic>{},
@@ -1191,6 +1224,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!_followLiveTurn) return;
     setState(() {
       _followLiveTurn = false;
+      // The snapshot goes with the follow: it describes a turn the gateway has
+      // stopped reporting.
+      _followProjectionSource = null;
       _streaming = false;
       _sending = false;
       if (identical(_gatewayTurnStatus, _followLiveTurnStatus)) {
@@ -1200,6 +1236,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _messages.removeWhere((message) => message['_follow_projection'] == true);
     });
     unawaited(_fetchMessages());
+  }
+
+  /// Re-applies the followed turn on top of a transcript that just arrived.
+  ///
+  /// A history response is authoritative for the COMMITTED rows only: it knows
+  /// nothing about the turn this screen is following, so assigning it to
+  /// [_messages] drops the reconstructed bubbles and leaves the follow state —
+  /// status bar and all — pointing at nothing. Replaying the snapshot rebuilds
+  /// them against the rows that just landed, idempotently: [_enterFollowMode]
+  /// replaces the projection row and dedupes the prompt instead of appending.
+  ///
+  /// Called OUTSIDE a `setState` callback on purpose: [_enterFollowMode] has
+  /// its own.
+  void _reapplyFollowedProjection() {
+    if (!_followLiveTurn) return;
+    final projection = _followProjectionSource;
+    if (projection == null) return;
+    _enterFollowMode(projection);
   }
 
   void _editAndResend(String text) {
@@ -1653,6 +1707,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _historyGeneration++;
         _loading = false;
       });
+      // The response replaced the transcript; the turn being followed is not
+      // part of it and goes back on top of the fresh rows.
+      _reapplyFollowedProjection();
       _scheduleInitialEndAlignment();
       if (completedPendingReattach) _clearPendingReattachResync();
     } catch (e) {
@@ -1673,6 +1730,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _historyGeneration++;
           _loading = false;
         });
+        // An emptied transcript is still not the followed turn's owner.
+        _reapplyFollowedProjection();
         _scheduleInitialEndAlignment();
         return;
       }
