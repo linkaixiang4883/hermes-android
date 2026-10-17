@@ -541,3 +541,10 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 - 技能：`hermes-android-client` → `references/connection-persistence.md` 补 §10（P5 落地与坑）；SKILL.md 指针与基线更新。
 - 最终门禁：analyze 0 + 全量 **1382**；真机 QA 由用户亲自执行（本次开发未跑设备）。
 - 收口结论：六阶段全部关闭；桌面端能力对照的三缺口（补发 / 投影重建 / 渲染放行）全部补齐——「回来接上并持续传输」链路成立。
+
+### QA 修复轮（2026-10-18，✅ 完成）
+- 真机 QA（用户亲测：功能验收 + 修复复验 + 切列表往返）抓出两个「外部回合」路径缺口，修复提交 `c98a7e2`（3 文件 +361/-8；5 新测试）：
+  ① **外部回合不可见**：根因 = `_handleDesktopAsyncEvent` 对「非跟随且非本地提交」的流帧直接丢弃、且无进入机制。证据 = 服务端 `session_transports._attach_session_transport` 的 `FanoutTransport(existing, new)` 加性扇出（手机确实在收帧）+ `server._emit` 走会话 transport。修复 = 陌生流帧触发 `_requestExternalTurnFollow()`（单飞 `resume(refresh:true)`）→ 快照沿 `_onDesktopLiveTurn → _enterFollowMode` 接驳；`_localSubmitActive` 优先、跟随中不重复问。
+  ② **跟随不贴底/回底不重咬**：根因 = `ChatScrollCoordinator.beginStreaming` 只在本地提交路径（4 处）调用，跟随路径零调用 → `updateFromUserScroll` 空操作。修复 = 首入 `beginStreaming(isNearEnd: _isNearEnd())`（`wasFollowing` 守卫，重入不动）、退出 `_scheduleScrollTarget(endStreaming())`。
+- 测试：先红后绿 +5（stream +3：接驳触发+入口 / 突发单飞 / 本地提交不抢；scroll +2：跟随贴底链 / 滑走暂停+回底重咬）；全量 **1387**（analyze 0）。
+- 真机复验：`flutter attach` + hot reload 热更到 QA 中 dev 包（免重装），两场景 + 切列表往返均通过。

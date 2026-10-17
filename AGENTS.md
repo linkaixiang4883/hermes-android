@@ -42,12 +42,12 @@
 | STT 键盘引导 | `voice_composer_controller`（`_hasReceivedResult` + `l10n` 注入）+ key `speech_recognition_use_keyboard`/`dictation_ready` | 上游 controller 无本地化 |
 | FAB heroTag 修复 | `workspace_screen`/`projects_pane`（`fd04661`） | 上游 IndexedStack 保活导致双 FAB 同 tag，debug 断言刷屏（上游对聊天 FAB 用 `heroTag: null`，同款思路） |
 | clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
-| 重连续接 + 实时跟随 | `ws_client`（seq 门/补发/`onReplayTruncated`）+ `desktop_gateway_client`（`rotateTicket` 复用/多路监听/`ensureSession(refresh:)`/`LiveTurnProjection`/`addReplayTruncatedListener`）+ `gateway_client_registry.dart`（应用级共享，main.dart 下发）+ `chat_screen`（跟随态/`_localSubmitActive`/`_acceptFollowStreamFrame`/`_reconcileFollowAfterTranscriptReplace`）+ 1 key（`live_turn_following`） | 机制全图与坑：技能 `hermes-android-client → references/connection-persistence.md` §6-§10；**硬不变量见下节**；真机 QA 由用户自测 |
+| 重连续接 + 实时跟随 | `ws_client`（seq 门/补发/`onReplayTruncated`）+ `desktop_gateway_client`（`rotateTicket` 复用/多路监听/`ensureSession(refresh:)`/`LiveTurnProjection`/`addReplayTruncatedListener`）+ `gateway_client_registry.dart`（应用级共享，main.dart 下发）+ `chat_screen`（跟随态/`_localSubmitActive`/`_acceptFollowStreamFrame`/`_reconcileFollowAfterTranscriptReplace`）+ 1 key（`live_turn_following`） | 机制全图与坑：技能 `hermes-android-client → references/connection-persistence.md` §6-§11；**硬不变量见下节**；真机 QA 已过（2026-10-18） |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1382**（2026-10-17 live-follow 六阶段收口后；此前 1288 = 2026-10-13 合 v2.1.19 后）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1387**（2026-10-18 QA 修复轮后；此前 1382 = 2026-10-17 live-follow 六阶段收口）。
 
-## 重连续接 + 实时跟随（2026-10-17，六阶段落地）
+## 重连续接 + 实时跟随（2026-10-17 六阶段 + 2026-10-18 QA 修复轮落地）
 
 **目标**：离开聊天页/挂后台/被杀后回来，自动从 `session.resume` 的 `inflight` 重建「进行中那一轮」并**持续实时显示**（delta/interim/工具/思考），终态自动收尾——对齐桌面端。不依赖前台服务/推送（那是独立的后续工作）。
 
@@ -57,6 +57,7 @@
 - P3 会话层 `0c4c200` + `8df48f9`：`LiveTurnProjection`、`ensureSession(refresh:true)`（只 resume 不 create）、跟随进入/退出、历史回包后重放投影。
 - P4 渲染层 `bf8e3b2`：桥放行流事件、跟随态路由（`_localSubmitActive` + 屏幕 seq 门）、终态收尾、停止走 `session.interrupt`、统一 `_reconcileFollowAfterTranscriptReplace`。
 - P5 收尾 `f1babd6`：截断回读接线（token 监听 + 未绑定停车场）、冷启动用例、跟随×reattach 冲突守卫、M7/M8 变异钉。
+- QA 修复轮 `c98a7e2`：**外部回合接驳**（陌生流帧 → 单飞 `resume(refresh)`，答案沿跟随入口）+ **跟随贴底**（首入拉起/退出收口/重入不扰）；+5 测试。
 
 **硬不变量（改这块前必读；机制全图见技能 `hermes-android-client → references/connection-persistence.md` §6-§10）**：
 1. **重连必须复用同一 `WsClient`**（`rotateTicket` 换单次票；重连/掉线路径绝不 `close()`——close = 主动销毁，会清水位/replay 代际）。
@@ -65,10 +66,12 @@
 4. **`ensureSession(refresh:true)` 只 resume、绝不 create**（进页/回前台用它；refresh=false 保持已映射早退）。
 5. **跟随态不变量**：重建幂等；历史整体替换后必须经 `_reconcileFollowAfterTranscriptReplace` 重放投影或一致退出（禁止「状态条在、投影行没了」）；退出必 `_fetchMessages()`；本地提交进行中（`_localSubmitActive`）优先于异步桥。
 6. **截断回读**：`onReplayTruncated` 从 WsClient 经 token 监听转达；未绑定报告暂存（`_unmappedReplayTruncations`）由 `_rememberBinding` 投递。
+7. **外部回合接驳**：陌生流帧（非跟随、非本地提交）= 外部回合的唯一信号 → `_requestExternalTurnFollow`（单飞 `resume(refresh:true)`，答案沿跟随入口接驳）；服务端本就扇出（Fanout），缺的只是快照。
+8. **跟随贴底**：`_enterFollowMode` 首入 `beginStreaming`（重入保留用户位置选择）、`_exitFollowMode` 以 `endStreaming` 收口——跟随的滚动语义 = 本地提交同款。
 
-**测试/门禁**：`chat_live_follow*`、`ws_client_event_replay`、`ws_reconnect_replay`、`desktop_gateway_{live_turn,replay_truncated,multiplex_listeners}`、`gateway_client_registry`、`chat_gateway_client_ownership`；**基线 1382**（analyze 0）。真实 socket 测试夹具坑（`client.capabilities` 静默 + safe-add、`testProjectOverviewLoader`、`isLocalDraft`、`connected→reconnecting` 同步对）见技能 §6-§10——**全量偶发挂先查夹具、再怀疑实现**，稳定性用连跑 5-10 次证明。
+**测试/门禁**：`chat_live_follow*`、`ws_client_event_replay`、`ws_reconnect_replay`、`desktop_gateway_{live_turn,replay_truncated,multiplex_listeners}`、`gateway_client_registry`、`chat_gateway_client_ownership`；**基线 1387**（analyze 0；QA 修复轮 +5 = `chat_live_follow_stream_test` ×3 + `chat_history_scroll_test` ×2）。真实 socket 测试夹具坑（`client.capabilities` 静默 + safe-add、`testProjectOverviewLoader`、`isLocalDraft`、`connected→reconnecting` 同步对）见技能 §6-§11——**全量偶发挂先查夹具、再怀疑实现**，稳定性用连跑 5-10 次证明。
 
-**已知遗留（非阻塞）**：`SessionListScreen`/`WorkspaceScreen(projects)`/`CronScreen` 仍 route-local socket；跟随终态帧未校验 `turnId`（迟到帧会结束跟随，靠下次 resume 自愈）；跟随首帧 delta 会按既有语义清状态条（停止键仍在）；截断回读在 pending resync 时让位给 resync 自读、跟随中回读会闪一次 spinner；「编辑连接时正开着聊天」的 UI 接管未特别处理。**真机 QA 由用户亲自执行**（本次开发未跑设备）。
+**已知遗留（非阻塞）**：`SessionListScreen`/`WorkspaceScreen(projects)`/`CronScreen` 仍 route-local socket；跟随终态帧未校验 `turnId`（迟到帧会结束跟随，靠下次 resume 自愈）；跟随首帧 delta 会按既有语义清状态条（停止键仍在）；截断回读在 pending resync 时让位给 resync 自读、跟随中回读会闪一次 spinner；「编辑连接时正开着聊天」的 UI 接管未特别处理。**真机 QA 已由用户执行通过**（2026-10-18：功能验收 + 修复复验 + 切列表往返；外部回合接驳与跟随贴底两个 QA 修复见提交清单与技能 §11）。
 
 
 
