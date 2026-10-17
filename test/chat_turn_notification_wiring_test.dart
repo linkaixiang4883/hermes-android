@@ -11,6 +11,8 @@ import 'package:hermes_android/core/services/gateway_turn_coordinator.dart';
 import 'package:hermes_android/core/services/gateway_turn_recovery.dart';
 import 'package:hermes_android/core/services/turn_notification_service.dart';
 import 'package:hermes_android/core/widgets/gateway_approval_dialog.dart';
+import 'package:hermes_android/core/models/projects_tree_overview.dart';
+import 'package:hermes_android/core/widgets/gateway_sensitive_prompt_dialog.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,6 +20,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'support/fake_voice_composer_adapter.dart';
 import 'support/recording_turn_notification_sink.dart';
 import 'package:hermes_android/l10n/app_localizations.dart';
+
+/// The fixture connection plus the unreachable desktop-gateway URL the
+/// sensitive-prompt drain requires: with no bound gateway the screen drops a
+/// sudo/secret prompt instead of showing it.
+SavedConnection _gatewayBackedConnection() => SavedConnection(
+  id: 'notif-fixture-gateway',
+  label: 'Notification fixture (gateway)',
+  host: 'notif.fixture',
+  port: 8642,
+  apiKey: 'gateway-fixture-key',
+  desktopGatewayUrl: 'http://127.0.0.1:1',
+);
 
 final _fixtureConnection = SavedConnection(
   id: 'notif-fixture',
@@ -52,6 +66,7 @@ void main() {
     SavedConnection? connection,
     String sessionId = 'notif-session',
     String title = 'Roadmap',
+    TestProjectOverviewLoader? projectOverviewLoader,
   }) async {
     final selectedConnection = connection ?? _fixtureConnection;
     await tester.pumpWidget(
@@ -78,6 +93,7 @@ void main() {
           ),
           testTurnApplicationSession: turnSession,
           testTurnNotifications: notifications,
+          testProjectOverviewLoader: projectOverviewLoader,
           testVoiceComposerAdapter: FakeVoiceComposerAdapter(),
         ),
       ),
@@ -226,6 +242,101 @@ void main() {
 
     expect(turnSession.approvalOwnershipChecks, 1);
     expect(find.byType(GatewayApprovalDialog), findsNothing);
+  });
+
+  group('turn-end prompt clear', () {
+    testWidgets(
+      'a turn ending closes the parked approval dialog without answering it',
+      (WidgetTester tester) async {
+        await pumpChat(tester);
+        foreground(tester);
+
+        turnSession.emitAsync('approval.request', {
+          'server_request_id': 'req-turn-end',
+          'command': 'rm -rf build',
+          'description': 'Remove the build folder',
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(GatewayApprovalDialog), findsOneWidget);
+
+        turnSession.emitAsync('message.complete', {'text': 'all done'});
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.byType(GatewayApprovalDialog),
+          findsNothing,
+          reason:
+              'a card parked when its turn ends can never be answered again',
+        );
+        expect(
+          turnSession.approvalResponses,
+          isEmpty,
+          reason: 'the turn-end close must not fabricate a denial',
+        );
+      },
+    );
+
+    testWidgets(
+      'a turn ending closes a legacy approval too, without a fabricated denial',
+      (WidgetTester tester) async {
+        await pumpChat(tester);
+        foreground(tester);
+
+        turnSession.emitAsync('approval.request', {
+          'command': 'rm -rf build',
+          'description': 'Remove the build folder',
+        });
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+        expect(find.byType(GatewayApprovalDialog), findsOneWidget);
+
+        turnSession.emitAsync('message.complete', {'text': 'all done'});
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        expect(
+          find.byType(GatewayApprovalDialog),
+          findsNothing,
+          reason: 'the legacy shape clears on the same turn-end edge',
+        );
+        expect(
+          turnSession.approvalResponses,
+          isEmpty,
+          reason: 'closing it must not look like a user denial',
+        );
+      },
+    );
+
+    testWidgets('a turn ending drains a parked sudo prompt', (
+      WidgetTester tester,
+    ) async {
+      // The drain only shows a sudo/secret dialog when a gateway is bound
+      // (nothing could answer it otherwise), so this scenario carries the
+      // same unreachable-gateway fixture the live-stream suites use.
+      await pumpChat(
+        tester,
+        connection: _gatewayBackedConnection(),
+        projectOverviewLoader: () async => ProjectsTreeOverview.empty,
+      );
+      foreground(tester);
+
+      turnSession.emitAsync('sudo.request', {'request_id': 'sudo-turn-end'});
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(GatewaySensitivePromptDialog), findsOneWidget);
+
+      turnSession.emitAsync('message.complete', {'text': 'all done'});
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        find.byType(GatewaySensitivePromptDialog),
+        findsNothing,
+        reason: 'a sensitive prompt for a dead turn must drain',
+      );
+    });
   });
 
   testWidgets(

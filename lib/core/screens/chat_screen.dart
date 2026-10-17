@@ -626,6 +626,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _stopResponseInFlight = false;
   bool _approvalDialogOpen = false;
   bool _approvalRouteOpen = false;
+
+  /// Set when the turn-end clear closed (or pre-closed) the approval dialog:
+  /// its close path reads this so the close is never mistaken for a denial —
+  /// the legacy shape has no request id for the cancelled set to carry.
+  bool _approvalTurnEndDismissed = false;
   String? _activeApprovalServerRequestId;
   final Set<String> _cancelledInteractiveRequestIds = {};
   final List<_PendingSensitivePrompt> _sensitivePromptQueue = [];
@@ -3727,6 +3732,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleDesktopGatewayEvent(StreamEvent event, int responseGeneration) {
     if (!mounted || responseGeneration != _responseGeneration) return;
+    if (_gatewayTerminalEventTypes.contains(event.type)) {
+      // The turn is over whichever lane carried the frame: a blocking card
+      // parked for it can never be answered again, so clear it the way a
+      // cancel would — never as a fabricated denial (see
+      // [_clearTurnEndBlockingPrompts]). The async bridge carries the same
+      // terminal frame; the clear is idempotent.
+      _clearTurnEndBlockingPrompts();
+    }
     final reasoning = GatewayReasoningUpdate.fromGatewayEvent(
       event.type,
       event.data,
@@ -3891,10 +3904,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     // The same terminal frame arrives twice (prompt.submit's listener and this
     // bridge); a followed turn has no listener of its own, so this is where it
-    // learns the turn it was watching is over.
-    if (_followLiveTurn && _gatewayTerminalEventTypes.contains(event.type)) {
-      _handleFollowTerminalFrame(event);
-      return;
+    // learns the turn it was watching is over. Either way the turn is over:
+    // blocking cards parked for it are cleared first (see
+    // [_clearTurnEndBlockingPrompts]).
+    if (_gatewayTerminalEventTypes.contains(event.type)) {
+      _clearTurnEndBlockingPrompts();
+      if (_followLiveTurn) {
+        _handleFollowTerminalFrame(event);
+        return;
+      }
     }
     const interactiveTypes = {
       'approval.request',
@@ -4243,7 +4261,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _cancelledInteractiveRequestIds.remove(serverRequestId);
       if (!mounted ||
           responseGeneration != _responseGeneration ||
-          wasCancelledBeforeOpen) {
+          wasCancelledBeforeOpen ||
+          _approvalTurnEndDismissed) {
+        _approvalTurnEndDismissed = false;
         _approvalDialogOpen = false;
         _activeApprovalServerRequestId = null;
         return;
@@ -4276,6 +4296,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       final wasCancelled =
           serverRequestId != null &&
           _cancelledInteractiveRequestIds.remove(serverRequestId);
+      final turnEndDismissed = _approvalTurnEndDismissed;
+      _approvalTurnEndDismissed = false;
       _activeApprovalServerRequestId = null;
       _drainClarifyPromptQueue();
       _drainSensitivePromptQueue();
@@ -4285,6 +4307,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // cancellation closes the same route but must not emit a late denial.
       if (responded != true &&
           !wasCancelled &&
+          !turnEndDismissed &&
           mounted &&
           responseGeneration == _responseGeneration) {
         try {
@@ -4419,6 +4442,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _expireSensitivePrompt(StreamEvent event) {
     final requestId = event.data['request_id']?.toString().trim() ?? '';
     if (requestId.isEmpty) return;
+    _expireSensitivePromptById(requestId);
+  }
+
+  void _expireSensitivePromptById(String requestId) {
     _expiredSensitivePromptIds.add(requestId);
     _sensitivePromptQueue.removeWhere(
       (pending) => pending.request.requestId == requestId,
@@ -4431,6 +4458,33 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       ).pop(GatewaySensitivePromptDialogResult.expired);
     } else if (_activeSensitivePrompt?.request.requestId != requestId) {
       _expiredSensitivePromptIds.remove(requestId);
+    }
+  }
+
+  /// The turn-end clear: a blocking card parked when its turn ends can never
+  /// be answered — the wait died with the turn — so it is closed the way a
+  /// `request.cancel` closes it: no late response is fabricated (neither the
+  /// deny a back-dismissed approval would send nor the empty-value skip a
+  /// dismissed sudo/secret dialog would), and sensitive prompts drain like an
+  /// expiry. Mirrors the desktop's `message.complete` prompt clear; a live
+  /// clarify is deliberately left alone, exactly as it is there.
+  void _clearTurnEndBlockingPrompts() {
+    if (_approvalDialogOpen || _approvalRouteOpen) {
+      _approvalTurnEndDismissed = true;
+      final approvalId = _activeApprovalServerRequestId;
+      if (approvalId != null) {
+        _cancelledInteractiveRequestIds.add(approvalId);
+      }
+      if (_approvalRouteOpen) {
+        Navigator.of(context, rootNavigator: true).pop(false);
+      }
+    }
+    final active = _activeSensitivePrompt;
+    if (active != null) {
+      _expireSensitivePromptById(active.request.requestId);
+    }
+    for (final pending in List.of(_sensitivePromptQueue)) {
+      _expireSensitivePromptById(pending.request.requestId);
     }
   }
 
