@@ -267,7 +267,6 @@ class DesktopGatewayClient {
           ? DesktopConnectionState.connecting
           : DesktopConnectionState.reconnecting,
     );
-    existing?.close();
     _gatewaySessionIds.clear();
     _serverRequests.clear();
     _serverRequestClients.clear();
@@ -282,8 +281,60 @@ class DesktopGatewayClient {
     _capabilities.reset();
     final ticket = await _dashboard.mintWebSocketTicket();
     if (_closed) throw StateError('DesktopGatewayClient is closed.');
-    final client = WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
-    _installAsyncEventBridge(client);
+    // A reconnect keeps the SAME WsClient and rotates only its ticket.
+    //
+    // The per-session replay watermarks that `session.events.since` names its
+    // gap with live on the instance, so replacing the client on every
+    // reconnect (and closing the old one, which clears watermarks by design)
+    // makes the replay fetch a silent no-op: the new client has nothing to
+    // ask for, and a long turn that streamed while the phone was asleep is
+    // never caught up. The ticket is the one thing that cannot be carried
+    // over — it is single-use and the previous upgrade consumed it.
+    //
+    // Re-entering connect() on a dropped client is safe: its close handling
+    // cleared _connected and _channel and left the watermarks alone, and the
+    // single-flight in _ensureSocket keeps a second connect from starting
+    // while one is in flight.
+    final client =
+        existing ??
+        WsClient(_baseUrl, ticket: ticket, profile: _gatewayProfile);
+    if (existing == null) {
+      // Handlers are instance fields, so both bindings stay valid for every
+      // later reconnect on this same client; installing them again would
+      // stack duplicate bridges.
+      _installAsyncEventBridge(client);
+      _bindConnectionListener(client);
+    } else {
+      client.rotateTicket(ticket);
+    }
+    try {
+      await client.connect();
+    } catch (_) {
+      // A reconnect attempt that never came up keeps its client: close()
+      // clears the replay watermarks and this instance is their only carrier,
+      // so the next backoff attempt must retry on it (see _scheduleReconnect).
+      // Only a client born in this call is torn down here.
+      if (existing == null) {
+        client.close();
+        if (identical(_ws, client)) _ws = null;
+      }
+      _connectionListener?.call(DesktopConnectionState.disconnected);
+      rethrow;
+    }
+    if (_closed) {
+      client.close();
+      throw StateError('DesktopGatewayClient is closed.');
+    }
+    _ws = client;
+    return client;
+  }
+
+  /// Wires the reconnect/rebind reactions onto [client].
+  ///
+  /// Installed exactly once per client, at first connect: the handlers below
+  /// are instance fields of [client], so they keep firing for every later
+  /// reconnect on that same instance.
+  void _bindConnectionListener(WsClient client) {
     final inheritedConnectionListener = client.onConnectionChanged;
     client.onConnectionChanged = (connected) {
       inheritedConnectionListener?.call(connected);
@@ -318,20 +369,6 @@ class DesktopGatewayClient {
         _scheduleReconnect();
       }
     };
-    try {
-      await client.connect();
-      if (_closed) {
-        client.close();
-        throw StateError('DesktopGatewayClient is closed.');
-      }
-      _ws = client;
-      return client;
-    } catch (_) {
-      client.close();
-      if (identical(_ws, client)) _ws = null;
-      _connectionListener?.call(DesktopConnectionState.disconnected);
-      rethrow;
-    }
   }
 
   /// Exponential-backoff reconnect loop, started when a previously-live

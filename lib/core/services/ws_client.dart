@@ -227,7 +227,12 @@ class GatewayServerRequest {
 class WsClient {
   final String baseUrl;
   final String? _token;
-  final String? _ticket;
+
+  /// The single-use credential the next [connect] dials with. Mutable because
+  /// a reconnect must rotate it (see [rotateTicket]) — the previous upgrade
+  /// consumed the old one — while the rest of this client, most importantly
+  /// the replay watermarks, must survive across that reconnect.
+  String? _ticket;
   final String? _profile;
   IOWebSocketChannel? _channel;
   bool _connected = false;
@@ -356,6 +361,23 @@ class WsClient {
   Timer? _heartbeatTimer;
   int _heartbeatSeq = 0;
   int _lastLivenessMs = 0;
+
+  /// Rotate the single-use credential the next [connect] dials with.
+  ///
+  /// A secured gateway mints one ticket per upgrade and consumes it there, so
+  /// a reconnect has to dial with a fresh one. Rotating in place — instead of
+  /// building a new client — is what keeps this instance's replay watermarks
+  /// alive for the socket that comes back: they are per-instance state, and
+  /// `session.events.since` (see [_fetchReplay]) can only name the gap this
+  /// client already saw. A client that has never connected never needs this;
+  /// the constructor's `ticket` is the first connect's credential.
+  void rotateTicket(String ticket) {
+    final trimmed = ticket.trim();
+    if (trimmed.isEmpty) {
+      throw ArgumentError('WebSocket ticket must not be blank');
+    }
+    _ticket = trimmed;
+  }
 
   /// Connect to the WebSocket gateway.
   Future<void> connect() async {
