@@ -42,7 +42,7 @@ flutter test --no-pub                      # 期望："All tests passed!"（基�
 | `lib/core/services/gateway_turn_application_controller.dart` | app 级 owner 的**先行范式**（草稿会话 + 通知里答审批）；L111-136 "keeps the coordinator, socket ... alive until the whole application is disposed"。 |
 | `lib/main.dart` | L211 建 `_turnApplicationController`；L335/346/382 下发到 Workspace/SessionList；L391 dispose。**registry 将复制这条下发链**。 |
 | `lib/l10n/app_en.arb`（模板） + `app_zh.arb` + `app_zh_Hans.arb` | 文案。新 key 三档都要加；改完 `flutter gen-l10n`；**≥2 占位符必须写 `@key` metadata**（否则参数被字母序重排）。禁止硬编码英文。 |
-| `test/ws_client_server_requests_test.dart` | 假 WS 服务器测试的**范本**（先读它再写传输层测试）。 |
+| `test/ws_server_requests_test.dart` | 假 WS 服务器测试的**范本**（先读它再写传输层测试）。 |
 | `test/desktop_gateway_cwd_binding_test.dart` | `_FakeGateway`（REST+WS）范本，写 inflight 用例时扩展它。 |
 
 ### 1.3 服务端契约（官方 Hermes；本机源码已逐行核实，勿改服务端）
@@ -92,7 +92,7 @@ flutter analyze --no-pub --fatal-infos && flutter test --no-pub
 
 ### Phase 1 — 传输层：seq 门 + 补发（`lib/core/services/ws_client.dart`）
 
-**T1.1（RED）** 先读范本 `test/ws_client_server_requests_test.dart` 的假服务器写法。新建 `test/ws_client_event_replay_test.dart`，写 5 个用例：
+**T1.1（RED）** 先读范本 `test/ws_server_requests_test.dart` 的假服务器写法。新建 `test/ws_client_event_replay_test.dart`，写 5 个用例：
 
 1. **重复丢**：同一会话 `seq=5` 的事件帧连发两次 → 监听者只收到一次。
 2. **重连补发**：第一段 socket 收到 seq 1..3 → 断开 → 重连；服务器记录到 `session.events.since` 请求，断言参数 `{session_id: <sid>, last_seen: 3}`；应答 `{events:[seq4, seq5], latest_seq:5}` → 监听者按序收到 4、5。
@@ -498,3 +498,13 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 | `apps/desktop/src/app/session/hooks/use-message-stream/*`（会话级归约 + 去重测试） | `chat_screen.dart` `_handleDesktopGatewayEvent/_handleDesktopAsyncEvent`（Phase 4） |
 | `apps/shared/src/json-rpc-gateway-replay.test.ts`、`warm-resume-replay-barrier.test.tsx`、`resume-occurrences.test.tsx` | 手机端对应新测试的用例清单（Phase 1/3/4/5） |
 | `tui_gateway/contracts/sessions.py::InflightTurn`、`methods_session.py::_resume_reuse_live` | 契约依据（勿改） |
+
+## 7. 执行记录
+
+### Phase 1 — 传输层（✅ 完成，2026-10-17）
+- 提交：`c851bda`（实现：seq 门 + `session.events.since` 补发；6 用例）+ `fd03619`（评审修复：压帧溢出上报、epoch 清理对称、回合水位上限 64、close 必清水位、replay 代际守卫、孤儿注释；+6 用例）。
+- 门禁：`analyze --no-pub --fatal-infos` 0 问题；全量 `flutter test` **1300** 全绿（基线 1288 + 12）。
+- 评审：规格 PASS（两处偏差独立复现验证）；质量 REQUEST_CHANGES → 修复 → 聚焦复审 **APPROVE**（7 项逐条 ADDRESSED，变异验证独立复现、6 个新用例全部非空洞）。
+- 合理偏差（已归档）：① seq 门分域——带 `turn_id` 的帧按回合内编号去重（本仓 v2 协议每回合从 1 重编号；stock 传输流从不带 `turn_id`，行为与桌面一致）；② 夹具竞态修正（`sendEvent` 等待 socket 注册）。
+- ⚠️ **带入 Phase 2 的硬要求**：`desktop_gateway_client._openSocket` 每次重连 `close()` 旧 WsClient 并 `new` 新实例 → 水位清零、补发在真机链路不会触发。Phase 2 必须让重连**复用同一 WsClient**（每连接新票 → `_ticket` 目前 `final`、`connect()` 无参，需最小扩展），重连路径不得调 `close()`，并加"重连后仍发出 since 请求（last_seen=水位）"的正向断言。
+- 复审接受遗留：回合水位按首现顺序淘汰（非 LRU，已钉测试）；`_lastSeenSeq`（按会话）无上限（接受）；`onReplayTruncated` 的 UI 消费方在 Phase 5。
