@@ -582,6 +582,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// duplicate and is dropped here.
   bool _localSubmitActive = false;
 
+  /// Whether the resume an unfollowed stream frame asked for is still in
+  /// flight (see [_requestExternalTurnFollow]).
+  bool _externalFollowAttachPending = false;
+
   _ResponseTransport _activeResponseTransport = _ResponseTransport.none;
   String? _activeClientTurnId;
   bool _recoveringTurn = false;
@@ -1259,6 +1263,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _enterFollowMode(projection);
   }
 
+  /// A stream frame arrived for a turn this screen neither submitted nor
+  /// follows: someone else started (or resumed) a turn under this chat.
+  ///
+  /// The frame itself is not rendered — only a resume answer may rebuild a
+  /// turn (see [_enterFollowMode]) — but it is the signal that a fresh resume
+  /// is one request away, and that answer walks the normal follow entry. The
+  /// gateway fans a session's frames out to every attached client, so what an
+  /// idle screen is missing is not transport but the snapshot that says which
+  /// turn these frames belong to.
+  ///
+  /// One request is in flight at a time: a running turn's frames arrive in a
+  /// burst, and every frame after the first would ask the same question.
+  void _requestExternalTurnFollow() {
+    if (_externalFollowAttachPending) return;
+    _externalFollowAttachPending = true;
+    unawaited(
+      _ensureDesktopSession(refresh: true).whenComplete(() {
+        _externalFollowAttachPending = false;
+      }),
+    );
+  }
+
   /// A replay window this chat was catching up on was truncated by the
   /// gateway's ring.
   ///
@@ -1292,6 +1318,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _exitFollowMode();
       return;
     }
+    // Re-entry must not re-arm the sticky end-follow: the choice the user
+    // has made in this follow outlives a snapshot refresh.
+    final wasFollowing = _followLiveTurn;
     final assistant = _lastAssistantMessage();
     final localPending =
         assistant != null &&
@@ -1329,6 +1358,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         '_follow_projection': true,
       });
     });
+    if (!wasFollowing) {
+      // A follow is a streaming period like a local submit's: arm the sticky
+      // end-follow so the streamed growth keeps the newest row in view, and
+      // so a manual scroll away (and back) can re-arm it.
+      _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
+    }
     _scheduleStreamingFollow();
   }
 
@@ -1355,6 +1390,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _followStreamSeq.clear();
       _messages.removeWhere((message) => message['_follow_projection'] == true);
     });
+    // The streaming period is over: hand the sticky end-follow the same
+    // completion a local submit's gets — jump to the end when the user was
+    // following it, leave the position alone when they were reading.
+    _scheduleScrollTarget(_scrollCoordinator.endStreaming());
     unawaited(_fetchMessages());
   }
 
@@ -3832,16 +3871,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _handleDesktopAsyncEvent(String mobileSessionId, StreamEvent event) {
     if (!mounted || mobileSessionId != widget.session.id) return;
     // A followed turn renders HERE, and its frames arrive on the shared
-    // connection rather than on a submit listener this screen owns. Every
-    // other case keeps the pre-Phase-4 behavior: a stream frame of a turn this
-    // screen did not submit is dropped, and the frame a running local submit
-    // already rendered is dropped here as its duplicate.
+    // connection rather than on a submit listener this screen owns. The frame
+    // a running local submit already rendered is dropped here as its
+    // duplicate; a stream frame of a turn this screen neither submitted nor
+    // follows is the one signal that a turn is running under an idle screen —
+    // it asks for the snapshot that enters the follow (see
+    // [_requestExternalTurnFollow]) instead of rendering, because only a
+    // resume answer may rebuild a turn.
     if (_isStreamFrameType(event.type)) {
-      if (_followLiveTurn &&
-          !_localSubmitActive &&
-          _acceptFollowStreamFrame(event)) {
-        _handleDesktopGatewayEvent(event, _responseGeneration);
+      if (_localSubmitActive) return;
+      if (_followLiveTurn) {
+        if (_acceptFollowStreamFrame(event)) {
+          _handleDesktopGatewayEvent(event, _responseGeneration);
+        }
+        return;
       }
+      _requestExternalTurnFollow();
       return;
     }
     // The same terminal frame arrives twice (prompt.submit's listener and this

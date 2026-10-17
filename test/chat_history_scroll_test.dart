@@ -7,8 +7,10 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:hermes_android/core/models/attachment_draft.dart';
+import 'package:hermes_android/core/models/projects_tree_overview.dart';
 import 'package:hermes_android/core/screens/chat_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
+import 'package:hermes_android/core/services/gateway_live_turn.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 import 'package:hermes_android/core/utils/chat_history_scroll.dart';
 import 'package:hermes_android/core/widgets/chat_end_affordance.dart';
@@ -227,6 +229,141 @@ void main() {
         reopenedController.position.maxScrollExtent,
       );
       expect(reopenedController.position.pixels, isNot(closeTo(320, 0.01)));
+    });
+
+    testWidgets('a followed turn keeps the end in view as it streams', (
+      tester,
+    ) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      await _pumpChat(
+        tester,
+        client: _ControlledChatHttpClient(_longHistory()),
+        connectionId: 'follow-scroll',
+        sessionId: 'follow-scroll',
+        liveTurn: liveTurn,
+        asyncHook: asyncHook,
+        desktopGatewayUrl: 'http://127.0.0.1:1',
+      );
+      final controller = _chatListController(tester);
+      expect(controller.position.maxScrollExtent, greaterThan(0));
+      expect(controller.position.pixels, controller.position.maxScrollExtent);
+
+      // A running turn this screen did not submit: its projection enters the
+      // follow, and the entry must keep the end in view while the viewport
+      // sits there.
+      liveTurn.handler?.call(
+        'follow-scroll',
+        const LiveTurnProjection(
+          running: true,
+          status: 'running',
+          user: 'hi',
+          assistant: 'partial',
+          streaming: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        controller.position.pixels,
+        closeTo(controller.position.maxScrollExtent, 0.01),
+        reason: 'entering a follow hands the view to the streaming end',
+      );
+
+      // Streamed growth keeps it pinned to the newest row.
+      asyncHook.handler?.call(
+        _followDelta('follow-scroll', 901, ' kept going\n${_streamLines()}'),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        controller.position.pixels,
+        closeTo(controller.position.maxScrollExtent, 0.01),
+        reason: 'a followed stream chases the end while the user is there',
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('scrolling away pauses the follow; returning re-arms it', (
+      tester,
+    ) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      await _pumpChat(
+        tester,
+        client: _ControlledChatHttpClient(_longHistory()),
+        connectionId: 'follow-scroll-pause',
+        sessionId: 'follow-scroll-pause',
+        liveTurn: liveTurn,
+        asyncHook: asyncHook,
+        desktopGatewayUrl: 'http://127.0.0.1:1',
+      );
+      final controller = _chatListController(tester);
+      liveTurn.handler?.call(
+        'follow-scroll-pause',
+        const LiveTurnProjection(
+          running: true,
+          status: 'running',
+          user: 'hi',
+          assistant: 'partial',
+          streaming: true,
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+
+      // The user scrolls away from the end to read earlier rows.
+      await tester.drag(find.byType(ListView).first, const Offset(0, 400));
+      await tester.pump();
+      final whileReading = controller.position.pixels;
+      expect(
+        whileReading,
+        lessThan(controller.position.maxScrollExtent - 200),
+        reason: 'the drag really left the end (fixture sanity)',
+      );
+
+      // New growth must not yank the reading position.
+      asyncHook.handler?.call(
+        _followDelta(
+          'follow-scroll-pause',
+          901,
+          ' one\n${_streamLines()}',
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        controller.position.pixels,
+        closeTo(whileReading, 0.01),
+        reason: 'direct user scrolling wins over the sticky follow',
+      );
+
+      // Returning to the end re-arms the sticky follow.
+      for (
+        var attempt = 0;
+        attempt < 12 &&
+            controller.position.pixels <
+                controller.position.maxScrollExtent - 1;
+        attempt++
+      ) {
+        await tester.drag(find.byType(ListView).first, const Offset(0, -600));
+        await tester.pump();
+      }
+      asyncHook.handler?.call(
+        _followDelta(
+          'follow-scroll-pause',
+          902,
+          ' two\n${_streamLines()}',
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        controller.position.pixels,
+        closeTo(controller.position.maxScrollExtent, 0.01),
+        reason: 'a user who returns to the end gets the follow back',
+      );
+      await tester.pump(const Duration(milliseconds: 100));
     });
 
     testWidgets('sends chronological REST history through the real screen', (
@@ -482,6 +619,9 @@ Future<void> _pumpChat(
   Future<String?> Function()? serverFilePicker,
   List<AttachmentDraft> initialDrafts = const [],
   bool settle = true,
+  TestDesktopLiveTurnHook? liveTurn,
+  TestDesktopAsyncEventHook? asyncHook,
+  String? desktopGatewayUrl,
 }) async {
   final apiClient = ApiClient(
     baseUrl: 'http://fixture.example',
@@ -505,6 +645,7 @@ Future<void> _pumpChat(
           label: 'Fixture',
           host: 'fixture.example',
           port: 8642,
+          desktopGatewayUrl: desktopGatewayUrl,
           apiKey: 'synthetic-test-key',
         ),
         session: Session(
@@ -521,6 +662,14 @@ Future<void> _pumpChat(
         testRemotePromptSubmit: remoteSubmit,
         testServerFilePicker: serverFilePicker,
         testInitialAttachmentDrafts: initialDrafts,
+        testDesktopLiveTurnHook: liveTurn,
+        testDesktopAsyncEventHook: asyncHook,
+        // A gateway-bound fixture (the follow scenarios) answers its sticky
+        // header lookup without a real client; the plain fixtures keep the
+        // screen gateway-less as before.
+        testProjectOverviewLoader: desktopGatewayUrl == null
+            ? null
+            : () async => ProjectsTreeOverview.empty,
       ),
     ),
   );
@@ -564,6 +713,16 @@ AttachmentDraft _fixtureDraft(String id) {
     kind: AttachmentDraftKind.genericFile,
   );
 }
+
+StreamEvent _followDelta(String sessionId, int seq, String text) =>
+    StreamEvent(
+      type: 'message.delta',
+      data: {'text': text, 'session_id': sessionId, 'seq': seq},
+      sessionId: sessionId,
+      seq: seq,
+    );
+
+String _streamLines() => List.filled(8, 'streamed line').join('\n');
 
 List<Map<String, dynamic>> _longHistory() {
   return [

@@ -644,6 +644,153 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+
+  group('a turn this screen never submitted', () {
+    testWidgets(
+      'its frames ask for the live snapshot, and the answer walks the follow',
+      (tester) async {
+        final liveTurn = TestDesktopLiveTurnHook();
+        final asyncHook = TestDesktopAsyncEventHook();
+        final refreshCalls = <bool>[];
+        final history = _StreamHistoryHttpClient()
+          ..rows = const [
+            {'id': 1, 'role': 'user', 'content': 'hi'},
+          ];
+        await _pumpChat(
+          tester,
+          history: history,
+          liveTurnHook: liveTurn,
+          asyncHook: asyncHook,
+          ensureHook: refreshCalls.add,
+        );
+        expect(find.text(_followingCopy), findsNothing);
+
+        // A running turn this screen did not submit announces itself the
+        // only way it can: a stream frame. The frame is not rendered — only
+        // a resume answer may rebuild a turn — but it is the signal that a
+        // fresh resume is one request away.
+        final before = refreshCalls.length;
+        asyncHook.handler?.call(_delta(' ext', seq: 9));
+        await tester.pump();
+
+        expect(
+          refreshCalls.length,
+          before + 1,
+          reason:
+              'a stream frame of a turn this screen neither submitted nor '
+              'follows must ask the gateway what is running',
+        );
+        expect(
+          refreshCalls.last,
+          isTrue,
+          reason:
+              'the ask must refresh: a plain ensure would reuse the very '
+              'snapshot that predates the turn',
+        );
+
+        // The resume's answer: the projection its listener publishes, which
+        // is the normal follow entry.
+        liveTurn.handler?.call(_sessionId, _runningTurn);
+        await tester.pump();
+        expect(find.text(_followingCopy), findsOneWidget);
+        expect(find.text('partial'), findsOneWidget);
+        expect(find.byIcon(Icons.stop_rounded), findsOneWidget);
+
+        // While following, frames belong to the follow: they render, and ask
+        // for nothing further.
+        final whileFollowing = refreshCalls.length;
+        asyncHook.handler?.call(_delta(' more', seq: 10));
+        await tester.pump();
+        expect(find.text('partial more'), findsOneWidget);
+        expect(
+          refreshCalls.length,
+          whileFollowing,
+          reason: 'a followed screen applies frames; it does not re-attach',
+        );
+        await tester.pump(const Duration(milliseconds: 100));
+      },
+    );
+
+    testWidgets('the frames of one running turn ask once', (tester) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      final refreshCalls = <bool>[];
+      await _pumpChat(
+        tester,
+        history: _StreamHistoryHttpClient(),
+        liveTurnHook: liveTurn,
+        asyncHook: asyncHook,
+        ensureHook: refreshCalls.add,
+      );
+
+      final before = refreshCalls.length;
+      // A burst, delivered the way a stream delivers it: frame after frame
+      // in the same event-loop turn.
+      asyncHook.handler?.call(_delta(' a', seq: 9));
+      asyncHook.handler?.call(_delta(' b', seq: 10));
+      await tester.pump();
+
+      expect(
+        refreshCalls.length,
+        before + 1,
+        reason:
+            'frames of the same turn all mean one question — what is '
+            'running — so one resume is in flight at a time',
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('a local submission keeps owning its stream', (tester) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      final refreshCalls = <bool>[];
+      final submission = Completer<void>();
+      await _pumpChat(
+        tester,
+        history: _StreamHistoryHttpClient(),
+        liveTurnHook: liveTurn,
+        asyncHook: asyncHook,
+        ensureHook: refreshCalls.add,
+        localDraft: true,
+        remoteSubmit:
+            ({
+              required sessionId,
+              required text,
+              required onEvent,
+              required onSent,
+            }) {
+              onSent();
+              return submission.future;
+            },
+      );
+
+      await tester.enterText(find.byType(TextField), 'Local prompt');
+      await tester.tap(find.byTooltip('Send'));
+      await tester.pump();
+      await tester.pump();
+
+      final before = refreshCalls.length;
+      asyncHook.handler?.call(_delta(' ghost-token', seq: 9));
+      await tester.pump();
+      expect(
+        find.textContaining('ghost-token'),
+        findsNothing,
+        reason: 'the submit owns the bubbles; the bridge copy is a duplicate',
+      );
+      expect(
+        refreshCalls.length,
+        before,
+        reason:
+            'a frame while this screen owns a submission is that '
+            "submission's, not an invitation to re-attach",
+      );
+
+      submission.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+    });
+  });
+
   testWidgets('a replacement during a follow leaves no orphan status bar', (
     tester,
   ) async {
@@ -744,6 +891,7 @@ Future<void> _pumpChat(
   TestDesktopLiveTurnHook? liveTurnHook,
   TestDesktopAsyncEventHook? asyncHook,
   TestDesktopConnectionHook? connectionHook,
+  void Function(bool refresh)? ensureHook,
   TestRemotePromptSubmit? remoteSubmit,
   ValueChanged<DesktopGatewayClient>? onGatewayBound,
   bool localDraft = false,
@@ -763,6 +911,7 @@ Future<void> _pumpChat(
         testDesktopLiveTurnHook: liveTurnHook,
         testDesktopAsyncEventHook: asyncHook,
         testDesktopConnectionHook: connectionHook,
+        testDesktopEnsureSessionHook: ensureHook,
         testRemotePromptSubmit: remoteSubmit,
         testDesktopGatewayObserver: onGatewayBound,
         testVoiceComposerAdapter: FakeVoiceComposerAdapter(),
