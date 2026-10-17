@@ -19,6 +19,7 @@ import '../services/attachment_draft_service.dart';
 import '../services/composer_draft_store.dart';
 import '../services/chat_model_override_store.dart';
 import '../services/desktop_gateway_client.dart';
+import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_coordinator.dart';
 import '../services/gateway_turn_recovery.dart';
@@ -262,6 +263,11 @@ class ChatScreen extends StatefulWidget {
 
   final GatewayTurnApplicationController? turnApplicationController;
 
+  /// The application's shared gateway connections. When supplied, this screen
+  /// borrows the connection's client (and must not close it); when null it
+  /// keeps building its own, which it owns and closes.
+  final GatewayClientRegistry? gatewayRegistry;
+
   @visibleForTesting
   final GatewayTurnApplicationSession? testTurnApplicationSession;
 
@@ -313,6 +319,12 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final VoidCallback? testDesktopSessionEnsured;
 
+  /// Receives the gateway client this screen bound to, so a test can assert
+  /// ownership — borrowed from [gatewayRegistry] or built here — without a
+  /// live gateway.
+  @visibleForTesting
+  final ValueChanged<DesktopGatewayClient>? testDesktopGatewayObserver;
+
   /// Test seam mirroring `DesktopGatewayClient.storedSessionKeyFor`: maps
   /// the mobile session id to the gateway's stored DB key so a test can
   /// assert the reattach history refetch targets the stored identity.
@@ -337,6 +349,7 @@ class ChatScreen extends StatefulWidget {
     this.initialComposerText,
     this.initialAttachmentDrafts = const [],
     this.turnApplicationController,
+    this.gatewayRegistry,
     this.testTurnApplicationSession,
     this.testApiClient,
     this.testAttachmentDraftService,
@@ -351,6 +364,7 @@ class ChatScreen extends StatefulWidget {
     this.testDesktopAsyncEventHook,
     this.testProjectOverviewLoader,
     this.testDesktopSessionEnsured,
+    this.testDesktopGatewayObserver,
     this.testStoredSessionKey,
     this.testContextUsageFetcher,
     this.testMediaFilesClient,
@@ -386,6 +400,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// attached (draft controller, notification/approval path).
   Object? _desktopAsyncEventToken;
   Object? _desktopSessionBoundToken;
+  Object? _desktopConnectionListenerToken;
+
+  /// Whether this screen built the gateway client it bound to, and is
+  /// therefore the one that closes it.
+  ///
+  /// False when the client came from [ChatScreen.gatewayRegistry]: that
+  /// connection belongs to the application — a running turn keeps streaming on
+  /// it while the user is elsewhere, and the next visit re-attaches to the same
+  /// socket — so this route must only detach its listeners.
+  bool _ownsClient = false;
   GatewayTurnApplicationSession? _turnApplicationSession;
   Object? _turnApplicationAsyncEventRegistration;
   Object? _turnApplicationSettledRegistration;
@@ -577,21 +601,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (widget.connection.desktopGatewayUrl?.trim().isNotEmpty == true ||
         hasDashboardAuth) {
       try {
-        _desktopGateway = DesktopGatewayClient.fromConnection(
-          widget.connection,
-        );
-        _desktopAsyncEventToken = _desktopGateway!.addAsyncEventListener(
+        // Borrow the application's client for this connection when one was
+        // handed down; only a screen with no registry builds (and owns) its own.
+        final shared = widget.gatewayRegistry?.clientFor(widget.connection);
+        final gateway =
+            shared ?? DesktopGatewayClient.fromConnection(widget.connection);
+        _desktopGateway = gateway;
+        _ownsClient = shared == null;
+        _desktopAsyncEventToken = gateway.addAsyncEventListener(
           _handleDesktopAsyncEvent,
         );
-        _desktopGateway!.setConnectionListener(_onDesktopConnectionChanged);
-        _desktopSessionBoundToken = _desktopGateway!.addSessionBoundListener(
+        _desktopConnectionListenerToken = gateway.addConnectionListener(
+          _onDesktopConnectionChanged,
+        );
+        _desktopSessionBoundToken = gateway.addSessionBoundListener(
           _onSessionBound,
         );
+        widget.testDesktopGatewayObserver?.call(gateway);
         unawaited(_ensureDesktopSession());
       } on ArgumentError {
         // The regular mobile chat remains usable; selection surfaces the
         // actionable configuration error when Desktop attachments are needed.
         _desktopGateway = null;
+        _ownsClient = false;
       }
     }
     // Test seam: with no real gateway, hand the same handler to the test
@@ -738,7 +770,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (desktopSessionBoundToken != null) {
       _desktopGateway?.removeSessionBoundListener(desktopSessionBoundToken);
     }
-    _desktopGateway?.close();
+    final desktopConnectionListenerToken = _desktopConnectionListenerToken;
+    if (desktopConnectionListenerToken != null) {
+      _desktopGateway?.removeConnectionListener(desktopConnectionListenerToken);
+    }
+    // Only a client this screen built is a client this screen closes. A client
+    // borrowed from the application registry stays open — with its socket, its
+    // session bindings and its replay watermarks — so the turn that is still
+    // running here keeps streaming, and returning to this chat re-attaches to
+    // the connection instead of rebuilding it.
+    if (_ownsClient) _desktopGateway?.close();
     final registration = _turnApplicationAsyncEventRegistration;
     if (registration != null) {
       _turnApplicationSession?.removeAsyncEventListener(

@@ -23,6 +23,7 @@ import '../services/attachment_draft_service.dart';
 import '../services/chat_space_store.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
+import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_journal.dart';
 import '../services/local_chat_pin_store.dart';
@@ -103,6 +104,9 @@ typedef SharedAttachmentPreparer =
 /// injected stand-in. [turnApplicationController] is threaded through
 /// deliberately: it owns durable turn recovery above the Navigator, so a chat
 /// opened from Home must resume exactly like one opened from the session list.
+/// [gatewayRegistry] is threaded through for the same reason: without it every
+/// chat would build a private socket against a connection the app already
+/// holds, and leaving the chat would drop it.
 Widget buildWorkspaceChatScreen({
   required SavedConnection connection,
   required Session session,
@@ -111,6 +115,7 @@ Widget buildWorkspaceChatScreen({
   String? initialComposerText,
   List<AttachmentDraft> initialAttachmentDrafts = const [],
   GatewayTurnApplicationController? turnApplicationController,
+  GatewayClientRegistry? gatewayRegistry,
 }) {
   return ChatScreen(
     connection: connection,
@@ -120,6 +125,7 @@ Widget buildWorkspaceChatScreen({
     initialComposerText: initialComposerText,
     initialAttachmentDrafts: initialAttachmentDrafts,
     turnApplicationController: turnApplicationController,
+    gatewayRegistry: gatewayRegistry,
   );
 }
 
@@ -144,6 +150,10 @@ class WorkspaceScreen extends StatefulWidget {
   /// Owns durable turn recovery above this screen's lifetime. Passed to every
   /// chat opened from Home so a turn survives leaving the chat.
   final GatewayTurnApplicationController? turnApplicationController;
+
+  /// The application's shared gateway connections. Every chat opened from this
+  /// shell borrows its client from here instead of building its own socket.
+  final GatewayClientRegistry? gatewayRegistry;
 
   /// Overrides how Home reads the sessions it ranks. Injectable for tests so
   /// the digest can be asserted without a live gateway.
@@ -197,6 +207,7 @@ class WorkspaceScreen extends StatefulWidget {
     this.onOpenProject,
     this.onOpenSession,
     this.turnApplicationController,
+    this.gatewayRegistry,
     this.sessionsLoader,
     this.testSessionsHttpClient,
     this.sessionScreenBuilder,
@@ -875,6 +886,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
               initialComposerText: initialComposerText,
               initialAttachmentDrafts: initialAttachmentDrafts,
               turnApplicationController: widget.turnApplicationController,
+              gatewayRegistry: widget.gatewayRegistry,
             ),
       ),
     );

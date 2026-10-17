@@ -3251,7 +3251,7 @@ void main() {
         // reconnect resume fails, so the next send must create the session
         // again in the remembered Project working directory.
         final states = <DesktopConnectionState>[];
-        client.setConnectionListener(states.add);
+        client.addConnectionListener(states.add);
         await fixture.openSockets.single.close();
         await expectSoon(
           () => states.contains(DesktopConnectionState.disconnected),
@@ -3340,7 +3340,7 @@ void main() {
           // Drop the live socket; the client must reconnect and resume with
           // the stored identity instead of creating a second session.
           final states = <DesktopConnectionState>[];
-          client.setConnectionListener(states.add);
+          client.addConnectionListener(states.add);
           await fixture.openSockets.single.close();
           await expectSoon(
             () => states.contains(DesktopConnectionState.disconnected),
@@ -3407,7 +3407,7 @@ void main() {
               expect(mobileSessionId, 'mobile-project');
               events.add(event);
             })
-            ..setConnectionListener(states.add);
+            ..addConnectionListener(states.add);
 
           await fixture.openSockets.single.close();
           await expectSoon(

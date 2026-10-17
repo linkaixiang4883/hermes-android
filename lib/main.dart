@@ -9,6 +9,7 @@ import 'core/services/config_backup.dart';
 import 'core/services/config_backup_io.dart';
 import 'core/services/config_backup_service.dart';
 import 'core/services/connection_manager.dart';
+import 'core/services/gateway_client_registry.dart';
 import 'core/services/gateway_turn_application_controller.dart';
 import 'core/services/local_chat_pin_store.dart';
 import 'core/services/notification_prefs.dart';
@@ -201,6 +202,12 @@ class HermesApp extends StatefulWidget {
 class HermesAppState extends State<HermesApp> {
   late final GatewayTurnApplicationController _turnApplicationController;
 
+  /// The application's gateway connections: one shared client per connection,
+  /// alive for as long as the app is. Screens borrow from it — a chat that is
+  /// left behind keeps streaming on the same socket, and coming back attaches
+  /// to the connection that never went down.
+  late final GatewayClientRegistry _gatewayRegistry;
+
   /// Pushes from the app root (notification taps) need a navigator below the
   /// MaterialApp this state builds.
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
@@ -208,7 +215,12 @@ class HermesAppState extends State<HermesApp> {
   @override
   void initState() {
     super.initState();
-    _turnApplicationController = GatewayTurnApplicationController();
+    // The registry exists before the controller: the controller's sessions run
+    // on the registry's shared clients instead of opening their own socket.
+    _gatewayRegistry = GatewayClientRegistry();
+    _turnApplicationController = GatewayTurnApplicationController(
+      registry: _gatewayRegistry,
+    );
     unawaited(NotificationPrefsStore.load());
     notificationResponseHandler = _handleNotificationResponse;
     // A notification that launched a terminated app carries its tap/action in
@@ -333,6 +345,7 @@ class HermesAppState extends State<HermesApp> {
           builder: (_) => WorkspaceScreen(
             connection: connection,
             turnApplicationController: _turnApplicationController,
+            gatewayRegistry: _gatewayRegistry,
           ),
         ),
       );
@@ -344,6 +357,7 @@ class HermesAppState extends State<HermesApp> {
           connection: connection,
           session: session!,
           turnApplicationController: _turnApplicationController,
+          gatewayRegistry: _gatewayRegistry,
         ),
       ),
     );
@@ -380,6 +394,7 @@ class HermesAppState extends State<HermesApp> {
       home: HomeScreen(
         connManager: widget.connManager,
         turnApplicationController: _turnApplicationController,
+        gatewayRegistry: _gatewayRegistry,
         shareIntents: widget.shareIntents,
         launchIntents: widget.launchIntents,
       ),
@@ -388,7 +403,11 @@ class HermesAppState extends State<HermesApp> {
 
   @override
   void dispose() {
+    // Detach first, then drop the connections: the turn owner releases the
+    // listeners it put on the shared clients, and the registry — the owner of
+    // every socket — is what closes them.
     unawaited(_turnApplicationController.close());
+    _gatewayRegistry.close();
     super.dispose();
   }
 }
@@ -443,6 +462,10 @@ class HermesHeader extends StatelessWidget {
 class HomeScreen extends StatefulWidget {
   final ConnectionManager connManager;
   final GatewayTurnApplicationController turnApplicationController;
+
+  /// Shared gateway connections, handed on to every workspace this screen
+  /// opens so chats never build a second socket for the same connection.
+  final GatewayClientRegistry? gatewayRegistry;
   final AndroidShareIntentService? shareIntents;
   final AndroidLaunchIntentService? launchIntents;
   final Future<String?> Function()? pickBackupFile;
@@ -456,6 +479,7 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({
     required this.connManager,
     required this.turnApplicationController,
+    this.gatewayRegistry,
     this.shareIntents,
     this.launchIntents,
     this.pickBackupFile,
@@ -620,6 +644,7 @@ class HomeScreenState extends State<HomeScreen> {
         builder: (_) => WorkspaceScreen(
           connection: conn,
           turnApplicationController: widget.turnApplicationController,
+          gatewayRegistry: widget.gatewayRegistry,
           initialSharedPayload: sharedPayload,
           initialQuickChat: initialQuickChat,
           sessionsRefreshInterval: const Duration(seconds: 10),

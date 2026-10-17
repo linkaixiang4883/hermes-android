@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'capability_registry.dart';
 import 'connection_manager.dart';
@@ -67,7 +68,15 @@ class DesktopGatewayClient {
 
   /// Per-token `acceptsSession` predicates, absent for uncapped listeners.
   final Map<Object, DesktopAsyncEventSessionPredicate> _asyncListenerAccepts = {};
-  DesktopConnectionCallback? _connectionListener;
+
+  /// Connection-state listeners keyed by their registration token, in delivery
+  /// order.
+  ///
+  /// Multiplexed for the same reason as [_asyncListeners]: with one shared
+  /// socket per connection, a screen that is disposed while another consumer
+  /// (or a later screen) is attached must detach only its own callback instead
+  /// of leaving a stale one behind or evicting a live one.
+  final Map<Object, DesktopConnectionCallback> _connectionListeners = {};
 
   /// Session-bound listeners keyed by their registration token, in delivery
   /// order. Shared for the same reason as [_asyncListeners].
@@ -274,7 +283,7 @@ class DesktopGatewayClient {
 
   Future<WsClient> _openSocket(WsClient? existing) async {
     if (_closed) throw StateError('DesktopGatewayClient is closed.');
-    _connectionListener?.call(
+    _dispatchConnectionState(
       existing == null
           ? DesktopConnectionState.connecting
           : DesktopConnectionState.reconnecting,
@@ -330,7 +339,7 @@ class DesktopGatewayClient {
         client.close();
         if (identical(_ws, client)) _ws = null;
       }
-      _connectionListener?.call(DesktopConnectionState.disconnected);
+      _dispatchConnectionState(DesktopConnectionState.disconnected);
       rethrow;
     }
     if (_closed) {
@@ -368,10 +377,10 @@ class DesktopGatewayClient {
         if (!_closed && _storedSessionIds.isNotEmpty) {
           unawaited(_rebindStoredSessions(client));
         }
-        _connectionListener?.call(DesktopConnectionState.connected);
+        _dispatchConnectionState(DesktopConnectionState.connected);
       } else if (identical(_ws, client)) {
         _gatewaySessionIds.clear();
-        _connectionListener?.call(DesktopConnectionState.disconnected);
+        _dispatchConnectionState(DesktopConnectionState.disconnected);
         // A socket that was once live and then dropped (phone sleep,
         // heartbeat timeout, gateway restart) must come back on its own:
         // the user is often not looking at the chat window when it dies,
@@ -396,7 +405,7 @@ class DesktopGatewayClient {
     _reconnectTimer = Timer(delay, () async {
       _reconnectTimer = null;
       if (_closed) return;
-      _connectionListener?.call(DesktopConnectionState.reconnecting);
+      _dispatchConnectionState(DesktopConnectionState.reconnecting);
       try {
         await _ensureSocket();
       } catch (_) {
@@ -655,8 +664,58 @@ class DesktopGatewayClient {
           };
   }
 
-  void setConnectionListener(DesktopConnectionCallback? listener) {
-    _connectionListener = listener;
+  /// Registers a connection-state listener and returns its removal token.
+  ///
+  /// The connection is shared (Phase 2B-ii), so listeners coexist instead of
+  /// replacing one another: a mounted chat screen observes its state beside
+  /// whoever else holds the same connection. Delivery order is registration
+  /// order, and a listener removes only its own registration by token.
+  Object addConnectionListener(DesktopConnectionCallback callback) {
+    final token = Object();
+    _connectionListeners[token] = callback;
+    return token;
+  }
+
+  /// Detaches exactly the listener [token] was returned for.
+  ///
+  /// A stale token — already removed, or belonging to a closed client — is a
+  /// no-op, so a teardown path can run twice safely.
+  void removeConnectionListener(Object token) {
+    _connectionListeners.remove(token);
+  }
+
+  /// Whether [close] has run.
+  ///
+  /// A borrowed client stays open after the screen that borrowed it is gone;
+  /// ownership is what decides, so tests pin that by observing this flag.
+  bool get isClosed => _closed;
+
+  /// How many connection-state listeners are attached.
+  ///
+  /// Exposed for the ownership tests: "the disposed screen detached its own
+  /// listener" has no other observable, because a callback that fires into a
+  /// disposed screen returns immediately anyway.
+  @visibleForTesting
+  int get connectionListenerCount => _connectionListeners.length;
+
+  /// Fans [state] out to every connection-state listener.
+  ///
+  /// Registration order is delivery order. The set is snapshotted first: a
+  /// listener is allowed to register or remove listeners re-entrantly (a
+  /// disconnected screen can drop its own registration), and the transition in
+  /// flight must still reach the listeners that were attached when it was
+  /// observed. A listener that throws must not strand its siblings nor abort
+  /// the connect path that reported the state, so its failure is swallowed
+  /// here — the same contract as [_dispatchAsyncEvent].
+  void _dispatchConnectionState(DesktopConnectionState state) {
+    if (_connectionListeners.isEmpty) return;
+    for (final listener in List.of(_connectionListeners.values)) {
+      try {
+        listener(state);
+      } catch (_) {
+        // Swallowed on purpose: see the contract above.
+      }
+    }
   }
 
   /// Registers an async-event listener and returns its removal token.
@@ -1258,7 +1317,7 @@ class DesktopGatewayClient {
     _asyncListeners.clear();
     _asyncListenerAccepts.clear();
     _sessionBoundListeners.clear();
-    _connectionListener = null;
+    _connectionListeners.clear();
     _projects = null;
     _ws?.close();
     _ws = null;

@@ -9,6 +9,7 @@ import '../services/chat_space_store.dart';
 import '../services/composer_draft_store.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
+import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/local_chat_pin_store.dart';
 import '../services/session_search_client.dart';
@@ -61,6 +62,11 @@ class SessionListScreen extends StatefulWidget {
   final SavedConnection connection;
   final GatewayTurnApplicationController turnApplicationController;
 
+  /// The application's shared gateway connections, threaded to every screen
+  /// this list opens so they borrow one socket per connection instead of each
+  /// building a private one.
+  final GatewayClientRegistry? gatewayRegistry;
+
   /// Test-only HTTP client injected into the session-list [ApiClient] so
   /// paging behaviour (pinned back-fills, offset advance) can be driven
   /// against a fake server without a real gateway.
@@ -79,6 +85,7 @@ class SessionListScreen extends StatefulWidget {
   const SessionListScreen({
     required this.connection,
     required this.turnApplicationController,
+    this.gatewayRegistry,
     this.testHttpClient,
     this.testSessionPageSize,
     this.testPreferencesLoader,
@@ -519,6 +526,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
         builder: (_) => SessionListScreen(
           connection: profile,
           turnApplicationController: widget.turnApplicationController,
+          gatewayRegistry: widget.gatewayRegistry,
         ),
       ),
     );
@@ -1006,6 +1014,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
           connection: widget.connection,
           session: session,
           turnApplicationController: widget.turnApplicationController,
+          gatewayRegistry: widget.gatewayRegistry,
         ),
       ),
     );
@@ -1147,6 +1156,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                     // Home opens chats itself now; without the owner they
                     // would lose durable turn recovery.
                     turnApplicationController: widget.turnApplicationController,
+                    gatewayRegistry: widget.gatewayRegistry,
                   ),
                 );
               },
@@ -1670,6 +1680,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
                               session: session,
                               turnApplicationController:
                                   widget.turnApplicationController,
+                              gatewayRegistry: widget.gatewayRegistry,
                             ),
                           ),
                         );

@@ -4,6 +4,7 @@ import 'package:crypto/crypto.dart';
 
 import '../models/connection.dart';
 import 'desktop_gateway_client.dart';
+import 'gateway_client_registry.dart';
 import 'gateway_turn_coordinator.dart';
 import 'gateway_turn_journal.dart';
 import 'gateway_turn_recovery.dart';
@@ -122,11 +123,19 @@ class GatewayTurnApplicationController {
   GatewayTurnApplicationController({
     GatewayTurnApplicationSessionFactory? sessionFactory,
     GatewayTurnJournalFactory? journalFactory,
+    GatewayClientRegistry? registry,
   }) : _sessionFactory =
            sessionFactory ??
            ((connection) => _CoordinatorGatewayTurnApplicationSession(
-             DesktopGatewayClient.fromConnection(connection),
+             // With a registry the controller is one borrower among others:
+             // it lands on the connection's shared client — the same instance
+             // a chat screen holds — and must not close it. Without one it
+             // keeps building (and owning) a private client.
+             registry != null
+                 ? registry.clientFor(connection)
+                 : DesktopGatewayClient.fromConnection(connection),
              journal: journalFactory?.call(),
+             ownsClient: registry == null,
            ));
 
   GatewayTurnApplicationSession sessionFor(SavedConnection connection) {
@@ -161,6 +170,14 @@ class GatewayTurnApplicationController {
 class _CoordinatorGatewayTurnApplicationSession
     implements GatewayTurnApplicationSession {
   final DesktopGatewayClient _client;
+
+  /// Whether closing this session may tear the client (and its socket) down.
+  ///
+  /// False when the client came from the application registry: chat screens
+  /// are still mounted on that connection, so disposing the draft owner must
+  /// leave it running for them. The registry closes what the registry built.
+  final bool ownsClient;
+
   final Map<String, _ApplicationAsyncEventRegistration> _asyncEventListeners =
       {};
   late final GatewayTurnCoordinatorRegistry _registry;
@@ -177,7 +194,12 @@ class _CoordinatorGatewayTurnApplicationSession
   _CoordinatorGatewayTurnApplicationSession(
     this._client, {
     GatewayTurnJournal? journal,
+    this.ownsClient = true,
   }) {
+    // `??=` on the client: a client that already enabled its recovery
+    // coordinator (another application scope, or a chat screen that borrowed
+    // the same shared instance) keeps it, so sharing a connection does not
+    // reset recovery state.
     _registry = _client.enableTurnRecoveryCoordinator(journal: journal);
   }
 
@@ -406,6 +428,14 @@ class _CoordinatorGatewayTurnApplicationSession
     if (dispatcherToken != null) {
       _client.removeAsyncEventListener(dispatcherToken);
     }
+    // Everything below is client-level teardown, so it is the owner's job:
+    // a borrowed client is a client some other consumer is still using —
+    // a mounted chat screen streaming a turn, or a second application scope —
+    // and closing the coordinator registry or the socket here would take that
+    // away from them. The registry runs this same teardown when it drops the
+    // connection (and `DesktopGatewayClient.close()` closes the coordinator
+    // registry itself), so nothing is left behind either way.
+    if (!ownsClient) return;
     try {
       await _registry.closeAll();
     } finally {
