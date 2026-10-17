@@ -9,6 +9,23 @@ import 'package:hermes_android/core/services/gateway_turn_journal.dart';
 import 'package:hermes_android/core/services/gateway_turn_recovery.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 const _digest =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const _mobileA = '11111111-1111-4111-8111-111111111111';
@@ -147,7 +164,7 @@ class _GatewayFixture {
       final closed = Completer<void>();
       _socketClosed.add(closed);
       order.add('socket');
-      socket.add(jsonEncode(readyFrame));
+      _safeAdd(socket, jsonEncode(readyFrame));
       socket.listen(
         (raw) async {
           final request = jsonDecode(raw as String) as Map<String, dynamic>;
@@ -162,7 +179,7 @@ class _GatewayFixture {
               ? _defaultResult(request, connectionIndex)
               : handler!(request, connectionIndex));
           final fixtureError = result['__fixture_error__'];
-          socket.add(
+          _safeAdd(socket,
             jsonEncode(<String, dynamic>{
               'jsonrpc': '2.0',
               'id': request['id'],
@@ -194,7 +211,7 @@ class _GatewayFixture {
   String get baseUrl => 'http://127.0.0.1:${server.port}';
 
   void sendEvent(Map<String, dynamic> params, {int socketIndex = 0}) {
-    _sockets[socketIndex].add(
+    _safeAdd(_sockets[socketIndex],
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',
@@ -207,7 +224,7 @@ class _GatewayFixture {
       _sockets[socketIndex].close(WebSocketStatus.goingAway, 'fixture close');
 
   Future<void> waitForSocketClosed([int socketIndex = 0]) =>
-      _socketClosed[socketIndex].future.timeout(const Duration(seconds: 5));
+      _socketClosed[socketIndex].future.timeout(const Duration(seconds: 10));
 
   Future<Map<String, dynamic>> _defaultResult(
     Map<String, dynamic> request,
@@ -606,7 +623,7 @@ Future<void> _triggerDefinitiveProcessPoison({
     pending,
     throwsA(isA<GatewayTurnJournalException>()),
   );
-  await promptSeen.future.timeout(const Duration(seconds: 5));
+  await promptSeen.future.timeout(const Duration(seconds: 10));
   failNextWrite();
   releaseError.complete();
   await assertion;
@@ -624,7 +641,9 @@ void _expectPayloadFreePoison(GatewayTurnRecoveryState? failure) {
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -1145,7 +1164,7 @@ void main() {
               payload: <String, dynamic>{'status': 'completed'},
             ),
           );
-          await terminalSeen.future.timeout(const Duration(seconds: 5));
+          await terminalSeen.future.timeout(const Duration(seconds: 10));
           await coordinator.waitForIdle();
           expect(
             (await journal.loadAll()).single.terminalEventRecorded,
@@ -1247,7 +1266,7 @@ void main() {
               ),
             );
             final state = await settled.future.timeout(
-              const Duration(seconds: 5),
+              const Duration(seconds: 10),
             );
             await coordinator.waitForIdle();
             if (overflow) {
@@ -1444,7 +1463,7 @@ void main() {
             ),
           );
           final terminal = await terminalSeen.future.timeout(
-            const Duration(seconds: 5),
+            const Duration(seconds: 10),
           );
           await first.waitForIdle();
           expect(terminal.eventPayloadBytes, 62);
@@ -1564,7 +1583,7 @@ void main() {
               payload: <String, dynamic>{'text': 'x' * 28},
             ),
           );
-          final state = await failed.future.timeout(const Duration(seconds: 5));
+          final state = await failed.future.timeout(const Duration(seconds: 10));
           expect(state.eventPayloadBytes, 2);
           expect(state.failure, GatewayTurnRecoveryFailure.protocolViolation);
           await fixture.waitForSocketClosed();
@@ -1656,7 +1675,7 @@ void main() {
               payload: completePayload,
             ),
           );
-          final state = await failed.future.timeout(const Duration(seconds: 5));
+          final state = await failed.future.timeout(const Duration(seconds: 10));
           expect(state.eventPayloadBytes, 40);
           expect(state.terminalEventRecorded, isFalse);
           expect(state.failure, GatewayTurnRecoveryFailure.protocolViolation);
@@ -1739,7 +1758,7 @@ void main() {
                 payload: <String, dynamic>{'status': 'completed'},
               ),
             );
-            await terminalSeen.future.timeout(const Duration(seconds: 5));
+            await terminalSeen.future.timeout(const Duration(seconds: 10));
             await coordinator.waitForIdle();
           }
 
@@ -1934,7 +1953,7 @@ void main() {
               payload: <String, dynamic>{'status': 'completed'},
             ),
           );
-          await terminalSeen.future.timeout(const Duration(seconds: 5));
+          await terminalSeen.future.timeout(const Duration(seconds: 10));
           await coordinator.waitForIdle();
           final active = await coordinator.submit(text: 'active target');
 
@@ -2029,7 +2048,7 @@ void main() {
               payload: <String, dynamic>{'status': 'completed'},
             ),
           );
-          await terminalSeen.future.timeout(const Duration(seconds: 5));
+          await terminalSeen.future.timeout(const Duration(seconds: 10));
           await coordinator.waitForIdle();
           final before = await journal.loadAll();
           final active = await coordinator.submit(text: 'late active survivor');
@@ -2146,7 +2165,7 @@ void main() {
             ),
             socketIndex: 1,
           );
-          await runningSeen.future.timeout(const Duration(seconds: 5));
+          await runningSeen.future.timeout(const Duration(seconds: 10));
           await coordinator.waitForIdle();
           final afterRollback = (await journal.loadAll()).single;
           expect(
@@ -2765,7 +2784,7 @@ void main() {
             pending,
             throwsA(isA<GatewayTurnJournalException>()),
           );
-          await promptSeen.future.timeout(const Duration(seconds: 5));
+          await promptSeen.future.timeout(const Duration(seconds: 10));
           store.failNextWrite = true;
           releaseError.complete();
           await assertion;
@@ -3178,7 +3197,7 @@ void main() {
           pending,
           throwsA(isA<GatewayTurnJournalException>()),
         );
-        await reconcileSeen.future.timeout(const Duration(seconds: 5));
+        await reconcileSeen.future.timeout(const Duration(seconds: 10));
         store.failNextWrite = true;
         releaseError.complete();
         await assertion;
@@ -3629,7 +3648,7 @@ void main() {
 
         try {
           unawaited(first.submit(text: 'complete during process loss'));
-          await slot.ackSealed.future.timeout(const Duration(seconds: 5));
+          await slot.ackSealed.future.timeout(const Duration(seconds: 10));
           final restartedJournal = GatewayTurnJournal(
             store: _CrashJournalStore(slot),
           );

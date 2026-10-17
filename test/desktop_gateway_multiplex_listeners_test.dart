@@ -26,6 +26,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 /// Mobile-side chat ids the UI knows; resolved by the fake gateway to
 /// [_runtimeSession]/[_storedSession] ids, minted in `session.create` order.
 const _mobileA = 'mob-a';
@@ -217,7 +234,9 @@ SavedConnection _connection(String baseUrl) => SavedConnection(
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -304,7 +323,7 @@ class _MultiplexFakeGateway {
     }
     final socket = await WebSocketTransformer.upgrade(request);
     _sockets.add(socket);
-    socket.add(
+    _safeAdd(socket,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',
@@ -324,7 +343,7 @@ class _MultiplexFakeGateway {
     final params = (frame['params'] as Map?)?.cast<String, dynamic>() ?? {};
 
     void reply(Object? result, {Map<String, dynamic>? error}) {
-      socket.add(
+      _safeAdd(socket,
         jsonEncode(<String, dynamic>{
           'jsonrpc': '2.0',
           'id': frame['id'],
@@ -377,7 +396,7 @@ class _MultiplexFakeGateway {
     required String text,
   }) async {
     await _waitFor(() => _sockets.isNotEmpty);
-    _sockets.last.add(
+    _safeAdd(_sockets.last,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',

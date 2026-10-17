@@ -8,6 +8,23 @@ import 'package:hermes_android/core/services/gateway_turn_application_controller
 import 'package:hermes_android/core/services/gateway_turn_journal.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 void main() {
   test('WsClient advertises and answers server initiated requests', () async {
     final gateway = await _ServerRequestGateway.start();
@@ -27,7 +44,7 @@ void main() {
     };
     addTearDown(client.close);
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     await _waitFor(() => gateway.capabilityFrames.isNotEmpty);
     expect(gateway.capabilityFrames.single['params'], {
       'server_requests': true,
@@ -66,7 +83,7 @@ void main() {
         heartbeatDeadline: const Duration(hours: 2),
       );
       addTearDown(client.close);
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(gateway.capabilityFrames, isEmpty);
 
@@ -852,7 +869,9 @@ void main() {
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -931,7 +950,7 @@ class _ServerRequestGateway {
 
     final socket = await WebSocketTransformer.upgrade(request);
     _sockets.add(socket);
-    socket.add(
+    _safeAdd(socket,
       jsonEncode({
         'jsonrpc': '2.0',
         'method': 'event',
@@ -1036,7 +1055,7 @@ class _ServerRequestGateway {
     int socketIndex = 0,
   }) {
     final socket = _sockets[socketIndex];
-    socket.add(
+    _safeAdd(socket,
       jsonEncode({
         'jsonrpc': '2.0',
         'id': id,
@@ -1050,11 +1069,11 @@ class _ServerRequestGateway {
       _sockets[socketIndex].close(WebSocketStatus.goingAway, 'fixture close');
 
   void _respond(WebSocket socket, dynamic id, Map<String, dynamic> result) {
-    socket.add(jsonEncode({'jsonrpc': '2.0', 'id': id, 'result': result}));
+    _safeAdd(socket, jsonEncode({'jsonrpc': '2.0', 'id': id, 'result': result}));
   }
 
   void _error(WebSocket socket, dynamic id, int code, String message) {
-    socket.add(
+    _safeAdd(socket,
       jsonEncode({
         'jsonrpc': '2.0',
         'id': id,

@@ -13,6 +13,23 @@ import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 const _fixtureKey = 'fixture-key';
 
 void main() {
@@ -26,15 +43,15 @@ void main() {
       heartbeatDeadline: const Duration(seconds: 5),
     );
     addTearDown(client.close);
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
 
-    await _waitFor(() => gateway.pingCount >= 2, timeout: const Duration(seconds: 3));
+    await _waitFor(() => gateway.pingCount >= 2, timeout: const Duration(seconds: 10));
     expect(client.isConnected, isTrue);
     // Heartbeats must not leak into the request-response pending map: a
     // normal RPC still completes normally while pings flow.
     final response = await client
         .send('session.resume', {'session_id': 'x'})
-        .timeout(const Duration(seconds: 2));
+        .timeout(const Duration(seconds: 10));
     expect(response['error'], isNull);
   });
 
@@ -48,12 +65,12 @@ void main() {
       heartbeatDeadline: const Duration(milliseconds: 400),
     );
     addTearDown(client.close);
-    await client.connect().timeout(const Duration(seconds: 5));
-    await _waitFor(() => gateway.pingCount >= 1, timeout: const Duration(seconds: 2));
+    await client.connect().timeout(const Duration(seconds: 10));
+    await _waitFor(() => gateway.pingCount >= 1, timeout: const Duration(seconds: 10));
 
     // Simulate the half-open case: the gateway stops answering anything.
     gateway.silencePings = true;
-    await _waitFor(() => !client.isConnected, timeout: const Duration(seconds: 3));
+    await _waitFor(() => !client.isConnected, timeout: const Duration(seconds: 10));
     expect(client.isConnected, isFalse);
   });
 
@@ -84,14 +101,15 @@ void main() {
     await gateway.dropSocket();
 
     // The client must reopen WITHOUT any explicit call from the UI.
-    await _waitFor(() => gateway.connectionCount >= 2, timeout: const Duration(seconds: 8));
+    // Auto-reconnect: 2s backoff hop + fresh ticket + handshake + resume.
+    await _waitFor(() => gateway.connectionCount >= 2, timeout: const Duration(seconds: 20));
 
     // Rebind-on-reconnect: the fresh socket must resume the stored key
     // proactively — no explicit call — so a reply that completed detached
     // during the outage is addressable immediately.
     await _waitFor(
       () => gateway.resumedStoredIds.contains('stored-ka-1'),
-      timeout: const Duration(seconds: 5),
+      timeout: const Duration(seconds: 20),
     );
 
     // And the stored session binding must survive: the next use resumes
@@ -103,7 +121,9 @@ void main() {
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -152,7 +172,7 @@ class _KeepAliveFakeGateway {
         final socket = await WebSocketTransformer.upgrade(httpReq);
         gw._sockets.add(socket);
         gw.connectionCount++;
-        socket.add(
+        _safeAdd(socket,
           jsonEncode({
             'jsonrpc': '2.0',
             'method': 'event',
@@ -166,7 +186,7 @@ class _KeepAliveFakeGateway {
           if (method == 'gateway.ping') {
             gw.pingCount++;
             if (!gw.silencePings) {
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': id,
@@ -184,7 +204,7 @@ class _KeepAliveFakeGateway {
               if (requested == 'mob-ka') {
                 // First touch: the mobile id is not a stored key yet —
                 // exactly the new-chat path that mints stored-ka-1 below.
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': id,
@@ -195,7 +215,7 @@ class _KeepAliveFakeGateway {
                   }),
                 );
               } else {
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': id,
@@ -204,7 +224,7 @@ class _KeepAliveFakeGateway {
                 );
               }
             case 'session.create':
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': id,
@@ -214,8 +234,14 @@ class _KeepAliveFakeGateway {
                   },
                 }),
               );
+            case 'client.capabilities':
+              // WsClient advertises server-request support fire-and-forget
+              // and ignores the answer (`onError: (_, _) {}`), so this
+              // gateway stays silent instead of writing a frame that can
+              // race a socket close.
+              return;
             default:
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': id,

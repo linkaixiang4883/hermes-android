@@ -18,6 +18,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 /// A minimal gateway: REST for the WebSocket ticket, then JSON-RPC over the
 /// socket. Records every `session.create` / `session.resume` and answers with
 /// the stock-Hermes shapes the client expects.
@@ -71,7 +88,7 @@ class _FakeGateway {
     final params = (frame['params'] as Map?)?.cast<String, dynamic>() ?? {};
 
     void reply(Object? result, {Map<String, dynamic>? error}) {
-      socket.add(
+      _safeAdd(socket,
         jsonEncode({
           'jsonrpc': '2.0',
           'id': frame['id'],
@@ -104,6 +121,11 @@ class _FakeGateway {
           'name': params['name'],
           'path': '',
         });
+      case 'client.capabilities':
+        // WsClient advertises server-request support on every socket and
+        // ignores the answer, so the fixture stays silent rather than
+        // writing a frame that can race a socket close.
+        return;
       default:
         reply(null, error: {'code': -32601, 'message': 'method not found'});
     }

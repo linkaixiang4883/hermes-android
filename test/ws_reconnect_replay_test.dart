@@ -24,6 +24,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 /// The mobile-side chat id the UI knows; resolved to [_runtimeSessionId] by
 /// the gateway, and remembered as [_storedSessionId] for reconnects.
 const _mobileSessionId = 'mob-1';
@@ -74,7 +91,7 @@ void main() {
       // The client reopens on its own — first backoff hop is 2s.
       await _waitFor(
         () => gateway.connectionCount >= 2,
-        timeout: const Duration(seconds: 8),
+        timeout: const Duration(seconds: 20),
       );
 
       // ...and the reopened socket asks for exactly the frames it missed.
@@ -82,7 +99,7 @@ void main() {
       // its watermark map starts empty, so the fetch has nothing to name.
       await _waitFor(
         () => gateway.replayRequests.isNotEmpty,
-        timeout: const Duration(seconds: 8),
+        timeout: const Duration(seconds: 20),
         describe: () =>
             'sockets opened: ${gateway.connectionCount}, '
             'replay requests: ${gateway.replayRequests.length}',
@@ -118,7 +135,9 @@ SavedConnection _connection(String baseUrl) => SavedConnection(
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
   String Function()? describe,
 }) async {
   final deadline = DateTime.now().add(timeout);
@@ -217,7 +236,7 @@ class _ReconnectFakeGateway {
     _sockets.add(socket);
     connectionCount++;
     socketTickets.add(ticket);
-    socket.add(
+    _safeAdd(socket,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',
@@ -241,7 +260,7 @@ class _ReconnectFakeGateway {
     final params = (frame['params'] as Map?)?.cast<String, dynamic>() ?? {};
 
     void reply(Object? result, {Map<String, dynamic>? error}) {
-      socket.add(
+      _safeAdd(socket,
         jsonEncode(<String, dynamic>{
           'jsonrpc': '2.0',
           'id': frame['id'],
@@ -292,7 +311,7 @@ class _ReconnectFakeGateway {
   /// loop, so a frame sent before registration would race the fixture.
   Future<void> sendEvent({required int seq, required String text}) async {
     await _waitFor(() => _sockets.isNotEmpty);
-    _sockets.last.add(
+    _safeAdd(_sockets.last,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',

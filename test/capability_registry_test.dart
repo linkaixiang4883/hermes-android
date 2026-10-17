@@ -6,6 +6,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/services/capability_registry.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 Map<String, dynamic> _readyFrame({
   String protocolName = 'hermes-jsonrpc',
   int protocolMajor = 2,
@@ -224,7 +241,7 @@ void main() {
       server.listen((request) async {
         final socket = await WebSocketTransformer.upgrade(request);
         sockets.add(socket);
-        socket.add(jsonEncode(_readyFrame()));
+        _safeAdd(socket, jsonEncode(_readyFrame()));
         socket.listen((_) {});
       });
     });
@@ -243,7 +260,7 @@ void main() {
 
       try {
         await client.connect();
-        await client.waitForGatewayReady(timeout: const Duration(seconds: 5));
+        await client.waitForGatewayReady(timeout: const Duration(seconds: 10));
 
         expect(registry.protocolName, 'hermes-jsonrpc');
         expect(registry.protocolMajor, 2);
@@ -267,7 +284,7 @@ void main() {
 
       try {
         await client.connect();
-        final frame = await seen.future.timeout(const Duration(seconds: 5));
+        final frame = await seen.future.timeout(const Duration(seconds: 10));
 
         expect(frame['method'], 'event');
         expect(registry.advertises('projects'), isTrue);

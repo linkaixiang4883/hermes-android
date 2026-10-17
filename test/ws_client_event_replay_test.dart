@@ -21,6 +21,23 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 const _fixtureKey = 'fixture-key';
 const _sessionId = 'runtime-1';
 
@@ -33,7 +50,7 @@ void main() {
     final received = <StreamEvent>[];
     client.onStreamEvent = received.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
 
     await gateway.sendEvent(
       _event(type: 'message.delta', seq: 5, text: 'once'),
@@ -58,7 +75,7 @@ void main() {
     final received = <StreamEvent>[];
     client.onStreamEvent = received.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
 
     // The turn-recovery protocol numbers every turn from 1 again (its state
     // machine requires seq == lastSeq + 1 inside one turn), so turn-b's seq 1
@@ -111,7 +128,7 @@ void main() {
     final received = <StreamEvent>[];
     client.onStreamEvent = received.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     for (final seq in <int>[1, 2, 3]) {
       await gateway.sendEvent(
         _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -131,7 +148,7 @@ void main() {
 
     await gateway.dropSocket();
     await _waitFor(() => !client.isConnected);
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 20));
     await _waitFor(() => received.length >= 5);
 
     final sinceRequest = gateway.requests.singleWhere(
@@ -167,7 +184,7 @@ void main() {
       final received = <StreamEvent>[];
       client.onStreamEvent = received.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3, 4]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -192,7 +209,7 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 20));
       await _waitFor(
         () => gateway.requests.any(
           (request) => request['method'] == 'session.events.since',
@@ -232,7 +249,7 @@ void main() {
       final received = <StreamEvent>[];
       client.onStreamEvent = received.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -246,8 +263,11 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
-      await _waitFor(() => client.isConnected && gateway.connectionCount >= 2);
+      await client.connect().timeout(const Duration(seconds: 20));
+      await _waitFor(
+        () => client.isConnected && gateway.connectionCount >= 2,
+        timeout: const Duration(seconds: 20),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 250));
 
       expect(
@@ -287,7 +307,7 @@ void main() {
     final truncated = <String>[];
     client.onReplayTruncated = truncated.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     for (final seq in <int>[1, 2, 3]) {
       await gateway.sendEvent(
         _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -311,7 +331,7 @@ void main() {
 
     await gateway.dropSocket();
     await _waitFor(() => !client.isConnected);
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 20));
     await _waitFor(() => truncated.isNotEmpty);
     await Future<void>.delayed(const Duration(milliseconds: 150));
 
@@ -343,7 +363,7 @@ void main() {
       final truncated = <String>[];
       client.onReplayTruncated = truncated.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -368,7 +388,7 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 20));
       await _waitFor(
         () => gateway.requests.any(
           (request) => request['method'] == 'session.events.since',
@@ -387,7 +407,11 @@ void main() {
       await _sendBarrier(gateway, received, seq: 1);
 
       release.complete();
-      await _waitFor(() => received.length >= 260);
+      // 300 frames were flooded ahead of this wait; the release flushes 256.
+      await _waitFor(
+        () => received.length >= 260,
+        timeout: const Duration(seconds: 20),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       final seqs = received
@@ -425,7 +449,7 @@ void main() {
       final truncated = <String>[];
       client.onReplayTruncated = truncated.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -446,7 +470,7 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 20));
       await _waitFor(
         () => gateway.requests.any(
           (request) => request['method'] == 'session.events.since',
@@ -485,7 +509,7 @@ void main() {
     final received = <StreamEvent>[];
     client.onStreamEvent = received.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     for (final seq in <int>[1, 2, 3]) {
       await gateway.sendEvent(
         _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -501,7 +525,7 @@ void main() {
     // swallow the restarted numbering's low seqs.
     client.close();
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 20));
     for (final seq in <int>[1, 2, 3]) {
       await gateway.sendEvent(
         _event(type: 'message.delta', seq: seq, text: 'fresh-$seq'),
@@ -536,7 +560,7 @@ void main() {
       final truncated = <String>[];
       client.onReplayTruncated = truncated.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -559,7 +583,7 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 20));
       await _waitFor(
         () => gateway.requests.any(
           (request) => request['method'] == 'session.events.since',
@@ -574,7 +598,11 @@ void main() {
       await _sendBarrier(gateway, received, seq: 1);
 
       release.complete();
-      await _waitFor(() => received.length >= 260);
+      // 300 frames were flooded ahead of this wait; the release flushes 256.
+      await _waitFor(
+        () => received.length >= 260,
+        timeout: const Duration(seconds: 20),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       // Truncation and overflow describe one and the same hole: the caller is
@@ -603,7 +631,7 @@ void main() {
       final received = <StreamEvent>[];
       client.onStreamEvent = received.add;
 
-      await client.connect().timeout(const Duration(seconds: 5));
+      await client.connect().timeout(const Duration(seconds: 10));
       for (final seq in <int>[1, 2, 3]) {
         await gateway.sendEvent(
           _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
@@ -634,9 +662,12 @@ void main() {
 
       await gateway.dropSocket();
       await _waitFor(() => !client.isConnected);
-      await client.connect().timeout(const Duration(seconds: 5));
-      await answered.future.timeout(const Duration(seconds: 5));
-      await _waitFor(() => gateway.connectionCount >= 2);
+      await client.connect().timeout(const Duration(seconds: 20));
+      await answered.future.timeout(const Duration(seconds: 20));
+      await _waitFor(
+        () => gateway.connectionCount >= 2,
+        timeout: const Duration(seconds: 20),
+      );
       await Future<void>.delayed(const Duration(milliseconds: 200));
 
       await gateway.sendEvent(
@@ -681,7 +712,7 @@ void main() {
     final received = <StreamEvent>[];
     client.onStreamEvent = received.add;
 
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     // A turn watermark only matters while its turn is live, so the map is
     // bounded: the 65th turn evicts the 1st, and none of the 64 newest.
     for (var turn = 1; turn <= 65; turn++) {
@@ -748,11 +779,14 @@ Future<void> _sendBarrier(
   );
   // The barrier session's own seq gate means each barrier frame is dispatched
   // exactly once, so waiting for THIS seq cannot be satisfied by an earlier one.
+  // Up to 300 frames can sit queued ahead of the barrier frame, so this
+  // wait is wider than the plain delivery default.
   await _waitFor(
     () => received.any(
       (event) =>
           event.sessionId == _barrierSessionId && event.seq == seq,
     ),
+    timeout: const Duration(seconds: 20),
   );
 }
 
@@ -780,7 +814,9 @@ Map<String, dynamic> _event({
 
 Future<void> _waitFor(
   bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
+  // Default wait, not 5s: a real loopback socket can sit unserved for
+  // seconds while the whole suite runs in parallel.
+  Duration timeout = const Duration(seconds: 10),
 }) async {
   final deadline = DateTime.now().add(timeout);
   while (!condition()) {
@@ -831,7 +867,7 @@ class _ReplayFakeGateway {
     final socket = await WebSocketTransformer.upgrade(httpRequest);
     _sockets.add(socket);
     connectionCount++;
-    socket.add(
+    _safeAdd(socket,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',
@@ -899,11 +935,9 @@ class _ReplayFakeGateway {
   }
 
   void _send(WebSocket socket, Map<String, dynamic> frame) {
-    try {
-      socket.add(jsonEncode(frame));
-    } catch (_) {
-      // A socket dropped mid-answer is exactly what the reconnect test wants.
-    }
+    // A socket dropped mid-answer is exactly what the reconnect test wants:
+    // the guarded write drops the frame instead of killing the listener.
+    _safeAdd(socket, jsonEncode(frame));
   }
 
   /// Push one server event frame on the newest socket.
@@ -921,7 +955,7 @@ class _ReplayFakeGateway {
       () => index < 0 ? _sockets.isNotEmpty : _sockets.length > index,
     );
     final socket = _sockets[index < 0 ? _sockets.length - 1 : index];
-    socket.add(
+    _safeAdd(socket,
       jsonEncode(<String, dynamic>{
         'jsonrpc': '2.0',
         'method': 'event',

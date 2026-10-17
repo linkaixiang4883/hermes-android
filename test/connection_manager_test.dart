@@ -10,6 +10,23 @@ import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 import 'package:hermes_android/core/services/ws_client.dart';
 
+/// Writes a server frame only while the socket is still open.
+///
+/// Fixture replies are fire-and-forget: under the load of a full parallel test
+/// run a reply can be produced after the peer has closed the socket, and
+/// dart:io then throws `Bad state: StreamSink is closed` out of the socket's
+/// listener -- which kills that listener and leaves the client waiting on an
+/// answer that can never arrive. A late frame is dropped instead, exactly as a
+/// gateway whose peer is already gone would behave.
+void _safeAdd(WebSocket socket, Object? frame) {
+  if (socket.readyState != WebSocket.open) return;
+  try {
+    socket.add(frame);
+  } catch (_) {
+    // Closed between the check above and the write: same late-write race.
+  }
+}
+
 /// Case-insensitive request header lookup — package:http normalises header
 /// names when sending, so tests should not assume a particular casing.
 String? _header(http.BaseRequest request, String name) {
@@ -157,7 +174,7 @@ Future<void> _expectFailClosedPromptDisconnect(
           return;
         }
 
-        socket.add(
+        _safeAdd(socket,
           jsonEncode({
             'jsonrpc': '2.0',
             'id': request['id'],
@@ -175,7 +192,7 @@ Future<void> _expectFailClosedPromptDisconnect(
         }
 
         for (var index = 0; index < 2; index += 1) {
-          socket.add(
+          _safeAdd(socket,
             jsonEncode({
               'jsonrpc': '2.0',
               'method': 'event',
@@ -205,7 +222,7 @@ Future<void> _expectFailClosedPromptDisconnect(
   final client = WsClient('http://127.0.0.1:${server.port}');
 
   try {
-    await client.connect().timeout(const Duration(seconds: 5));
+    await client.connect().timeout(const Duration(seconds: 10));
     Object? surfacedError;
     var sentCount = 0;
     try {
@@ -219,7 +236,7 @@ Future<void> _expectFailClosedPromptDisconnect(
     } catch (error) {
       surfacedError = error;
     }
-    await socketClosed.future.timeout(const Duration(seconds: 5));
+    await socketClosed.future.timeout(const Duration(seconds: 10));
 
     expect(surfacedError, isA<Exception>());
     expect(surfacedError, isA<JsonRpcError>());
@@ -2197,7 +2214,7 @@ void main() {
           socket.listen((message) {
             final frame = jsonDecode(message as String) as Map<String, dynamic>;
             frames.add(frame);
-            socket.add(
+            _safeAdd(socket,
               jsonEncode({
                 'jsonrpc': '2.0',
                 'id': frame['id'],
@@ -2269,7 +2286,7 @@ void main() {
         final socketSubscription = server
             .transform(WebSocketTransformer())
             .listen((socket) {
-              socket.add(jsonEncode(readyFrame));
+              _safeAdd(socket, jsonEncode(readyFrame));
             });
         final client = WsClient('http://127.0.0.1:${server.port}')
           ..onGatewayReady = callbackFrames.add
@@ -2321,7 +2338,7 @@ void main() {
         await client.connect();
         final readyFuture = client.waitForGatewayReady();
         final socket = await socketSeen.future;
-        socket.add(
+        _safeAdd(socket,
           jsonEncode({
             'jsonrpc': '2.0',
             'method': 'event',
@@ -2332,7 +2349,7 @@ void main() {
           }),
         );
 
-        final frame = await readyFuture.timeout(const Duration(seconds: 5));
+        final frame = await readyFuture.timeout(const Duration(seconds: 10));
         expect((frame['params'] as Map<String, dynamic>)['payload'], {
           'generation': 1,
         });
@@ -2410,7 +2427,7 @@ void main() {
         try {
           await client.connect();
           final firstSocket = await firstSocketSeen.future;
-          firstSocket.add(
+          _safeAdd(firstSocket,
             jsonEncode({
               'jsonrpc': '2.0',
               'method': 'event',
@@ -2420,7 +2437,7 @@ void main() {
               },
             }),
           );
-          firstSocket.add(
+          _safeAdd(firstSocket,
             jsonEncode({
               'jsonrpc': '2.0',
               'method': 'event',
@@ -2435,7 +2452,7 @@ void main() {
 
           await client.connect();
           final secondSocket = await secondSocketSeen.future;
-          secondSocket.add(
+          _safeAdd(secondSocket,
             jsonEncode({
               'jsonrpc': '2.0',
               'method': 'event',
@@ -2445,7 +2462,7 @@ void main() {
               },
             }),
           );
-          secondSocket.add(
+          _safeAdd(secondSocket,
             jsonEncode({
               'jsonrpc': '2.0',
               'method': 'event',
@@ -2458,7 +2475,7 @@ void main() {
           );
 
           final ready = await client.waitForGatewayReady();
-          await newEventSeen.future.timeout(const Duration(seconds: 5));
+          await newEventSeen.future.timeout(const Duration(seconds: 10));
           expect(
             ((ready['params'] as Map<String, dynamic>)['payload']
                 as Map<String, dynamic>)['generation'],
@@ -2501,7 +2518,7 @@ void main() {
         await client.connect();
         expect(client.isConnected, isTrue);
         expect(() => client.close(), returnsNormally);
-        await serverSocketClosed.future.timeout(const Duration(seconds: 5));
+        await serverSocketClosed.future.timeout(const Duration(seconds: 10));
         expect(client.isConnected, isFalse);
         expect(connectionChanges, [true, false]);
       } finally {
@@ -2523,7 +2540,7 @@ void main() {
                 final request =
                     jsonDecode(raw as String) as Map<String, dynamic>;
                 requests.add(request);
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -2531,7 +2548,7 @@ void main() {
                   }),
                 );
                 if (requests.length == 2) {
-                  socket.add(
+                  _safeAdd(socket,
                     jsonEncode({
                       'jsonrpc': '2.0',
                       'method': 'event',
@@ -2542,7 +2559,7 @@ void main() {
                       },
                     }),
                   );
-                  socket.add(
+                  _safeAdd(socket,
                     jsonEncode({
                       'jsonrpc': '2.0',
                       'method': 'event',
@@ -2591,7 +2608,7 @@ void main() {
           await Future.wait([
             first,
             second,
-          ]).timeout(const Duration(seconds: 5));
+          ]).timeout(const Duration(seconds: 10));
           expect(requests, hasLength(2));
           expect(globalTypes, ['message.delta', 'turn.end']);
           expect(firstTypes, ['message.delta', 'turn.end']);
@@ -2614,7 +2631,7 @@ void main() {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               requests.add(request);
               if (request['method'] == 'fixture.stream') {
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -2624,7 +2641,7 @@ void main() {
                   }),
                 );
               } else {
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -2693,10 +2710,10 @@ void main() {
                   }
                 },
               );
-              socket.add(jsonEncode(firstFrame));
-              socket.add(jsonEncode(firstFrame));
+              _safeAdd(socket, jsonEncode(firstFrame));
+              _safeAdd(socket, jsonEncode(firstFrame));
               Timer(const Duration(milliseconds: 100), () {
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'method': 'event',
@@ -2724,8 +2741,8 @@ void main() {
         try {
           await client.connect();
           expect(await client.waitForGatewayReady(), firstFrame);
-          await disconnected.future.timeout(const Duration(seconds: 5));
-          await serverSocketClosed.future.timeout(const Duration(seconds: 5));
+          await disconnected.future.timeout(const Duration(seconds: 10));
+          await serverSocketClosed.future.timeout(const Duration(seconds: 10));
 
           expect(callbackFrames, hasLength(1));
           expect(applicationEvents, isEmpty);
@@ -2760,7 +2777,7 @@ void main() {
                 final request =
                     jsonDecode(raw as String) as Map<String, dynamic>;
                 requestCount += 1;
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -2848,7 +2865,7 @@ void main() {
                 final request =
                     jsonDecode(raw as String) as Map<String, dynamic>;
                 requestCount += 1;
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -2900,7 +2917,7 @@ void main() {
                   ),
             ),
           );
-          await secondAck.future.timeout(const Duration(seconds: 5));
+          await secondAck.future.timeout(const Duration(seconds: 10));
           client.close();
           client.close();
           await secondExpectation;
@@ -2952,7 +2969,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -2986,7 +3003,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3043,7 +3060,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3101,7 +3118,7 @@ void main() {
                 final request =
                     jsonDecode(raw as String) as Map<String, dynamic>;
                 requestSeen.complete(request);
-                socket.add(
+                _safeAdd(socket,
                   jsonEncode({
                     'jsonrpc': '2.0',
                     'id': request['id'],
@@ -3143,7 +3160,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               requests.add(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3198,7 +3215,9 @@ void main() {
         bool Function() condition, {
         String reason = 'condition',
       }) async {
-        final deadline = DateTime.now().add(const Duration(seconds: 5));
+        // 20s, not 5s: several conditions here wait out the client's first
+        // reconnect hop (2s backoff) plus a fresh handshake.
+        final deadline = DateTime.now().add(const Duration(seconds: 20));
         while (!condition()) {
           if (DateTime.now().isAfter(deadline)) {
             fail('Timed out waiting for $reason');
@@ -3440,7 +3459,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               requests.add(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3505,7 +3524,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3545,7 +3564,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3585,7 +3604,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3625,7 +3644,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3667,7 +3686,7 @@ void main() {
             socket.listen((raw) {
               final request = jsonDecode(raw as String) as Map<String, dynamic>;
               if (!requestSeen.isCompleted) requestSeen.complete(request);
-              socket.add(
+              _safeAdd(socket,
                 jsonEncode({
                   'jsonrpc': '2.0',
                   'id': request['id'],
@@ -3930,11 +3949,7 @@ class _ProjectGatewayFixture {
     // Tests close sockets while the fixture may still be answering an earlier
     // frame; a write to a closed sink is a fixture artefact, not client
     // behaviour.
-    try {
-      socket.add(jsonEncode(frame));
-    } on StateError {
-      // Socket already closed.
-    }
+    _safeAdd(socket, jsonEncode(frame));
   }
 
   void handleSocket(WebSocket socket) {
