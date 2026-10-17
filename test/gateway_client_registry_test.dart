@@ -44,6 +44,75 @@ String _runtimeSession(int ordinal) => 'runtime-$ordinal';
 String _storedSession(int ordinal) => 'stored-$ordinal';
 
 void main() {
+  group('gatewayClientIdentityChanged', () {
+    test('every field the shared client is built from counts as identity', () {
+      final base = _identityConnection();
+      final varied = <String, SavedConnection>{
+        'host': base.copyWith(host: 'other.example'),
+        'port': base.copyWith(port: 9999),
+        'https flag': base.copyWith(useHttps: true),
+        'dashboard port': base.copyWith(dashboardPortOverride: 4119),
+        'dashboard prefix': base.copyWith(dashboardPrefix: '/dashboard'),
+        'dashboard proxied': base.copyWith(dashboardProxied: true),
+        'desktop gateway override': base.copyWith(
+          desktopGatewayUrl: 'https://override.example:9443',
+        ),
+        'dashboard username': base.copyWith(dashboardUsername: 'someone'),
+        'dashboard password': base.copyWith(dashboardPassword: 'something'),
+        'gateway profile': base.copyWith(gatewayProfile: 'sol'),
+      };
+
+      varied.forEach((field, edited) {
+        expect(
+          gatewayClientIdentityChanged(base, edited),
+          isTrue,
+          reason: 'a $field edit must drop the client built from the old one',
+        );
+        expect(
+          gatewayClientIdentityChanged(edited, base),
+          isTrue,
+          reason: 'reversing a $field edit must be detected too',
+        );
+      });
+    });
+
+    test('a cosmetic edit leaves the shared client alone', () {
+      final base = _identityConnection();
+      final cosmetic = <String, SavedConnection>{
+        'label': base.copyWith(label: 'Renamed gateway'),
+        'label and nothing else': base.copyWith(label: 'Moved to the study'),
+        // The REST API Server key is read per request by ApiClient; the
+        // WebSocket transport authenticates with a dashboard ticket instead.
+        'api key': base.copyWith(apiKey: 'rest-key'),
+        // The gateway path prefix belongs to the REST surface.
+        'gateway path prefix': base.copyWith(gatewayPrefix: '/gateway'),
+      };
+
+      cosmetic.forEach((field, edited) {
+        expect(
+          gatewayClientIdentityChanged(base, edited),
+          isFalse,
+          reason:
+              'a $field edit must not tear down a socket the connection '
+              'still needs',
+        );
+      });
+      expect(
+        gatewayClientIdentityChanged(base, base),
+        isFalse,
+        reason: 'an unchanged connection keeps its client',
+      );
+    });
+
+    test('a different connection id is never the same client', () {
+      final base = _identityConnection();
+      expect(
+        gatewayClientIdentityChanged(base, _identityConnection(id: 'other')),
+        isTrue,
+      );
+    });
+  });
+
   group('GatewayClientRegistry', () {
     test('hands one client to every borrower of the same connection', () {
       final registry = GatewayClientRegistry();
@@ -354,6 +423,17 @@ SavedConnection _connection(String baseUrl, {String id = 'conn-registry'}) =>
       desktopGatewayUrl: baseUrl,
       dashboardUsername: 'u',
       dashboardPassword: 'p',
+    );
+
+/// A connection whose every field sits at its default, so an identity test can
+/// vary exactly one of them and attribute the result to that change.
+SavedConnection _identityConnection({String id = 'conn-identity'}) =>
+    SavedConnection(
+      id: id,
+      label: 'Identity fixture',
+      host: 'identity.example',
+      port: 8642,
+      apiKey: '',
     );
 
 Future<void> _waitFor(

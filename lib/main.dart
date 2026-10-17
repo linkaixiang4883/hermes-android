@@ -218,6 +218,13 @@ class HermesAppState extends State<HermesApp> {
     // The registry exists before the controller: the controller's sessions run
     // on the registry's shared clients instead of opening their own socket.
     _gatewayRegistry = GatewayClientRegistry();
+    // A saved edit or a deletion has to drop the client cached for the previous
+    // definition: that client captured its endpoint and its dashboard
+    // credentials when it was built, so without this signal the change would
+    // only take effect after a restart, and a deleted connection would leave a
+    // socket reconnecting to a host the user removed.
+    widget.connManager.onConnectionClientInvalidated =
+        _gatewayRegistry.closeConnection;
     _turnApplicationController = GatewayTurnApplicationController(
       registry: _gatewayRegistry,
     );

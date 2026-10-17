@@ -690,6 +690,15 @@ class DesktopGatewayClient {
   /// ownership is what decides, so tests pin that by observing this flag.
   bool get isClosed => _closed;
 
+  /// The canonical gateway origin this client was built from.
+  ///
+  /// The registry drops a cached client as soon as its connection's identity
+  /// changed; it is this string that makes the dropped client observably
+  /// different from its replacement, so an invalidation test can tell a client
+  /// built from the current definition from one still bound to the old one.
+  @visibleForTesting
+  String get gatewayBaseUrl => _baseUrl;
+
   /// How many connection-state listeners are attached.
   ///
   /// Exposed for the ownership tests: "the disposed screen detached its own

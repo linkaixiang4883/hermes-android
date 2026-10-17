@@ -253,3 +253,55 @@ class SavedConnection {
     );
   }
 }
+
+/// Whether editing [before] into [after] produced a connection that needs a
+/// *different* Desktop Gateway client.
+///
+/// The application keeps one shared `DesktopGatewayClient` per connection id,
+/// and that client captures its origin — host, ports, HTTPS flag, dashboard
+/// path prefix, Desktop Gateway override — plus its dashboard credentials and
+/// profile at construction. An edit that touches any of those fields must
+/// therefore drop the cached client: otherwise the next borrower keeps talking
+/// to the old host, port or credentials until the app restarts.
+///
+/// Field by field:
+/// * [SavedConnection.host], [SavedConnection.port],
+///   [SavedConnection.useHttps] and
+///   [SavedConnection.dashboardPortOverride] together resolve the gateway
+///   origin (`dashboardPort` follows the API port on HTTPS, and 9119
+///   otherwise), and the same origin is what the client dials.
+/// * [SavedConnection.dashboardPrefix] and
+///   [SavedConnection.desktopGatewayUrl] are the path and the explicit origin
+///   override the client is built from.
+/// * [SavedConnection.dashboardUsername], [SavedConnection.dashboardPassword]
+///   and [SavedConnection.dashboardProxied] are the credentials the client
+///   logs in with.
+/// * [SavedConnection.gatewayProfile] is sent with every JSON-RPC call the
+///   client makes.
+///
+/// Fields no gateway client reads are deliberately ignored, so a cosmetic edit
+/// never tears a live socket down:
+/// * [SavedConnection.label] is display text only.
+/// * [SavedConnection.apiKey] is the REST API Server key, read per request by
+///   `ApiClient`; the WebSocket transport authenticates with a dashboard
+///   ticket instead.
+/// * [SavedConnection.gatewayPrefix] is the REST-side path prefix.
+///
+/// A different [SavedConnection.id] is never the same client, so it counts as
+/// changed.
+bool gatewayClientIdentityChanged(
+  SavedConnection before,
+  SavedConnection after,
+) {
+  if (before.id != after.id) return true;
+  return before.host != after.host ||
+      before.port != after.port ||
+      before.useHttps != after.useHttps ||
+      before.dashboardPortOverride != after.dashboardPortOverride ||
+      before.dashboardPrefix != after.dashboardPrefix ||
+      before.dashboardProxied != after.dashboardProxied ||
+      before.desktopGatewayUrl != after.desktopGatewayUrl ||
+      before.dashboardUsername != after.dashboardUsername ||
+      before.dashboardPassword != after.dashboardPassword ||
+      before.gatewayProfile != after.gatewayProfile;
+}

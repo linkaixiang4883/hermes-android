@@ -137,6 +137,20 @@ class ConnectionManager {
   final SharedPreferences prefs;
   final CredentialStore _credentialStore;
 
+  /// Notified with the id of a connection whose cached gateway client the app
+  /// must stop using.
+  ///
+  /// The store is what knows a mutation landed, so it is what reports it: the
+  /// application points this at its `GatewayClientRegistry`, which closes the
+  /// client cached under that id. Without the signal a saved edit (host, ports,
+  /// dashboard credentials, profile) would keep handing back the client built
+  /// from the previous definition until the app restarts, and a deleted
+  /// connection would leave a socket reconnecting to a host the user removed.
+  ///
+  /// Null in tests and in headless callers of the store, where there is no
+  /// cache to invalidate.
+  void Function(String connectionId)? onConnectionClientInvalidated;
+
   ConnectionManager(this.prefs, {CredentialStore? credentialStore})
     : _credentialStore = credentialStore ?? _sharedCredentialStore;
 
@@ -236,6 +250,7 @@ class ConnectionManager {
     List<SavedConnection> incoming, {
     required bool replaceExisting,
   }) async {
+    final previous = getConnections();
     final current = _connectionsFromMaps(_readConnectionMaps());
 
     final ordered = List<SavedConnection>.of(incoming);
@@ -270,6 +285,7 @@ class ConnectionManager {
     }
 
     await _saveAll(next);
+    _invalidateClientsChangedBy(previous);
   }
 
   Future<void> saveConnection(
@@ -338,8 +354,9 @@ class ConnectionManager {
     final idx = current.indexWhere((c) => c.id == connId);
     if (idx < 0) return;
 
+    final previous = current[idx];
     final previousCredentials = _ConnectionCredentials.fromConnection(
-      current[idx],
+      previous,
     );
 
     final normalized = SavedConnection.normalizeHostAndPort(host, port);
@@ -382,6 +399,7 @@ class ConnectionManager {
       nextCredentials: _ConnectionCredentials.fromConnection(current[idx]),
       connections: current,
     );
+    _invalidateClientIfIdentityChanged(previous, after: current[idx]);
   }
 
   /// Updates the dashboard port + basic-auth credentials on an existing
@@ -398,8 +416,9 @@ class ConnectionManager {
     final current = getConnections();
     final idx = current.indexWhere((c) => c.id == connId);
     if (idx < 0) return;
+    final previous = current[idx];
     final previousCredentials = _ConnectionCredentials.fromConnection(
-      current[idx],
+      previous,
     );
     final u = username.trim();
     final p = password.trim();
@@ -426,14 +445,16 @@ class ConnectionManager {
       nextCredentials: _ConnectionCredentials.fromConnection(current[idx]),
       connections: current,
     );
+    _invalidateClientIfIdentityChanged(previous, after: current[idx]);
   }
 
   Future<void> updateApiKey(String connId, String apiKey) async {
     final current = getConnections();
     final idx = current.indexWhere((c) => c.id == connId);
     if (idx < 0) return;
+    final previous = current[idx];
     final previousCredentials = _ConnectionCredentials.fromConnection(
-      current[idx],
+      previous,
     );
     current[idx] = current[idx].copyWith(apiKey: apiKey);
     await _commitCredentialAndMetadata(
@@ -442,6 +463,7 @@ class ConnectionManager {
       nextCredentials: _ConnectionCredentials.fromConnection(current[idx]),
       connections: current,
     );
+    _invalidateClientIfIdentityChanged(previous, after: current[idx]);
   }
 
   Future<void> deleteConnection(String id) async {
@@ -451,6 +473,7 @@ class ConnectionManager {
     final previousCredentials = _ConnectionCredentials.fromConnection(
       current[index],
     );
+    final removed = current[index];
     current.removeWhere((c) => c.id == id);
     await _commitCredentialAndMetadata(
       connectionId: id,
@@ -461,6 +484,7 @@ class ConnectionManager {
       ),
       connections: current,
     );
+    _invalidateClientIfIdentityChanged(removed, after: null);
   }
 
   List<Map<String, dynamic>> _readConnectionMaps() {
@@ -495,6 +519,36 @@ class ConnectionManager {
       dashboardPassword: credentials.dashboardPassword,
       clearDashboardPassword: credentials.dashboardPassword == null,
     );
+  }
+
+  /// Drops the client cached for [before] once the store is done with it.
+  ///
+  /// [after] is the same connection as it is stored now, or null when it is
+  /// gone: a deleted connection always loses its client, an edited one only
+  /// when the edit touched a field that client is built from (see
+  /// [gatewayClientIdentityChanged]). Callers run it only after the mutation
+  /// was committed, so a fail-closed credential error cannot tear down a client
+  /// that still matches what is stored.
+  void _invalidateClientIfIdentityChanged(
+    SavedConnection? before, {
+    required SavedConnection? after,
+  }) {
+    if (before == null) return;
+    if (after != null && !gatewayClientIdentityChanged(before, after)) return;
+    onConnectionClientInvalidated?.call(before.id);
+  }
+
+  /// The same rule across a whole-list mutation: every connection the new list
+  /// removed, or redefined, loses its cached client, while untouched ones keep
+  /// the socket they are already streaming on.
+  void _invalidateClientsChangedBy(List<SavedConnection> previous) {
+    if (onConnectionClientInvalidated == null) return;
+    final current = <String, SavedConnection>{
+      for (final connection in getConnections()) connection.id: connection,
+    };
+    for (final before in previous) {
+      _invalidateClientIfIdentityChanged(before, after: current[before.id]);
+    }
   }
 
   Future<void> _commitCredentialAndMetadata({
