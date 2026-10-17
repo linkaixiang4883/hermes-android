@@ -515,3 +515,10 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 - 评审：合并评审 **APPROVE**（2A 的 RED 被评审在 scratch 副本独立复现；三提交逐项 PASS）；唯一 Important（共享 client 不失效）→ 2C 闭环。**发现并修复上游遗留夹具竞态**（`client.capabilities` 落 default 回帧 + 晚写 `StreamSink closed`；基线复跑 ~25%/run 可复现）——修后 13 连全绿。
 - 合理偏差（归档）：① registry 失效放在 store（ConnectionManager notifier）+ main 接线，而非各 Home 对话框内联（单一收口、避免循环依赖；真 Home 删除路径与 App 真实编辑各一条 widget 测试钉住）；② 身份字段 = 计划清单 + `port`；label/apiKey/gatewayPrefix 不失效（各钉测试）；③ 控制器借用时 `close()` 跳过 `_client.close()` 与 `_registry.closeAll()`；④ 2D-fix 顺带修复 cwd-binding 夹具同款 capabilities 晚写；⑤ 新增少量 `@visibleForTesting` 观测点（`connectionListenerCount`、`gatewayBaseUrl`、`testDesktopGatewayObserver`）。
 - 带入后续（已记录，非回归）：`SessionListScreen`/`WorkspaceScreen(projects)`/`CronScreen` 仍有 route-local socket；通知路径对"连接列表页时后台回合完成"仍按现状（Phase 4/后续）。
+
+### Phase 3 — 会话层（✅ 完成，2026-10-17）
+- 提交：`0c4c200`（LiveTurnProjection inflight 投影 + `ensureSession(refresh)` 强制快照（**绝不 create**）+ chat 跟随状态机（user 去重/幂等/状态条/退出重拉）+ l10n `live_turn_following`（en/zh/zh_Hans + 生成件），19 文件）；`8df48f9`（评审修复：历史回包/404 后**幂等重放投影**、`testDesktopEnsureSessionHook` 钉住三处 refresh 接线、localPending 守卫两场景测试、refresh 失败显式化，3 文件）。
+- 门禁：analyze 0；全量 **1357**（1334 + 16 + 7）；编排者与复审各自复跑全绿。
+- 评审：首轮 REQUEST_CHANGES（Important ① 进页 REST 历史回包抹掉投影气泡——评审在 scratch 确定性复现；② refresh:true 接线零测试，翻 false 全绿）→ 修复 → 聚焦复审 **APPROVE**（4 项逐条 ADDRESSED；变异自检独立复现；副本回退 RED 复现）。
+- 合理偏差（归档）：① 重放源只在"真正落行"时记录（本地 pending 早退不记录）；② 404 分支同样重放；③ Minor 5 机制在旧码上本就不可达 → 仅显式化；④ 顺序 A 用例断言改到历史回包后（spinner 期间 transcript 不在树中）；⑤ 新测试接缝 `testDesktopEnsureSessionHook`。
+- 带入 Phase 4：① **跟随中按停止**（`_stopResponse` 不清跟随/重放源）→ 刷新或重连重同步可能重贴/抹掉投影（复审 Minor，需"停止"触发、下次 resume 自愈）——Phase 4 统一收口"回合已死"路径；② committed 回复与投影暂态并存（终态信号接线后由 Phase 4 收尾）；③ 停止按钮在跟随态应接 `session.interrupt`；④ `acceptsSession`/`failed/error` 字段待 Phase 4 消费。
