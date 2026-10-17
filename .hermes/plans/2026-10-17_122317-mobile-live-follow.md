@@ -522,3 +522,10 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 - 评审：首轮 REQUEST_CHANGES（Important ① 进页 REST 历史回包抹掉投影气泡——评审在 scratch 确定性复现；② refresh:true 接线零测试，翻 false 全绿）→ 修复 → 聚焦复审 **APPROVE**（4 项逐条 ADDRESSED；变异自检独立复现；副本回退 RED 复现）。
 - 合理偏差（归档）：① 重放源只在"真正落行"时记录（本地 pending 早退不记录）；② 404 分支同样重放；③ Minor 5 机制在旧码上本就不可达 → 仅显式化；④ 顺序 A 用例断言改到历史回包后（spinner 期间 transcript 不在树中）；⑤ 新测试接缝 `testDesktopEnsureSessionHook`。
 - 带入 Phase 4：① **跟随中按停止**（`_stopResponse` 不清跟随/重放源）→ 刷新或重连重同步可能重贴/抹掉投影（复审 Minor，需"停止"触发、下次 resume 自愈）——Phase 4 统一收口"回合已死"路径；② committed 回复与投影暂态并存（终态信号接线后由 Phase 4 收尾）；③ 停止按钮在跟随态应接 `session.interrupt`；④ `acceptsSession`/`failed/error` 字段待 Phase 4 消费。
+
+### Phase 4 — 渲染层（✅ 完成，2026-10-17）
+- 提交：`bf8e3b2`（异步桥放行 delta/interim/reasoning/tool；跟随态流路由（新增 `_localSubmitActive` + 屏幕级 seq 门 `_acceptFollowStreamFrame`）；终态收尾 `_handleFollowTerminalFrame`；跟随停止 `_stopFollowedTurn` 走 `session.interrupt` 并退出；`_reconcileFollowAfterTranscriptReplace` 统一接入 5 个整体替换点；双路径去重。3 文件 +16 测试）。
+- 门禁：analyze 0；全量 **1373**（1357 + 16）；编排者 2 连 + 复审 1 连全绿。
+- 评审：**APPROVE**（规格 1-7 PASS；屏幕 seq 门正确性获独立确认：无 seq 放行、turn 作用域与传输同规则、退出清；变异矩阵独立复现，仅 M7/M8 存活）。
+- 偏差/观察（归档）：① 停止不 bump `_responseGeneration`（避免杀并行本地提交流，用 `interruptPrompt`）；② 统一 reconcile 取代两处 `_reapplyFollowedProjection`；③ **首帧 delta 按既有语义清状态条**（跟随态沿用"流式即进度"表现，停止键仍在）——接受；④ 终态帧未校验 `turnId`（迟到/异回合帧会结束当前跟随，靠下次 resume 自愈）——观察项；⑤ 屏幕水位 `_followStreamSeq` 只随退出清（epoch 变化危害不可达）。
+- 带入 Phase 5：① **桥调用点无测试钉**（M7 存活：回退旧白名单 16 用例全绿）——补 socket 级放行断言；② `_followProjectionSource` 退出清零是载重行但无钉（M8 存活）——补注释或一例；③ 截断回读尚未接（`onReplayTruncated` 需从 WsClient 转发到 client 监听者 → chat `_fetchMessages()`）；④ 跟随 + 待审 reattach 同场时终态帧被跟随分支先消费、重拉延后到下次 resync tick（自愈）——T5.3 冲突守卫范畴；⑤ 冷启动（无任何历史状态直接 resume 带 inflight）需显式用例。
