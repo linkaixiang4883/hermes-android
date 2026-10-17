@@ -47,7 +47,7 @@ void main() {
       );
       addTearDown(client.close);
       final delivered = <String>[];
-      client.setAsyncEventListener((mobileSessionId, event) {
+      client.addAsyncEventListener((mobileSessionId, event) {
         delivered.add('$mobileSessionId#${event.seq}');
       });
 

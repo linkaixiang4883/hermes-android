@@ -128,7 +128,7 @@ void main() {
       );
       addTearDown(client.close);
       final events = <StreamEvent>[];
-      client.setAsyncEventListener((_, event) => events.add(event));
+      client.addAsyncEventListener((_, event) => events.add(event));
       await client.ensureSession('mobile-1');
 
       gateway.sendServerRequest(
@@ -766,7 +766,7 @@ void main() {
       );
       addTearDown(client.close);
       final events = <StreamEvent>[];
-      client.setAsyncEventListener((_, event) => events.add(event));
+      client.addAsyncEventListener((_, event) => events.add(event));
 
       await client.ensureSession('stored-1');
       await _waitFor(
@@ -822,7 +822,7 @@ void main() {
       );
       addTearDown(client.close);
       final events = <StreamEvent>[];
-      client.setAsyncEventListener((_, event) => events.add(event));
+      client.addAsyncEventListener((_, event) => events.add(event));
 
       await client.ensureSession('stored-1');
       await _waitFor(

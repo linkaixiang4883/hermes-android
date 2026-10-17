@@ -56,10 +56,22 @@ class DesktopGatewayClient {
   int _nextServerRequestClientOrdinal = 1;
   final Map<String, Set<String>> _serverClarifyRemaining = {};
   final Map<String, String> _serverApprovalByMobileSession = {};
-  DesktopAsyncEventCallback? _asyncEventListener;
-  DesktopAsyncEventSessionPredicate? _asyncEventAcceptsSession;
+  /// Async-event listeners keyed by their registration token.
+  ///
+  /// A map, not a slot: the Phase 2B application-wide socket is shared, so a
+  /// mounted chat screen, the turn-coordinator dispatcher and the
+  /// notification/approval path all observe the same connection at once. The
+  /// last registration must never evict an earlier one. Map insertion order is
+  /// the delivery order.
+  final Map<Object, DesktopAsyncEventCallback> _asyncListeners = {};
+
+  /// Per-token `acceptsSession` predicates, absent for uncapped listeners.
+  final Map<Object, DesktopAsyncEventSessionPredicate> _asyncListenerAccepts = {};
   DesktopConnectionCallback? _connectionListener;
-  GatewayTurnSessionBoundCallback? _sessionBoundListener;
+
+  /// Session-bound listeners keyed by their registration token, in delivery
+  /// order. Shared for the same reason as [_asyncListeners].
+  final Map<Object, GatewayTurnSessionBoundCallback> _sessionBoundListeners = {};
   GatewayTurnCoordinatorRegistry? _turnCoordinatorRegistry;
   ProjectsGatewayClient? _projects;
   final CapabilityRegistry _capabilities = CapabilityRegistry();
@@ -470,7 +482,7 @@ class DesktopGatewayClient {
     _gatewaySessionIds[mobileSessionId] = binding.runtimeSessionId;
     _storedSessionIds[mobileSessionId] = binding.storedSessionId;
     if (bindingChanged) {
-      _sessionBoundListener?.call(mobileSessionId, binding.storedSessionId);
+      _dispatchSessionBound(mobileSessionId, binding.storedSessionId);
     }
     final resumed = binding.resumed;
     if (resumed != null && resumed.openRequests.isNotEmpty) {
@@ -499,7 +511,7 @@ class DesktopGatewayClient {
       // have begun a history fetch from the connected callback; its recovery
       // generation makes that fetch harmless once this failure clears it.
       scheduleMicrotask(() {
-        _asyncEventListener?.call(
+        _dispatchAsyncEvent(
           mobileSessionId,
           StreamEvent(
             type: 'turn.error',
@@ -647,13 +659,109 @@ class DesktopGatewayClient {
     _connectionListener = listener;
   }
 
-  /// Observes each authoritative legacy session binding.
+  /// Registers an async-event listener and returns its removal token.
+  ///
+  /// The connection is shared (Phase 2B), so listeners coexist instead of
+  /// replacing one another: the chat screen, the turn-coordinator dispatcher
+  /// and the notification path each add their own, and each removes only its
+  /// own by the returned token. Delivery order is registration order.
+  ///
+  /// [acceptsSession] caps which mobile session ids this listener receives.
+  ///
+  /// Callers that leave a screened session unmounted should unregister, or the
+  /// client keeps claiming interactive server requests for that session (see
+  /// [_acceptsAnyAsyncEvent]) and routes them to a listener that can no longer
+  /// answer.
+  Object addAsyncEventListener(
+    DesktopAsyncEventCallback callback, {
+    DesktopAsyncEventSessionPredicate? acceptsSession,
+  }) {
+    final token = Object();
+    _asyncListeners[token] = callback;
+    if (acceptsSession != null) {
+      _asyncListenerAccepts[token] = acceptsSession;
+    }
+    return token;
+  }
+
+  /// Detaches exactly the listener [token] was returned for.
+  ///
+  /// A stale token — one already removed, or belonging to a closed client — is
+  /// a no-op, so a teardown path can run twice safely.
+  void removeAsyncEventListener(Object token) {
+    _asyncListeners.remove(token);
+    _asyncListenerAccepts.remove(token);
+  }
+
+  /// Registers a durable session-binding observer and returns its token.
   ///
   /// A stock gateway can create the durable session lazily during the first
   /// attachment or prompt call, so consumers must not rely on an eager
   /// [ensureSession] having already exposed the stored identity.
-  void setSessionBoundListener(GatewayTurnSessionBoundCallback? listener) {
-    _sessionBoundListener = listener;
+  Object addSessionBoundListener(GatewayTurnSessionBoundCallback callback) {
+    final token = Object();
+    _sessionBoundListeners[token] = callback;
+    return token;
+  }
+
+  /// Detaches exactly the binding observer [token] was returned for.
+  void removeSessionBoundListener(Object token) {
+    _sessionBoundListeners.remove(token);
+  }
+
+  /// Fans [event] out to every listener that accepts [mobileSessionId].
+  ///
+  /// Registration order is delivery order. The set is snapshotted first: a
+  /// listener is allowed to register or remove listeners re-entrantly, and the
+  /// frame in flight must still reach the listeners that were attached when it
+  /// arrived. A listener that throws must not steal the frame from its
+  /// siblings nor escape into the socket's message pump, so its failure is
+  /// swallowed here.
+  void _dispatchAsyncEvent(String mobileSessionId, StreamEvent event) {
+    if (_asyncListeners.isEmpty) return;
+    for (final entry in List.of(_asyncListeners.entries)) {
+      final acceptsSession = _asyncListenerAccepts[entry.key];
+      if (acceptsSession != null && !acceptsSession(mobileSessionId)) continue;
+      try {
+        entry.value(mobileSessionId, event);
+      } catch (_) {
+        // Swallowed on purpose: see the contract above.
+      }
+    }
+  }
+
+  /// Whether some listener would receive an event for [mobileSessionId].
+  ///
+  /// Interactive server requests (approval, clarify, sudo, secret) are
+  /// answered by whoever observes them, so the client only claims one when at
+  /// least one listener is attached and none of its predicates rejects the
+  /// session. With a single listener this is exactly the old single-slot
+  /// gate: no listener, or a rejecting `acceptsSession`, means "not handled".
+  bool _acceptsAnyAsyncEvent(String mobileSessionId) {
+    for (final token in _asyncListeners.keys) {
+      final acceptsSession = _asyncListenerAccepts[token];
+      if (acceptsSession == null || acceptsSession(mobileSessionId)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Fans a binding change out to every session-bound listener.
+  ///
+  /// Registration order is delivery order, and a failure is swallowed for the
+  /// same reason as in [_dispatchAsyncEvent]: the binding maps are already
+  /// authoritative when this runs, so one observer must not strand the others
+  /// nor abort the caller that established the binding.
+  void _dispatchSessionBound(String mobileSessionId, String storedSessionId) {
+    if (_sessionBoundListeners.isEmpty) return;
+    for (final listener in List.of(_sessionBoundListeners.values)) {
+      try {
+        listener(mobileSessionId, storedSessionId);
+      } catch (_) {
+        // Swallowed on purpose: see the contract above.
+      }
+    }
   }
 
   Future<RemoteFileAttachment> attachFile({
@@ -688,20 +796,6 @@ class DesktopGatewayClient {
     );
   }
 
-  /// Receives durable session-scoped events plus terminal turn frames.
-  ///
-  /// Terminal frames are also delivered through [submitPrompt] while its
-  /// listener is attached. The async path is required after socket close,
-  /// when a detached turn can settle on the resumed session; ChatScreen
-  /// ignores the duplicate unless legacy reattach recovery is pending.
-  void setAsyncEventListener(
-    DesktopAsyncEventCallback? listener, {
-    DesktopAsyncEventSessionPredicate? acceptsSession,
-  }) {
-    _asyncEventListener = listener;
-    _asyncEventAcceptsSession = listener == null ? null : acceptsSession;
-  }
-
   void _installAsyncEventBridge(WsClient client) {
     // Every socket greets us with gateway.ready; that greeting is where the
     // capability registry learns what this Hermes instance offers.
@@ -731,7 +825,12 @@ class DesktopGatewayClient {
         event.data['session_id']?.toString(),
       );
       if (mobileSessionId == null) return;
-      _asyncEventListener?.call(mobileSessionId, deliveredEvent);
+      // Durable session-scoped events plus terminal turn frames. Terminal
+      // frames are also delivered through [submitPrompt] while its listener
+      // is attached; the async path is required after socket close, when a
+      // detached turn can settle on the resumed session, and ChatScreen
+      // ignores the duplicate unless legacy reattach recovery is pending.
+      _dispatchAsyncEvent(mobileSessionId, deliveredEvent);
     };
   }
 
@@ -766,9 +865,7 @@ class DesktopGatewayClient {
 
     final gatewaySessionId = request.params['session_id']?.toString();
     final mobileSessionId = _mobileSessionIdFor(gatewaySessionId);
-    if (mobileSessionId == null || _asyncEventListener == null) return false;
-    final acceptsSession = _asyncEventAcceptsSession;
-    if (acceptsSession != null && !acceptsSession(mobileSessionId)) {
+    if (mobileSessionId == null || !_acceptsAnyAsyncEvent(mobileSessionId)) {
       return false;
     }
 
@@ -824,7 +921,7 @@ class DesktopGatewayClient {
       sessionId: gatewaySessionId,
     );
     _serverRequestEvents[requestId] = event;
-    _asyncEventListener!.call(mobileSessionId, event);
+    _dispatchAsyncEvent(mobileSessionId, event);
     return true;
   }
 
@@ -847,7 +944,7 @@ class DesktopGatewayClient {
       final mobileSessionId = _serverRequestMobileSessionIds[requestId];
       _forgetServerRequest(requestId);
       if (request != null && mobileSessionId != null) {
-        _asyncEventListener?.call(
+        _dispatchAsyncEvent(
           mobileSessionId,
           StreamEvent(
             type: 'request.cancel',
@@ -865,13 +962,15 @@ class DesktopGatewayClient {
   }
 
   /// Replays unresolved requests when a replacement route mounts.
+  ///
+  /// Fan-out goes through the same predicate-aware dispatch as live frames, so
+  /// a listener attached for another session never sees them.
   void replayServerRequestsForSession(String mobileSessionId) {
-    final listener = _asyncEventListener;
-    if (listener == null) return;
+    if (_asyncListeners.isEmpty) return;
     for (final entry in _serverRequestMobileSessionIds.entries.toList()) {
       if (entry.value != mobileSessionId) continue;
       final event = _serverRequestEvents[entry.key];
-      if (event != null) listener(mobileSessionId, event);
+      if (event != null) _dispatchAsyncEvent(mobileSessionId, event);
     }
   }
 
@@ -1035,7 +1134,7 @@ class DesktopGatewayClient {
       }
       final mobileSessionId = _serverRequestMobileSessionIds[requestId];
       if (mobileSessionId != null) {
-        _asyncEventListener?.call(
+        _dispatchAsyncEvent(
           mobileSessionId,
           StreamEvent(
             type: 'clarify.remaining',
@@ -1156,8 +1255,9 @@ class DesktopGatewayClient {
     _closed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
-    _asyncEventListener = null;
-    _asyncEventAcceptsSession = null;
+    _asyncListeners.clear();
+    _asyncListenerAccepts.clear();
+    _sessionBoundListeners.clear();
     _connectionListener = null;
     _projects = null;
     _ws?.close();

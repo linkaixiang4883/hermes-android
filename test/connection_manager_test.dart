@@ -3284,7 +3284,7 @@ void main() {
         final client = buildClient();
         addTearDown(client.close);
         final bindings = <(String, String)>[];
-        client.setSessionBoundListener((localSessionId, storedSessionId) {
+        client.addSessionBoundListener((localSessionId, storedSessionId) {
           bindings.add((localSessionId, storedSessionId));
         });
 
@@ -3403,7 +3403,7 @@ void main() {
           final events = <StreamEvent>[];
           final states = <DesktopConnectionState>[];
           client
-            ..setAsyncEventListener((mobileSessionId, event) {
+            ..addAsyncEventListener((mobileSessionId, event) {
               expect(mobileSessionId, 'mobile-project');
               events.add(event);
             })

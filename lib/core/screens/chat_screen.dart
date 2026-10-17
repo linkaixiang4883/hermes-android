@@ -377,6 +377,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   late final Future<ChatModelOverrideStore> _chatModelStore;
   late final Future<void> _sessionModelRestore;
   DesktopGatewayClient? _desktopGateway;
+
+  /// Tokens for the two listeners this route attached to [_desktopGateway].
+  ///
+  /// The Phase 2B connection is shared across the app, so this route must
+  /// detach exactly its own registrations on dispose instead of clearing a
+  /// connection-wide listener slot that now belongs to whoever else is
+  /// attached (draft controller, notification/approval path).
+  Object? _desktopAsyncEventToken;
+  Object? _desktopSessionBoundToken;
   GatewayTurnApplicationSession? _turnApplicationSession;
   Object? _turnApplicationAsyncEventRegistration;
   Object? _turnApplicationSettledRegistration;
@@ -571,9 +580,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _desktopGateway = DesktopGatewayClient.fromConnection(
           widget.connection,
         );
-        _desktopGateway!.setAsyncEventListener(_handleDesktopAsyncEvent);
+        _desktopAsyncEventToken = _desktopGateway!.addAsyncEventListener(
+          _handleDesktopAsyncEvent,
+        );
         _desktopGateway!.setConnectionListener(_onDesktopConnectionChanged);
-        _desktopGateway!.setSessionBoundListener(_onSessionBound);
+        _desktopSessionBoundToken = _desktopGateway!.addSessionBoundListener(
+          _onSessionBound,
+        );
         unawaited(_ensureDesktopSession());
       } on ArgumentError {
         // The regular mobile chat remains usable; selection surfaces the
@@ -717,8 +730,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         List<AttachmentDraft>.from(_attachmentDrafts),
       ),
     );
-    _desktopGateway?.setAsyncEventListener(null);
-    _desktopGateway?.setSessionBoundListener(null);
+    final desktopAsyncEventToken = _desktopAsyncEventToken;
+    if (desktopAsyncEventToken != null) {
+      _desktopGateway?.removeAsyncEventListener(desktopAsyncEventToken);
+    }
+    final desktopSessionBoundToken = _desktopSessionBoundToken;
+    if (desktopSessionBoundToken != null) {
+      _desktopGateway?.removeSessionBoundListener(desktopSessionBoundToken);
+    }
     _desktopGateway?.close();
     final registration = _turnApplicationAsyncEventRegistration;
     if (registration != null) {

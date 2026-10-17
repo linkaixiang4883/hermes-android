@@ -166,6 +166,14 @@ class _CoordinatorGatewayTurnApplicationSession
   late final GatewayTurnCoordinatorRegistry _registry;
   bool _closed = false;
 
+  /// Token for this owner's single forwarder on the shared gateway client.
+  ///
+  /// Null while this application session owns no per-session listeners. Never
+  /// touched by [setAsyncEventListener] / [removeAsyncEventListener]: those
+  /// register per-session entries in [_asyncEventListeners], which the
+  /// forwarder reads live.
+  Object? _asyncEventDispatcherToken;
+
   _CoordinatorGatewayTurnApplicationSession(
     this._client, {
     GatewayTurnJournal? journal,
@@ -173,17 +181,35 @@ class _CoordinatorGatewayTurnApplicationSession
     _registry = _client.enableTurnRecoveryCoordinator(journal: journal);
   }
 
+  /// Attaches or detaches the one forwarder that serves this owner.
+  ///
+  /// The socket is application-shared (Phase 2B), so this owner adds exactly
+  /// one listener — keyed by a token it alone holds — for as long as it has
+  /// per-session listeners, and removes only that token when the last one
+  /// goes. Other owners' listeners on the same connection are untouched.
+  ///
+  /// The forwarder reads [_asyncEventListeners] on every frame and its
+  /// `acceptsSession` predicate is a live view of the map's keys, so
+  /// per-session registration and removal keep taking effect without
+  /// re-attaching anything.
   void _syncAsyncEventDispatcher() {
+    final token = _asyncEventDispatcherToken;
     if (_asyncEventListeners.isEmpty) {
-      _client.setAsyncEventListener(null);
+      if (token == null) return;
+      _asyncEventDispatcherToken = null;
+      _client.removeAsyncEventListener(token);
       return;
     }
-    _client.setAsyncEventListener((localSessionId, event) {
-      _asyncEventListeners[localSessionId]?.listener.call(
-        localSessionId,
-        event,
-      );
-    }, acceptsSession: _asyncEventListeners.containsKey);
+    if (token != null) return;
+    _asyncEventDispatcherToken = _client.addAsyncEventListener(
+      (localSessionId, event) {
+        _asyncEventListeners[localSessionId]?.listener.call(
+          localSessionId,
+          event,
+        );
+      },
+      acceptsSession: _asyncEventListeners.containsKey,
+    );
   }
 
   void _requireOpen() {
@@ -375,7 +401,11 @@ class _CoordinatorGatewayTurnApplicationSession
     if (_closed) return;
     _closed = true;
     _asyncEventListeners.clear();
-    _client.setAsyncEventListener(null);
+    final dispatcherToken = _asyncEventDispatcherToken;
+    _asyncEventDispatcherToken = null;
+    if (dispatcherToken != null) {
+      _client.removeAsyncEventListener(dispatcherToken);
+    }
     try {
       await _registry.closeAll();
     } finally {
