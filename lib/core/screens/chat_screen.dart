@@ -84,6 +84,49 @@ bool shouldEstablishLegacyDesktopSession(
   required bool legacyTransportFallback,
 }) => !session.isLocalDraft || legacyTransportFallback;
 
+/// Terminal frames: the turn they belong to has settled, one way or another.
+///
+/// Both the detached-turn recovery and a followed turn end on these; the
+/// consumer differs, the classification does not.
+const _gatewayTerminalEventTypes = {
+  'message.complete',
+  'turn.end',
+  'turn.error',
+  'error',
+};
+
+/// Frames of a turn that is still running: the ones a follow keeps rendering.
+const _gatewayStreamEventTypes = {
+  'message.delta',
+  'message.interim',
+  'reasoning.delta',
+  'thinking.delta',
+  'reasoning.available',
+};
+
+/// Whether [eventType] is a frame of a running turn.
+///
+/// The tool family is matched by prefix: `tool.start`/`tool.complete` and
+/// their siblings are one activity card, so a name this build has not heard of
+/// still belongs on screen.
+bool _isStreamFrameType(String eventType) =>
+    _gatewayStreamEventTypes.contains(eventType) ||
+    eventType.startsWith('tool.');
+
+/// Whether terminal [event] reports a FAILED turn rather than a settled one.
+bool _terminalFrameReportsFailure(StreamEvent event) {
+  if (event.type == 'error' || event.type == 'turn.error') return true;
+  const failureStatuses = {
+    'error',
+    'failed',
+    'interrupted',
+    'cancelled',
+    'canceled',
+  };
+  final status = event.data['status']?.toString().trim().toLowerCase();
+  return failureStatuses.contains(status);
+}
+
 class _ModelChoice {
   final String provider;
   final String model;
@@ -497,6 +540,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// is followed, and cleared on exit: the snapshot is stale the moment the
   /// gateway stops reporting the turn.
   LiveTurnProjection? _followProjectionSource;
+
+  /// Highest stream `seq` this screen has already applied while following,
+  /// keyed by the frame's turn scope (`''` for the unscoped transport stream).
+  ///
+  /// The socket gates frames by exactly this watermark, but one frame can be
+  /// handed to this screen more than once — the shared connection reaches it
+  /// through its own registration and, for recovery sessions, through the
+  /// controller's forwarder, and a replayed frame can overlap a live one — so
+  /// the projection needs the same rule applied where it is rendered. A frame
+  /// with no `seq` has no ordering contract to violate and always passes, and
+  /// the map is cleared with the follow it describes.
+  final Map<String, int> _followStreamSeq = {};
+
+  /// Whether this screen's own prompt submission is still in flight.
+  ///
+  /// NOT [_streaming]/[_sending]: a followed remote turn sets those too, and
+  /// the follow is precisely the case where the async bridge MUST deliver
+  /// stream frames. Only the submit that owns the optimistic bubbles may
+  /// render them while it runs; the bridge's copy of the same frame is its
+  /// duplicate and is dropped here.
+  bool _localSubmitActive = false;
+
   _ResponseTransport _activeResponseTransport = _ResponseTransport.none;
   String? _activeClientTurnId;
   bool _recoveringTurn = false;
@@ -1233,6 +1298,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _gatewayTurnStatus = null;
       }
       _followLiveTurnStatus = null;
+      // The watermark describes the turn being left; the next follow starts
+      // from a clean slate.
+      _followStreamSeq.clear();
       _messages.removeWhere((message) => message['_follow_projection'] == true);
     });
     unawaited(_fetchMessages());
@@ -1254,6 +1322,39 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     final projection = _followProjectionSource;
     if (projection == null) return;
     _enterFollowMode(projection);
+  }
+
+  /// Keeps the follow state and the transcript consistent when a response
+  /// replaced [_messages] wholesale.
+  ///
+  /// The rule for every such replacement — the history page, the deferred
+  /// hydration, the reattach resync — is the one the follow was entered with:
+  /// a history response is authoritative for the COMMITTED rows only, so it
+  /// knows nothing about the turn on screen, and assigning it drops the
+  /// projection row while leaving the follow state (status bar, stop button)
+  /// pointing at nothing.
+  ///
+  /// - the snapshot is still known: replay it on top of the fresh rows,
+  ///   idempotently (see [_reapplyFollowedProjection]);
+  /// - a locally pending reply owns its bubbles: leave them to their submit;
+  /// - neither: the replacement is all there is, and the follow goes with it —
+  ///   never a status bar over a row that no longer exists.
+  ///
+  /// Called OUTSIDE a `setState` callback on purpose: both branches have their
+  /// own.
+  void _reconcileFollowAfterTranscriptReplace() {
+    if (!_followLiveTurn) return;
+    if (_followProjectionSource != null) {
+      _reapplyFollowedProjection();
+      return;
+    }
+    final assistant = _lastAssistantMessage();
+    final localPending =
+        assistant != null &&
+        assistant['_gateway_pending_response'] == true &&
+        assistant['_follow_projection'] != true;
+    if (localPending) return;
+    _exitFollowMode();
   }
 
   void _editAndResend(String text) {
@@ -1709,7 +1810,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       });
       // The response replaced the transcript; the turn being followed is not
       // part of it and goes back on top of the fresh rows.
-      _reapplyFollowedProjection();
+      _reconcileFollowAfterTranscriptReplace();
       _scheduleInitialEndAlignment();
       if (completedPendingReattach) _clearPendingReattachResync();
     } catch (e) {
@@ -1731,7 +1832,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _loading = false;
         });
         // An emptied transcript is still not the followed turn's owner.
-        _reapplyFollowedProjection();
+        _reconcileFollowAfterTranscriptReplace();
         _scheduleInitialEndAlignment();
         return;
       }
@@ -1787,6 +1888,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _historyGeneration += 1;
         _error = null;
       });
+      _reconcileFollowAfterTranscriptReplace();
       _scheduleInitialEndAlignment();
     } catch (_) {
       // Keep the refresh pending. A later terminal/rollback transition can
@@ -1984,6 +2086,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _loading = false;
         _error = null;
       });
+      _reconcileFollowAfterTranscriptReplace();
       _scheduleInitialEndAlignment();
       if (completed) _clearPendingReattachResync();
     } catch (_) {
@@ -2031,6 +2134,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _messages = messages;
         _legacyHistoryResyncPending = false;
       });
+      _reconcileFollowAfterTranscriptReplace();
       _scheduleInitialEndAlignment();
     } catch (_) {
       // Keep the pending watermark so the next resume can retry. The composer
@@ -3258,6 +3362,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               '_gateway_pending_response': true,
             });
             turnAdded = true;
+            // The bubbles here belong to this submit: while it runs, the async
+            // bridge's copy of a frame it already rendered is a duplicate, not
+            // a second delivery to paint.
+            _localSubmitActive = true;
           });
           _scheduleStreamingFollow();
           void onEvent(StreamEvent event) {
@@ -3289,6 +3397,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             }
           } finally {
             _legacyDesktopPromptSubmitted = false;
+            // The submit has settled (or been rejected): the session's stream
+            // frames are the bridge's again.
+            _localSubmitActive = false;
           }
         },
       );
@@ -3457,6 +3568,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
     setState(() {
       _streaming = true;
+      // The optimistic bubbles below belong to this submit until it settles;
+      // its frames arrive through the recovery session, not the async bridge.
+      _localSubmitActive = true;
       _gatewayTurnStatus = GatewayTurnStatus(
         kind: 'starting',
         text: context.l10n.starting_hermes,
@@ -3515,6 +3629,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         );
       });
       await _recoverPendingTurn();
+    } finally {
+      _localSubmitActive = false;
     }
   }
 
@@ -3663,6 +3779,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleDesktopAsyncEvent(String mobileSessionId, StreamEvent event) {
     if (!mounted || mobileSessionId != widget.session.id) return;
+    // A followed turn renders HERE, and its frames arrive on the shared
+    // connection rather than on a submit listener this screen owns. Every
+    // other case keeps the pre-Phase-4 behavior: a stream frame of a turn this
+    // screen did not submit is dropped, and the frame a running local submit
+    // already rendered is dropped here as its duplicate.
+    if (_isStreamFrameType(event.type)) {
+      if (_followLiveTurn &&
+          !_localSubmitActive &&
+          _acceptFollowStreamFrame(event)) {
+        _handleDesktopGatewayEvent(event, _responseGeneration);
+      }
+      return;
+    }
+    // The same terminal frame arrives twice (prompt.submit's listener and this
+    // bridge); a followed turn has no listener of its own, so this is where it
+    // learns the turn it was watching is over.
+    if (_followLiveTurn && _gatewayTerminalEventTypes.contains(event.type)) {
+      _handleFollowTerminalFrame(event);
+      return;
+    }
     const interactiveTypes = {
       'approval.request',
       'clarify.request',
@@ -3728,32 +3864,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   bool _handlePendingReattachTerminalEvent(StreamEvent event) {
-    const terminalTypes = {
-      'message.complete',
-      'turn.end',
-      'turn.error',
-      'error',
-    };
-    if (!terminalTypes.contains(event.type)) return false;
+    if (!_gatewayTerminalEventTypes.contains(event.type)) return false;
     // Active turns receive terminal events through prompt.submit. The async
     // bridge intentionally duplicates only these frames so detached legacy
     // recovery can still observe them after reconnect.
     if (!_pendingReattachResync) return true;
 
-    final status = event.data['status']?.toString().trim().toLowerCase();
     final rawError = event.data['error'] ?? event.data['message'];
     final error = rawError?.toString().trim() ?? '';
-    const failureStatuses = {
-      'error',
-      'failed',
-      'interrupted',
-      'cancelled',
-      'canceled',
-    };
-    final failed =
-        event.type == 'error' ||
-        event.type == 'turn.error' ||
-        failureStatuses.contains(status);
+    final failed = _terminalFrameReportsFailure(event);
     if (failed) {
       _clearPendingReattachResync();
       setState(() {
@@ -3782,6 +3901,52 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // completion authority in case persistence trails the event slightly.
     _requestImmediateReattachResync();
     return true;
+  }
+
+  /// Whether a stream frame may be applied to the projected row.
+  ///
+  /// The socket already gates frames by this watermark, but one frame can pass
+  /// it and still reach this screen twice (a second registration, or a replayed
+  /// frame overlapping a live one), so the same rule is applied where the text
+  /// is written. Frames scoped to a turn are gated inside that turn's own
+  /// numbering, matching the transport; a frame with no `seq` has no ordering
+  /// contract to violate and always passes.
+  bool _acceptFollowStreamFrame(StreamEvent event) {
+    final seq = event.seq;
+    if (seq == null) return true;
+    // This screen only ever renders its own chat's frames, so the turn is all
+    // that separates two numbering domains.
+    final scope = event.turnId ?? '';
+    if (seq <= (_followStreamSeq[scope] ?? 0)) return false;
+    _followStreamSeq[scope] = seq;
+    return true;
+  }
+
+  /// Settles a followed turn on its terminal frame.
+  ///
+  /// A followed turn has no submit listener of this screen's own, so this frame
+  /// is the only end-of-turn signal it gets: the status bar, the projected row
+  /// and the replayable snapshot all go with it, and the committed rows take
+  /// the transcript back (see [_exitFollowMode]). A turn that FAILED says so
+  /// first, with the same notice the detached-turn recovery shows.
+  void _handleFollowTerminalFrame(StreamEvent event) {
+    if (_terminalFrameReportsFailure(event)) {
+      final rawError = event.data['error'] ?? event.data['message'];
+      final error = rawError?.toString().trim() ?? '';
+      ScaffoldMessenger.of(context)
+        ..removeCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(
+              error.isEmpty
+                  ? context.l10n.the_detached_reply_failed
+                  : context.l10n.the_detached_reply_failed_2(error),
+            ),
+            persist: false,
+          ),
+        );
+    }
+    _exitFollowMode();
   }
 
   void _upsertSubagent(String eventType, Map<String, dynamic> data) {
@@ -4328,6 +4493,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Future<void> _stopResponse() async {
     if (!_streaming) return;
+    // A followed turn is not this screen's submission, so there is no local
+    // transport to cancel: the stop takes the gateway's interrupt channel and
+    // ends the follow with it. Reporting "no active gateway turn" here would be
+    // exactly wrong — the followed turn IS the active one.
+    if (_followLiveTurn) {
+      await _stopFollowedTurn();
+      return;
+    }
 
     final transport = _activeResponseTransport;
     final activeClientTurnId = _activeClientTurnId;
@@ -4417,6 +4590,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     } finally {
       _stopResponseInFlight = false;
+      unawaited(_refreshDeferredHistoryIfIdle());
+    }
+  }
+
+  /// Stops a turn this screen is only FOLLOWING.
+  ///
+  /// Best effort on the wire, unconditional on screen. The interrupt goes to
+  /// the same `session.interrupt` the desktop transport uses; its outcome is
+  /// swallowed because an unreachable socket says nothing about the server
+  /// turn — the next resume snapshot reports that turn again. What matters is
+  /// that the follow ends: leaving it would strand a status bar and a stop
+  /// button over a turn whose frames this screen can no longer receive.
+  ///
+  /// `_responseGeneration` is deliberately NOT bumped: the followed turn has no
+  /// generation-bound listener of its own, while a local submit running beside
+  /// it (this screen submitted the same turn) does, and invalidating it would
+  /// strand that submit's stream mid-reply.
+  Future<void> _stopFollowedTurn() async {
+    _stopResponseInFlight = true;
+    try {
+      final gateway = _desktopGateway;
+      if (gateway != null) {
+        try {
+          await gateway.interruptPrompt(sessionId: widget.session.id);
+        } catch (_) {
+          // Swallowed on purpose: see the contract above.
+        }
+      }
+    } finally {
+      _stopResponseInFlight = false;
+      if (mounted) _exitFollowMode();
       unawaited(_refreshDeferredHistoryIfIdle());
     }
   }

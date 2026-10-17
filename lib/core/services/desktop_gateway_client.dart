@@ -130,7 +130,27 @@ class DesktopGatewayClient {
     'turn.error',
     'error',
     'request.cancel',
+    // Stream frames of a turn this client did NOT submit. These are the
+    // frames a screen following a remote turn renders: without them the
+    // rebuilt bubble would freeze at its resume snapshot. Consumers that are
+    // not following a live turn drop them, which is the pre-Phase-4 behavior
+    // (they used to stop at the socket).
+    'message.delta',
+    'message.interim',
+    'reasoning.delta',
+    'thinking.delta',
+    'reasoning.available',
   };
+
+  /// Whether a socket event belongs on the async bridge.
+  ///
+  /// The named set above plus the tool family, matched by prefix: `tool.start`,
+  /// `tool.complete` and their siblings are one activity card on screen, so a
+  /// name this client has not heard of must still reach it. Everything else is
+  /// dropped here, before any listener sees it.
+  @visibleForTesting
+  static bool shouldBridgeAsyncEvent(String type) =>
+      _asyncEventTypes.contains(type) || type.startsWith('tool.');
 
   DesktopGatewayClient._({
     required this._connectionId,
@@ -1058,7 +1078,7 @@ class DesktopGatewayClient {
     client.onServerRequest = (request) => _handleServerRequest(client, request);
     client.onConnectionClosed = () => _forgetServerRequestsFrom(client);
     client.onStreamEvent = (event) {
-      if (!_asyncEventTypes.contains(event.type)) return;
+      if (!shouldBridgeAsyncEvent(event.type)) return;
       var deliveredEvent = event;
       if (event.type == 'request.cancel') {
         final wireRequestId = event.data['id']?.toString() ?? '';
