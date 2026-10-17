@@ -330,6 +330,430 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 100));
     expect(received.map((event) => event.seq), <int>[1, 2, 3, 10]);
   });
+
+  test(
+    'reports a hole when the parked-frame buffer overflows',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+      final truncated = <String>[];
+      client.onReplayTruncated = truncated.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      await _waitFor(() => received.length == 3);
+
+      // Hold the replay answer open, then flood the session with more frames
+      // than the parked-frame bound: the oldest parked frames fall out of the
+      // hold, so flushing the rest jumps their seqs. That hole is exactly as
+      // unrecoverable as a truncated window and must be reported the same way.
+      final release = Completer<void>();
+      gateway.sinceResult = (sessionId, lastSeen) async {
+        await release.future;
+        return <String, dynamic>{
+          'epoch': gateway.epoch,
+          'events': const <Object>[],
+          'latest_seq': 0,
+          'truncated': false,
+        };
+      };
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await _waitFor(
+        () => gateway.requests.any(
+          (request) => request['method'] == 'session.events.since',
+        ),
+      );
+
+      // 300 frames against a 256-frame hold: seqs 4..47 are evicted unparked.
+      for (var seq = 4; seq <= 303; seq++) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'flood-$seq'),
+        );
+      }
+      // Parked frames never reach a listener, so the barrier frame (another
+      // session, no replay in flight) is what proves the whole flood has been
+      // processed — frames on one socket arrive in order.
+      await _sendBarrier(gateway, received, seq: 1);
+
+      release.complete();
+      await _waitFor(() => received.length >= 260);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      final seqs = received
+          .where((event) => event.sessionId == _sessionId)
+          .map((event) => event.seq)
+          .toList();
+      // Whatever survived the hold is still delivered in order, once each: the
+      // silent part of the eviction is what the report has to cover.
+      expect(seqs, <int>[
+        1,
+        2,
+        3,
+        ...List<int>.generate(256, (index) => index + 48),
+      ]);
+      for (var index = 1; index < seqs.length; index++) {
+        expect(seqs[index], greaterThan(seqs[index - 1]!));
+      }
+      // The frames the hold evicted were never delivered, so their seqs are a
+      // hole in the delivered stream: the caller has to be told to re-read
+      // history, exactly as for a truncated window.
+      expect(truncated, <String>[_sessionId]);
+    },
+  );
+
+  test(
+    'a close during a replay round drops the parked frames instead of '
+    'flushing them',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+      final truncated = <String>[];
+      client.onReplayTruncated = truncated.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      await _waitFor(() => received.length == 3);
+
+      final release = Completer<void>();
+      gateway.sinceResult = (sessionId, lastSeen) async {
+        await release.future;
+        return <String, dynamic>{
+          'epoch': gateway.epoch,
+          'events': const <Object>[],
+          'latest_seq': 0,
+          'truncated': false,
+        };
+      };
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await _waitFor(
+        () => gateway.requests.any(
+          (request) => request['method'] == 'session.events.since',
+        ),
+      );
+
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 4, text: 'parked-4'),
+      );
+      await _sendBarrier(gateway, received, seq: 1);
+      // The barrier frame belongs to another session; parked frames reach no
+      // listener at all, so the session's seqs are still [1, 2, 3].
+      Iterable<int?> sessionSeqs() => received
+          .where((event) => event.sessionId == _sessionId)
+          .map((event) => event.seq);
+      expect(sessionSeqs(), <int>[1, 2, 3]);
+
+      // A deliberate teardown owns this client's state from here on: the window
+      // still in flight belongs to a socket that no longer exists, so its parked
+      // frames must not be dispatched into the closed client.
+      client.close();
+      expect(client.isConnected, isFalse);
+      release.complete();
+      await Future<void>.delayed(const Duration(milliseconds: 300));
+
+      expect(sessionSeqs(), <int>[1, 2, 3]);
+      expect(truncated, isEmpty);
+    },
+  );
+
+  test('a close while disconnected still clears the seq watermarks', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+    for (final seq in <int>[1, 2, 3]) {
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+      );
+    }
+    await _waitFor(() => received.length == 3);
+
+    await gateway.dropSocket();
+    await _waitFor(() => !client.isConnected);
+
+    // The socket is already gone, but a deliberate teardown must still start
+    // over: the next connect has nothing to replay and no watermark left to
+    // swallow the restarted numbering's low seqs.
+    client.close();
+
+    await client.connect().timeout(const Duration(seconds: 5));
+    for (final seq in <int>[1, 2, 3]) {
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: seq, text: 'fresh-$seq'),
+      );
+    }
+    await _sendBarrier(gateway, received, seq: 1);
+
+    expect(
+      received
+          .where((event) => event.sessionId == _sessionId)
+          .map((event) => event.data['text']),
+      <String>['live-1', 'live-2', 'live-3', 'fresh-1', 'fresh-2', 'fresh-3'],
+    );
+    // A cleared watermark also means there is no gap left to ask about.
+    expect(
+      gateway.requests.where(
+        (request) => request['method'] == 'session.events.since',
+      ),
+      isEmpty,
+    );
+  });
+
+  test(
+    'reports one hole per replay round when a truncated window also overflows',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+      final truncated = <String>[];
+      client.onReplayTruncated = truncated.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      await _waitFor(() => received.length == 3);
+
+      final release = Completer<void>();
+      gateway.sinceResult = (sessionId, lastSeen) async {
+        await release.future;
+        return <String, dynamic>{
+          'epoch': gateway.epoch,
+          'events': <Object>[
+            _event(type: 'message.delta', seq: 4, text: 'hole-4'),
+          ],
+          'latest_seq': 4,
+          'truncated': true,
+        };
+      };
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await _waitFor(
+        () => gateway.requests.any(
+          (request) => request['method'] == 'session.events.since',
+        ),
+      );
+
+      for (var seq = 4; seq <= 303; seq++) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'flood-$seq'),
+        );
+      }
+      await _sendBarrier(gateway, received, seq: 1);
+
+      release.complete();
+      await _waitFor(() => received.length >= 260);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      // Truncation and overflow describe one and the same hole: the caller is
+      // told once, not twice.
+      expect(truncated, <String>[_sessionId]);
+      final seqs = received
+          .where((event) => event.sessionId == _sessionId)
+          .map((event) => event.seq)
+          .toList();
+      expect(seqs, <int>[
+        1,
+        2,
+        3,
+        ...List<int>.generate(256, (index) => index + 48),
+      ]);
+    },
+  );
+
+  test(
+    'an epoch changed by the replay answer clears turn watermarks too',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      // A live turn whose numbering dies with the gateway process too.
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 5, text: 'turn-5', turnId: 'turn-x'),
+      );
+      await _waitFor(() => received.length == 4);
+
+      // The gateway restarts between this socket's greeting and its answer, so
+      // only the answer carries the new epoch: BOTH numbering spaces must be
+      // dropped from there, or the turn's stale high-water mark swallows the
+      // restarted turn's low seqs.
+      final answered = Completer<void>();
+      gateway.sinceResult = (sessionId, lastSeen) async {
+        answered.complete();
+        return <String, dynamic>{
+          'epoch': 'e2',
+          'events': <Object>[
+            _event(type: 'message.delta', seq: 4, text: 'stale-4'),
+          ],
+          'latest_seq': 4,
+          'truncated': false,
+        };
+      };
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await answered.future.timeout(const Duration(seconds: 5));
+      await _waitFor(() => gateway.connectionCount >= 2);
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 1, text: 'after-1'),
+      );
+      await gateway.sendEvent(
+        _event(
+          type: 'message.delta',
+          seq: 1,
+          text: 'turn-after-1',
+          turnId: 'turn-x',
+        ),
+      );
+      await _sendBarrier(gateway, received, seq: 1);
+
+      expect(
+        received
+            .where((event) => event.sessionId == _sessionId)
+            .map((event) => event.data['text']),
+        <String>[
+          'live-1',
+          'live-2',
+          'live-3',
+          'turn-5',
+          'after-1',
+          'turn-after-1',
+        ],
+      );
+      // Nothing from the old numbering painted, the rejected window included.
+      expect(
+        received.any((event) => event.data['text'] == 'stale-4'),
+        isFalse,
+      );
+    },
+  );
+
+  test('bounds the turn watermarks by evicting the oldest turn', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+    // A turn watermark only matters while its turn is live, so the map is
+    // bounded: the 65th turn evicts the 1st, and none of the 64 newest.
+    for (var turn = 1; turn <= 65; turn++) {
+      await gateway.sendEvent(
+        _event(
+          type: 'message.delta',
+          seq: 1,
+          text: 'turn-$turn-1',
+          turnId: 'turn-$turn',
+        ),
+      );
+    }
+    await _sendBarrier(gateway, received, seq: 1);
+    expect(
+      received.where((event) => event.sessionId == _sessionId),
+      hasLength(65),
+    );
+
+    // A duplicate inside a turn that is still held is still dropped...
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 1, text: 'turn-65-dup', turnId: 'turn-65'),
+    );
+    // ...while the evicted turn starts over instead of being suppressed forever.
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 1, text: 'turn-1-restart', turnId: 'turn-1'),
+    );
+    await _sendBarrier(gateway, received, seq: 2);
+
+    expect(
+      received
+          .where((event) => event.sessionId == _sessionId)
+          .map((event) => event.data['text'])
+          .toList(),
+      <String>[
+        for (var turn = 1; turn <= 65; turn++) 'turn-$turn-1',
+        'turn-1-restart',
+      ],
+    );
+  });
+}
+
+/// Session used only for barrier frames: no replay is ever in flight for it, so
+/// its frames dispatch immediately and observing one proves every frame sent
+/// before it has been processed by the client.
+const _barrierSessionId = 'runtime-barrier';
+
+/// Send a barrier frame and wait until the client dispatches it.
+///
+/// Parked frames are invisible to a listener (they sit in the replay hold until
+/// the window is released), so this is the only deterministic way to know a
+/// flood has been received before the replay answer is released.
+Future<void> _sendBarrier(
+  _ReplayFakeGateway gateway,
+  List<StreamEvent> received, {
+  required int seq,
+}) async {
+  await gateway.sendEvent(
+    _event(
+      type: 'message.delta',
+      seq: seq,
+      text: 'barrier-$seq',
+      sessionId: _barrierSessionId,
+    ),
+  );
+  // The barrier session's own seq gate means each barrier frame is dispatched
+  // exactly once, so waiting for THIS seq cannot be satisfied by an earlier one.
+  await _waitFor(
+    () => received.any(
+      (event) =>
+          event.sessionId == _barrierSessionId && event.seq == seq,
+    ),
+  );
 }
 
 WsClient _clientFor(_ReplayFakeGateway gateway) => WsClient(

@@ -258,7 +258,8 @@ class WsClient {
   /// turn from 1 again (`turn.reconcile` cursors, `GatewayTurnRecoveryState`),
   /// so a turn-scoped seq must never be compared against — or advance — the
   /// session watermark. Kept separate for the same reason: mixing the two
-  /// numbering spaces silently swallows a live turn's frames.
+  /// numbering spaces silently swallows a live turn's frames. Bounded by
+  /// [_maxTurnWatermarks], oldest turn evicted first.
   final Map<String, int> _lastSeenTurnSeq = {};
 
   /// Live frames parked while their session's replay window is in flight. A
@@ -266,8 +267,28 @@ class WsClient {
   /// suppress as a duplicate (desktop `replayHold` in json-rpc-gateway.ts).
   final Map<String, List<StreamEvent>> _replayHold = {};
 
+  /// Sessions whose parked-frame buffer overflowed during the window in flight:
+  /// the frames evicted to keep the hold bounded were never delivered, so their
+  /// seqs are a hole in the dispatched stream. Reported once the surviving
+  /// frames have flushed (see [_flushReplayHold]).
+  final Set<String> _replayHoldOverflowed = {};
+
+  /// Sessions whose current replay round already reported a hole (a truncated
+  /// window). Truncation and overflow describe one and the same gap, so a round
+  /// reports at most once ([_reportReplayHole]); the round's end consumes the
+  /// marker, so it cannot leak into a later round.
+  final Set<String> _replayHoleReported = {};
+
   /// Sessions whose replay window is currently being fetched.
   final Set<String> _replaying = {};
+
+  /// Round counter for replay windows. A window belongs to the socket that
+  /// started it: [close] and every [connect] invalidate the rounds in flight, so
+  /// their completion can neither dispatch parked frames nor report a hole into
+  /// a client that has already moved on (desktop `replayGeneration` in
+  /// json-rpc-gateway.ts). A round only ever touches the session barrier it
+  /// still owns (see [_fetchReplay]), which is what makes that guard exact.
+  int _replayGeneration = 0;
 
   /// Server-process identity from `gateway.ready`. Seq counters live in the
   /// gateway process, so a restart resets them to 1 while this client still
@@ -289,10 +310,12 @@ class WsClient {
   void Function()? onConnectionClosed;
   GatewayReadyCallback? onGatewayReady;
 
-  /// Called with the session id when a replay window had to be skipped because
-  /// the gateway's ring no longer holds the whole gap: the replayed tail would
-  /// paint a hole (missing message prefix, tool state or terminal frame), so
-  /// nothing is dispatched and the caller must re-read history instead.
+  /// Called with the session id when a replay round could not deliver a
+  /// hole-free stream, because the gap needs a history re-read to be repaired:
+  /// either the gateway's ring no longer holds the whole gap (`truncated`), or
+  /// the parked-frame buffer overflowed and a frame was evicted before it could
+  /// be dispatched. Both are reported at most once per round; nothing else will
+  /// repair the gap, so the caller must re-read history.
   void Function(String sessionId)? onReplayTruncated;
 
   factory WsClient(
@@ -341,6 +364,9 @@ class WsClient {
       throw StateError('A WebSocket connection is already in progress');
     }
     final generation = ++_connectionGeneration;
+    // This socket starts a new replay round: rounds still in flight belong to
+    // the socket they were asked on, and must not dispatch into this one.
+    _replayGeneration++;
     _gatewayReadyFrame = null;
     _gatewayReadyCanonical = null;
     _gatewayReadyFailure = null;
@@ -756,7 +782,9 @@ class WsClient {
     channel?.sink.close();
   }
 
-  /// Dispatch a server-pushed event to registered listeners.
+  /// Parse one server-pushed `event` frame's params into a [StreamEvent], or
+  /// null when the frame carries no usable type. Live and replayed frames are
+  /// parsed here, so handlers cannot tell one from the other.
   static StreamEvent? parseGatewayEvent(Map<String, dynamic> params) {
     final rawType = params['type'];
     if (rawType is! String || rawType.isEmpty) return null;
@@ -860,8 +888,17 @@ class WsClient {
 
   /// Bound on live frames parked per session while its replay is in flight.
   /// The hold only lives for one replay request; a pathological stream must not
-  /// grow it without limit, so the oldest parked frame is dropped first.
+  /// grow it without limit, so the oldest parked frame is dropped first — and
+  /// that eviction is reported, since a dropped frame leaves a seq hole in the
+  /// dispatched stream that nothing but a history re-read can repair.
   static const _maxReplayHoldPerSession = 256;
+
+  /// Bound on the turn-scoped watermarks ([_lastSeenTurnSeq]). A turn's
+  /// watermark only matters while that turn is live — recovery reconciles per
+  /// turn and the gateway never renumbers a finished one — so evicting the
+  /// oldest turn is safe. It keeps a long-lived client from holding one entry
+  /// per turn ever seen (64 matches `GatewayTurnJournal.maxBindings`).
+  static const _maxTurnWatermarks = 64;
 
   /// Replay is an optimization over a lossy reconnect: a window that outlives
   /// its socket (a hung session) is abandoned, not waited on.
@@ -883,7 +920,13 @@ class WsClient {
     final turnId = event.turnId;
     if (turnId != null && turnId.isNotEmpty) {
       final key = '$sessionId\u0000$turnId';
-      if (seq <= (_lastSeenTurnSeq[key] ?? 0)) return false;
+      final last = _lastSeenTurnSeq[key];
+      if (last == null && _lastSeenTurnSeq.length >= _maxTurnWatermarks) {
+        // A new turn while the map is full: drop the oldest turn's watermark,
+        // which is the one least likely to still be reconciling.
+        _lastSeenTurnSeq.remove(_lastSeenTurnSeq.keys.first);
+      }
+      if (seq <= (last ?? 0)) return false;
       _lastSeenTurnSeq[key] = seq;
       return true;
     }
@@ -895,17 +938,52 @@ class WsClient {
   /// Park one live frame while its session's replay window is in flight.
   void _holdReplayFrame(String sessionId, StreamEvent event) {
     final held = _replayHold.putIfAbsent(sessionId, () => <StreamEvent>[]);
-    if (held.length >= _maxReplayHoldPerSession) held.removeAt(0);
+    if (held.length >= _maxReplayHoldPerSession) {
+      // Bounded hold: the oldest frame goes. Its seq is never delivered, so the
+      // flush that follows will jump it — remember the hole for the round so the
+      // caller is told to re-read history instead of trusting the watermarks.
+      _replayHoldOverflowed.add(sessionId);
+      held.removeAt(0);
+    }
     held.add(event);
   }
 
   /// Release this session's parked frames in arrival order, through the same
-  /// seq gate: frames the replay window already delivered stay dropped.
+  /// seq gate: frames the replay window already delivered stay dropped. Reports
+  /// the round's hole, if any, once the surviving frames are out.
   void _flushReplayHold(String sessionId) {
     final held = _replayHold.remove(sessionId);
-    if (held == null) return;
-    for (final event in held) {
-      if (_passSeqGate(event)) _deliverEvent(event);
+    final overflowed = _replayHoldOverflowed.remove(sessionId);
+    if (held != null) {
+      for (final event in held) {
+        if (_passSeqGate(event)) _deliverEvent(event);
+      }
+    }
+    if (overflowed) _reportReplayHole(sessionId);
+    // This round is over: a later round starts from a clean slate.
+    _replayHoleReported.remove(sessionId);
+  }
+
+  /// Drop this session's parked frames without dispatching or reporting them.
+  /// The round that parked them belongs to a socket that has been torn down or
+  /// replaced, so its frames died with it; whatever was truly missed is asked
+  /// for again from the watermark they never advanced.
+  void _discardReplayHold(String sessionId) {
+    _replayHold.remove(sessionId);
+    _replayHoldOverflowed.remove(sessionId);
+    _replayHoleReported.remove(sessionId);
+  }
+
+  /// Tell the caller this session's stream has a hole no replay covered, so
+  /// history has to be re-read. At most one report per round: a truncated window
+  /// reports as it is skipped, a hold overflow reports at flush, and both mean
+  /// the same thing. Observer failures cannot break the replay teardown.
+  void _reportReplayHole(String sessionId) {
+    if (!_replayHoleReported.add(sessionId)) return;
+    try {
+      onReplayTruncated?.call(sessionId);
+    } catch (_) {
+      // A hole observer cannot break the replay teardown.
     }
   }
 
@@ -976,11 +1054,17 @@ class WsClient {
   }
 
   Future<void> _fetchSessionReplay(String sessionId, int lastSeen) async {
+    // This window belongs to the round (and so to the socket) that started it.
+    // [close] and the next [connect] bump the generation: a round whose
+    // generation is gone must neither dispatch nor report anything, because the
+    // client it would report to has moved on.
+    final replayGeneration = _replayGeneration;
     try {
       final response = await send('session.events.since', <String, dynamic>{
         'session_id': sessionId,
         'last_seen': lastSeen,
       }, timeout: _replayRequestTimeout);
+      if (replayGeneration != _replayGeneration) return;
       final rawResult = response['result'];
       if (response['error'] != null || rawResult is! Map) return;
       final result = Map<String, dynamic>.from(rawResult);
@@ -992,9 +1076,11 @@ class WsClient {
         } else if (epoch != _replayEpoch) {
           // The gateway restarted while this socket was down: these seqs belong
           // to the new numbering and the watermark we asked with to the old one.
-          // Adopt the new epoch, drop the watermarks and paint nothing.
+          // Adopt the new epoch, drop every watermark (both numbering spaces —
+          // a turn-scoped one describes the same gone process) and paint nothing.
           _replayEpoch = epoch;
           _lastSeenSeq.clear();
+          _lastSeenTurnSeq.clear();
           return;
         }
       }
@@ -1008,6 +1094,9 @@ class WsClient {
       final rawEvents = result['events'];
       if (rawEvents is! List) return;
       for (final rawEvent in rawEvents) {
+        // A frame handler can close the client or replace its socket while a
+        // window is being applied: the rest of that window died with it.
+        if (replayGeneration != _replayGeneration) return;
         if (rawEvent is! Map) continue;
         // Built exactly like a live frame, `isComplete` included, so handlers
         // cannot tell a replayed event from a streamed one.
@@ -1023,7 +1112,14 @@ class WsClient {
       // Frames parked for this session wait for the window above, so they flush
       // only once it has been applied (or abandoned) — never before the gap.
       _replaying.remove(sessionId);
-      _flushReplayHold(sessionId);
+      if (replayGeneration == _replayGeneration) {
+        _flushReplayHold(sessionId);
+      } else {
+        // The socket this window belongs to was torn down or replaced while the
+        // answer was in flight: its parked frames died with it, and a newer
+        // round owns whatever is left to catch up on.
+        _discardReplayHold(sessionId);
+      }
     }
   }
 
@@ -1043,11 +1139,7 @@ class WsClient {
       }
     }
     _lastSeenSeq[sessionId] = head;
-    try {
-      onReplayTruncated?.call(sessionId);
-    } catch (_) {
-      // A truncation observer cannot break the replay teardown.
-    }
+    _reportReplayHole(sessionId);
   }
 
   /// Dispatch a streaming event to a specific request's subscribers.
@@ -1683,12 +1775,19 @@ class WsClient {
 
   /// Close the connection.
   void close() {
-    if (!_connected && _channel == null) return;
     // A deliberate teardown is the one disconnect that means "start over": a
     // dropped or lost socket must keep its watermarks so the next connect can
-    // replay the gap (see [_fetchReplay]).
+    // replay the gap (see [_fetchReplay]). Clearing happens before the early
+    // return below, so "close always clears" holds even when the socket is
+    // already gone — a teardown is a teardown.
     _lastSeenSeq.clear();
     _lastSeenTurnSeq.clear();
+    _replayHoldOverflowed.clear();
+    _replayHoleReported.clear();
+    // Rounds still in flight belong to the socket being torn down: their
+    // completion must not flush parked frames into the closed client.
+    _replayGeneration++;
+    if (!_connected && _channel == null) return;
     final generation = _connectionGeneration;
     final channel = _channel;
     _handleClosedConnection(generation);
