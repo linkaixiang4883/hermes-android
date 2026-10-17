@@ -245,6 +245,36 @@ class WsClient {
   /// per-session listeners so one active session cannot consume another one's
   /// streamed response.
   final Map<String, List<StreamCallback>> _sessionStreams = {};
+
+  /// Per-session high-water mark of the `seq`s already dispatched. It outlives
+  /// a dropped socket so a reconnect can ask `session.events.since` for exactly
+  /// the frames this client missed; only [close] and a replay-epoch change
+  /// clear it (a dropped socket never means "resynchronised").
+  final Map<String, int> _lastSeenSeq = {};
+
+  /// High-water marks for frames that carry a `turn_id`, keyed
+  /// `sessionId\u0000turnId`. The gateway's transport stream numbers one
+  /// sequence per session, but the turn-recovery protocol numbers events per
+  /// turn from 1 again (`turn.reconcile` cursors, `GatewayTurnRecoveryState`),
+  /// so a turn-scoped seq must never be compared against — or advance — the
+  /// session watermark. Kept separate for the same reason: mixing the two
+  /// numbering spaces silently swallows a live turn's frames.
+  final Map<String, int> _lastSeenTurnSeq = {};
+
+  /// Live frames parked while their session's replay window is in flight. A
+  /// frame racing the answer must not dispatch ahead of the gap it would then
+  /// suppress as a duplicate (desktop `replayHold` in json-rpc-gateway.ts).
+  final Map<String, List<StreamEvent>> _replayHold = {};
+
+  /// Sessions whose replay window is currently being fetched.
+  final Set<String> _replaying = {};
+
+  /// Server-process identity from `gateway.ready`. Seq counters live in the
+  /// gateway process, so a restart resets them to 1 while this client still
+  /// holds high watermarks — a change means the held numbers describe a
+  /// numbering that no longer exists.
+  String? _replayEpoch;
+
   final Map<int, _ConnectionClosedListener> _connectionClosedListeners = {};
   Completer<Map<String, dynamic>>? _gatewayReadyCompleter;
   Map<String, dynamic>? _gatewayReadyFrame;
@@ -258,6 +288,12 @@ class WsClient {
   ConnectionCallback? onConnectionChanged;
   void Function()? onConnectionClosed;
   GatewayReadyCallback? onGatewayReady;
+
+  /// Called with the session id when a replay window had to be skipped because
+  /// the gateway's ring no longer holds the whole gap: the replayed tail would
+  /// paint a hole (missing message prefix, tool state or terminal frame), so
+  /// nothing is dispatched and the caller must re-read history instead.
+  void Function(String sessionId)? onReplayTruncated;
 
   factory WsClient(
     String baseUrl, {
@@ -335,6 +371,10 @@ class WsClient {
       }
       _connected = true;
       _startHeartbeat(generation);
+      // Install this socket's replay barrier before any open observer can start
+      // history reads (desktop does the same), and keep the fetch itself
+      // fire-and-forget so connect latency is unchanged.
+      _scheduleReplay(generation);
       try {
         onConnectionChanged?.call(true);
       } catch (_) {
@@ -560,7 +600,19 @@ class WsClient {
           return;
         }
         final event = parseGatewayEvent(params);
-        if (event != null) _dispatchEvent(event);
+        if (event != null) {
+          final sessionId = event.sessionId;
+          if (sessionId != null &&
+              event.seq != null &&
+              _replaying.contains(sessionId)) {
+            // This session's replay window is still in flight: park the frame
+            // so it dispatches after the replayed gap instead of advancing the
+            // watermark past events that are about to be delivered.
+            _holdReplayFrame(sessionId, event);
+            return;
+          }
+          if (_passSeqGate(event)) _deliverEvent(event);
+        }
         return;
       }
 
@@ -679,6 +731,10 @@ class WsClient {
     if (pinned == null) {
       _gatewayReadyCanonical = canonical;
       _gatewayReadyFrame = frame;
+      // The greeting names the gateway process's seq numbering. Adopt it here,
+      // on the frame this socket is pinned to, before the replay fetch decides
+      // what to ask for.
+      _adoptReplayEpoch(frame);
       final ready = _gatewayReadyCompleter;
       if (ready != null && !ready.isCompleted) ready.complete(frame);
       try {
@@ -779,7 +835,11 @@ class WsClient {
     return ready.future.timeout(timeout);
   }
 
-  void _dispatchEvent(StreamEvent event) {
+  /// Dispatch a server-pushed event to registered listeners.
+  ///
+  /// The single delivery path for live AND replayed frames: replay must not
+  /// grow a second fan-out that could drift from this one.
+  void _deliverEvent(StreamEvent event) {
     try {
       onStreamEvent?.call(event);
     } catch (_) {
@@ -795,6 +855,198 @@ class WsClient {
       } catch (_) {
         // One session observer cannot block other listeners or cleanup.
       }
+    }
+  }
+
+  /// Bound on live frames parked per session while its replay is in flight.
+  /// The hold only lives for one replay request; a pathological stream must not
+  /// grow it without limit, so the oldest parked frame is dropped first.
+  static const _maxReplayHoldPerSession = 256;
+
+  /// Replay is an optimization over a lossy reconnect: a window that outlives
+  /// its socket (a hung session) is abandoned, not waited on.
+  static const _replayRequestTimeout = Duration(seconds: 10);
+
+  /// Seq gate shared by live and replayed frames: true when [event] advances
+  /// its session's watermark. A frame without a session id or without a seq has
+  /// no ordering contract to violate and always passes (legacy gateways,
+  /// session-less global events).
+  ///
+  /// Frames carrying a `turn_id` are gated inside that turn's own numbering
+  /// (see [_lastSeenTurnSeq]) — only frames with no turn scope, which is what
+  /// the gateway's transport stream emits, move the per-session watermark that
+  /// [fetchReplay] sends as `last_seen`.
+  bool _passSeqGate(StreamEvent event) {
+    final sessionId = event.sessionId;
+    final seq = event.seq;
+    if (sessionId == null || sessionId.isEmpty || seq == null) return true;
+    final turnId = event.turnId;
+    if (turnId != null && turnId.isNotEmpty) {
+      final key = '$sessionId\u0000$turnId';
+      if (seq <= (_lastSeenTurnSeq[key] ?? 0)) return false;
+      _lastSeenTurnSeq[key] = seq;
+      return true;
+    }
+    if (seq <= (_lastSeenSeq[sessionId] ?? 0)) return false;
+    _lastSeenSeq[sessionId] = seq;
+    return true;
+  }
+
+  /// Park one live frame while its session's replay window is in flight.
+  void _holdReplayFrame(String sessionId, StreamEvent event) {
+    final held = _replayHold.putIfAbsent(sessionId, () => <StreamEvent>[]);
+    if (held.length >= _maxReplayHoldPerSession) held.removeAt(0);
+    held.add(event);
+  }
+
+  /// Release this session's parked frames in arrival order, through the same
+  /// seq gate: frames the replay window already delivered stay dropped.
+  void _flushReplayHold(String sessionId) {
+    final held = _replayHold.remove(sessionId);
+    if (held == null) return;
+    for (final event in held) {
+      if (_passSeqGate(event)) _deliverEvent(event);
+    }
+  }
+
+  /// Record the gateway's replay epoch. A change means the gateway restarted
+  /// and reset its in-process seq counters: every held watermark then describes
+  /// a numbering that no longer exists, so drop them instead of letting a
+  /// replay believe nothing was missed.
+  void _adoptReplayEpoch(Map<String, dynamic> readyFrame) {
+    final params = readyFrame['params'];
+    final payload = params is Map ? params['payload'] : null;
+    final raw = payload is Map ? payload['replay_epoch'] : null;
+    final epoch = raw is String ? raw.trim() : '';
+    if (epoch.isEmpty || epoch == _replayEpoch) return;
+    final changed = _replayEpoch != null;
+    _replayEpoch = epoch;
+    if (changed) {
+      _lastSeenSeq.clear();
+      _lastSeenTurnSeq.clear();
+    }
+  }
+
+  /// Start this socket's replay window once its greeting has been folded in.
+  ///
+  /// `gateway.ready` carries `replay_epoch`, and adopting a *changed* epoch
+  /// clears every watermark — so the fetch must not decide what to ask for
+  /// before that frame has been processed, whatever order the handshake and the
+  /// greeting arrive in (the greeting can beat `connect()`'s own completion).
+  void _scheduleReplay(int generation) {
+    unawaited(_replayWhenGreeted(generation));
+  }
+
+  Future<void> _replayWhenGreeted(int generation) async {
+    if (_gatewayReadyFrame == null) {
+      try {
+        await waitForGatewayReady();
+      } catch (_) {
+        // Closed before its greeting: this socket has nothing to resume.
+        return;
+      }
+    }
+    if (generation != _connectionGeneration) return;
+    try {
+      await _fetchReplay();
+    } catch (_) {
+      // Replay is best-effort and can never fail a live connection.
+    }
+  }
+
+  /// After a reconnect, ask the gateway to replay every event newer than our
+  /// per-session watermarks (mirrors `fetchReplay` in the desktop
+  /// json-rpc-gateway.ts). Replayed frames run through the SAME gate and
+  /// delivery path as live ones, so de-duplication and ordering are shared.
+  Future<void> _fetchReplay() async {
+    if (_lastSeenSeq.isEmpty) return;
+    // Snapshot: each window updates the watermark it is catching up.
+    final entries = List<MapEntry<String, int>>.from(_lastSeenSeq.entries);
+    final pending = <Future<void>>[];
+    for (final entry in entries) {
+      // Exactly one `session.events.since` per session per reconnect: a window
+      // already in flight for this session covers it, and a second one would
+      // ask for the same gap while more live frames sit parked.
+      if (!_replaying.add(entry.key)) continue;
+      pending.add(_fetchSessionReplay(entry.key, entry.value));
+    }
+    if (pending.isEmpty) return;
+    // A hung session must not hold another one's replay: ask in parallel.
+    await Future.wait(pending);
+  }
+
+  Future<void> _fetchSessionReplay(String sessionId, int lastSeen) async {
+    try {
+      final response = await send('session.events.since', <String, dynamic>{
+        'session_id': sessionId,
+        'last_seen': lastSeen,
+      }, timeout: _replayRequestTimeout);
+      final rawResult = response['result'];
+      if (response['error'] != null || rawResult is! Map) return;
+      final result = Map<String, dynamic>.from(rawResult);
+      final rawEpoch = result['epoch'];
+      final epoch = rawEpoch is String ? rawEpoch.trim() : '';
+      if (epoch.isNotEmpty) {
+        if (_replayEpoch == null) {
+          _replayEpoch = epoch;
+        } else if (epoch != _replayEpoch) {
+          // The gateway restarted while this socket was down: these seqs belong
+          // to the new numbering and the watermark we asked with to the old one.
+          // Adopt the new epoch, drop the watermarks and paint nothing.
+          _replayEpoch = epoch;
+          _lastSeenSeq.clear();
+          return;
+        }
+      }
+      if (result['truncated'] == true) {
+        // The ring evicted part of the gap: the retained tail has a hole
+        // (missing message prefix, tool state or terminal frame), so skip the
+        // whole window and let the caller re-read history instead.
+        _skipTruncatedWindow(sessionId, result);
+        return;
+      }
+      final rawEvents = result['events'];
+      if (rawEvents is! List) return;
+      for (final rawEvent in rawEvents) {
+        if (rawEvent is! Map) continue;
+        // Built exactly like a live frame, `isComplete` included, so handlers
+        // cannot tell a replayed event from a streamed one.
+        final event = parseGatewayEvent(Map<String, dynamic>.from(rawEvent));
+        if (event == null) continue;
+        if (_passSeqGate(event)) _deliverEvent(event);
+      }
+    } catch (_) {
+      // An older gateway answers -32601, a dropped socket rejects the call, a
+      // hung one times out: none of it is worth surfacing, and the next
+      // reconnect retries.
+    } finally {
+      // Frames parked for this session wait for the window above, so they flush
+      // only once it has been applied (or abandoned) — never before the gap.
+      _replaying.remove(sessionId);
+      _flushReplayHold(sessionId);
+    }
+  }
+
+  /// Advance the watermark past a truncated replay window without dispatching
+  /// any of it, so the holed frames stay gone and only genuinely newer ones
+  /// land. Reports the skip so the caller can re-read history.
+  void _skipTruncatedWindow(String sessionId, Map<String, dynamic> result) {
+    var head = _lastSeenSeq[sessionId] ?? 0;
+    final latest = result['latest_seq'];
+    if (latest is int && latest > head) head = latest;
+    final rawEvents = result['events'];
+    if (rawEvents is List) {
+      for (final rawEvent in rawEvents) {
+        if (rawEvent is! Map) continue;
+        final seq = rawEvent['seq'];
+        if (seq is int && seq > head) head = seq;
+      }
+    }
+    _lastSeenSeq[sessionId] = head;
+    try {
+      onReplayTruncated?.call(sessionId);
+    } catch (_) {
+      // A truncation observer cannot break the replay teardown.
     }
   }
 
@@ -1432,6 +1684,11 @@ class WsClient {
   /// Close the connection.
   void close() {
     if (!_connected && _channel == null) return;
+    // A deliberate teardown is the one disconnect that means "start over": a
+    // dropped or lost socket must keep its watermarks so the next connect can
+    // replay the gap (see [_fetchReplay]).
+    _lastSeenSeq.clear();
+    _lastSeenTurnSeq.clear();
     final generation = _connectionGeneration;
     final channel = _channel;
     _handleClosedConnection(generation);

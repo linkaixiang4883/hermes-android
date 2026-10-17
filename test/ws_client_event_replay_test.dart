@@ -1,0 +1,524 @@
+// Transport-level contract tests for the seq gate + `session.events.since`
+// replay (Phase 1 of the mobile live-follow plan). Mirrors the desktop
+// client's semantics (apps/shared/src/json-rpc-gateway.ts: fetchReplay /
+// fetchSessionReplay / dispatchIfNewer / skipTruncatedWindow) at the
+// WsClient layer: live and replayed frames share ONE dispatch path, are
+// de-duplicated by per-session seq, and live frames racing a replay window
+// are parked until that window has been delivered.
+//
+// The one place this differs from the desktop: this client also speaks the
+// turn-recovery protocol, whose events are numbered per turn from 1 again, so
+// a frame carrying `turn_id` is gated inside its turn instead of against the
+// session watermark (see `WsClient._passSeqGate`).
+//
+// Real local WS traffic cannot share a suite with
+// TestWidgetsFlutterBinding (see ws_keepalive_test.dart), so this file owns
+// its own fake gateway, like ws_server_requests_test.dart.
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter_test/flutter_test.dart';
+import 'package:hermes_android/core/services/ws_client.dart';
+
+const _fixtureKey = 'fixture-key';
+const _sessionId = 'runtime-1';
+
+void main() {
+  test('drops a duplicate seq frame and keeps the stream monotonic', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 5, text: 'once'),
+    );
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 5, text: 'once'),
+    );
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 6, text: 'twice'),
+    );
+
+    await _waitFor(() => received.length >= 2);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(received.map((event) => event.seq), <int>[5, 6]);
+  });
+
+  test('gates a turn-scoped seq inside its own turn numbering', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+
+    // The turn-recovery protocol numbers every turn from 1 again (its state
+    // machine requires seq == lastSeq + 1 inside one turn), so turn-b's seq 1
+    // is not a duplicate of turn-a's: a per-session watermark would swallow it.
+    for (final turnId in <String>['turn-a', 'turn-b']) {
+      for (final seq in <int>[1, 2]) {
+        await gateway.sendEvent(
+          _event(
+            type: 'message.delta',
+            seq: seq,
+            text: '$turnId-$seq',
+            turnId: turnId,
+          ),
+        );
+      }
+    }
+    await _waitFor(() => received.length == 4);
+    expect(received.map((event) => event.data['text']), <String>[
+      'turn-a-1',
+      'turn-a-2',
+      'turn-b-1',
+      'turn-b-2',
+    ]);
+
+    // A duplicate inside one turn is still dropped...
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 2, text: 'turn-b-2', turnId: 'turn-b'),
+    );
+    // ...and no turn frame moved the session watermark, so a transport frame
+    // (no turn scope) whose seq restarts at 1 still dispatches.
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 1, text: 'session-1'),
+    );
+    await _waitFor(() => received.length == 5);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(received.map((event) => event.data['text']), <String>[
+      'turn-a-1',
+      'turn-a-2',
+      'turn-b-1',
+      'turn-b-2',
+      'session-1',
+    ]);
+  });
+
+  test('replays the frames missed while the socket was down', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+    for (final seq in <int>[1, 2, 3]) {
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+      );
+    }
+    await _waitFor(() => received.length == 3);
+
+    gateway.sinceResult = (sessionId, lastSeen) async => <String, dynamic>{
+      'epoch': gateway.epoch,
+      'events': <Object>[
+        _event(type: 'message.delta', seq: 4, text: 'replay-4'),
+        _event(type: 'message.delta', seq: 5, text: 'replay-5'),
+      ],
+      'latest_seq': 5,
+      'truncated': false,
+    };
+
+    await gateway.dropSocket();
+    await _waitFor(() => !client.isConnected);
+    await client.connect().timeout(const Duration(seconds: 5));
+    await _waitFor(() => received.length >= 5);
+
+    final sinceRequest = gateway.requests.singleWhere(
+      (request) => request['method'] == 'session.events.since',
+    );
+    expect(sinceRequest['params'], <String, dynamic>{
+      'session_id': _sessionId,
+      'last_seen': 3,
+    });
+    expect(
+      gateway.requests.where(
+        (request) => request['method'] == 'session.events.since',
+      ),
+      hasLength(1),
+    );
+    expect(received.map((event) => event.seq), <int>[1, 2, 3, 4, 5]);
+    expect(received.map((event) => event.data['text']), <String>[
+      'live-1',
+      'live-2',
+      'live-3',
+      'replay-4',
+      'replay-5',
+    ]);
+  });
+
+  test(
+    'parks live frames until the replay window has been delivered',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3, 4]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      await _waitFor(() => received.length == 4);
+
+      // Hold the replay answer open, then race a live frame past it.
+      final release = Completer<void>();
+      gateway.sinceResult = (sessionId, lastSeen) async {
+        await release.future;
+        return <String, dynamic>{
+          'epoch': gateway.epoch,
+          'events': <Object>[
+            _event(type: 'message.delta', seq: 5, text: 'replay-5'),
+            _event(type: 'message.delta', seq: 6, text: 'replay-6'),
+          ],
+          'latest_seq': 6,
+          'truncated': false,
+        };
+      };
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await _waitFor(
+        () => gateway.requests.any(
+          (request) => request['method'] == 'session.events.since',
+        ),
+      );
+
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 7, text: 'live-7'),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      // The racer must not dispatch ahead of the gap it would then suppress.
+      expect(received.map((event) => event.seq), <int>[1, 2, 3, 4]);
+
+      release.complete();
+      await _waitFor(() => received.length >= 7);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(received.map((event) => event.seq), <int>[1, 2, 3, 4, 5, 6, 7]);
+      expect(received.map((event) => event.data['text']), <String>[
+        'live-1',
+        'live-2',
+        'live-3',
+        'live-4',
+        'replay-5',
+        'replay-6',
+        'live-7',
+      ]);
+    },
+  );
+
+  test(
+    'a changed replay epoch clears watermarks instead of replaying',
+    () async {
+      final gateway = await _ReplayFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = _clientFor(gateway);
+      addTearDown(client.close);
+      final received = <StreamEvent>[];
+      client.onStreamEvent = received.add;
+
+      await client.connect().timeout(const Duration(seconds: 5));
+      for (final seq in <int>[1, 2, 3]) {
+        await gateway.sendEvent(
+          _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+        );
+      }
+      await _waitFor(() => received.length == 3);
+
+      // The backend restarted: its in-process seq counters start over under a
+      // new epoch, so the held watermarks describe a numbering that is gone.
+      gateway.epoch = 'e2';
+
+      await gateway.dropSocket();
+      await _waitFor(() => !client.isConnected);
+      await client.connect().timeout(const Duration(seconds: 5));
+      await _waitFor(() => client.isConnected && gateway.connectionCount >= 2);
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+
+      expect(
+        gateway.requests.where(
+          (request) => request['method'] == 'session.events.since',
+        ),
+        isEmpty,
+      );
+
+      // Proof the watermark was cleared: the restarted backend's low seqs are
+      // delivered again instead of being swallowed as duplicates.
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 1, text: 'after-1'),
+      );
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: 2, text: 'after-2'),
+      );
+      await _waitFor(() => received.length >= 5);
+      expect(received.map((event) => event.seq), <int>[1, 2, 3, 1, 2]);
+      expect(received.map((event) => event.data['text']), <String>[
+        'live-1',
+        'live-2',
+        'live-3',
+        'after-1',
+        'after-2',
+      ]);
+    },
+  );
+
+  test('skips a truncated replay window and reports it', () async {
+    final gateway = await _ReplayFakeGateway.start();
+    addTearDown(gateway.stop);
+    final client = _clientFor(gateway);
+    addTearDown(client.close);
+    final received = <StreamEvent>[];
+    client.onStreamEvent = received.add;
+    final truncated = <String>[];
+    client.onReplayTruncated = truncated.add;
+
+    await client.connect().timeout(const Duration(seconds: 5));
+    for (final seq in <int>[1, 2, 3]) {
+      await gateway.sendEvent(
+        _event(type: 'message.delta', seq: seq, text: 'live-$seq'),
+      );
+    }
+    await _waitFor(() => received.length == 3);
+
+    // The ring evicted the gap: a tail-only replay would paint a hole
+    // (missing prefix / tool state / terminal event), so none of it paints.
+    gateway.sinceResult = (sessionId, lastSeen) async => <String, dynamic>{
+      'epoch': gateway.epoch,
+      'events': <Object>[
+        _event(type: 'message.delta', seq: 5, text: 'hole-5'),
+        _event(type: 'message.delta', seq: 6, text: 'hole-6'),
+        _event(type: 'message.delta', seq: 7, text: 'hole-7'),
+        _event(type: 'message.delta', seq: 8, text: 'hole-8'),
+      ],
+      'latest_seq': 9,
+      'truncated': true,
+    };
+
+    await gateway.dropSocket();
+    await _waitFor(() => !client.isConnected);
+    await client.connect().timeout(const Duration(seconds: 5));
+    await _waitFor(() => truncated.isNotEmpty);
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(received.map((event) => event.seq), <int>[1, 2, 3]);
+    expect(truncated, <String>[_sessionId]);
+
+    // The watermark advanced to the server head, so the holed frames stay
+    // gone and only genuinely newer frames dispatch.
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 9, text: 'holed'),
+    );
+    await gateway.sendEvent(
+      _event(type: 'message.delta', seq: 10, text: 'fresh-10'),
+    );
+    await _waitFor(() => received.length >= 4);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(received.map((event) => event.seq), <int>[1, 2, 3, 10]);
+  });
+}
+
+WsClient _clientFor(_ReplayFakeGateway gateway) => WsClient(
+  'http://127.0.0.1:${gateway.port}',
+  token: _fixtureKey,
+  heartbeatInterval: const Duration(hours: 1),
+  heartbeatDeadline: const Duration(hours: 2),
+);
+
+Map<String, dynamic> _event({
+  required String type,
+  required int seq,
+  required String text,
+  String sessionId = _sessionId,
+  String? turnId,
+}) => <String, dynamic>{
+  'type': type,
+  'session_id': sessionId,
+  'seq': seq,
+  'turn_id': ?turnId,
+  'message_id': 'message-$seq',
+  'payload': <String, dynamic>{'text': text},
+};
+
+Future<void> _waitFor(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition()) {
+    if (DateTime.now().isAfter(deadline)) {
+      throw StateError('condition not met within $timeout');
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
+/// Minimal gateway: one `gateway.ready` per socket, recorded request frames,
+/// switchable replay answers, and an explicit socket drop for reconnect tests.
+class _ReplayFakeGateway {
+  _ReplayFakeGateway(this._server);
+
+  final HttpServer _server;
+  final List<WebSocket> _sockets = [];
+
+  /// Every inbound JSON-RPC request frame, in arrival order, with the
+  /// 1-based connection ordinal it arrived on.
+  final List<Map<String, dynamic>> requests = [];
+
+  /// Server process identity advertised in `gateway.ready` and in every
+  /// `session.events.since` answer.
+  String epoch = 'e1';
+
+  int connectionCount = 0;
+
+  /// Answer factory for `session.events.since`; defaults to an empty window.
+  Future<Map<String, dynamic>> Function(String sessionId, int lastSeen)?
+  sinceResult;
+
+  int get port => _server.port;
+
+  static Future<_ReplayFakeGateway> start() async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final gateway = _ReplayFakeGateway(server);
+    server.listen(gateway._handleRequest);
+    return gateway;
+  }
+
+  Future<void> _handleRequest(HttpRequest httpRequest) async {
+    if (httpRequest.uri.path != '/api/ws') {
+      httpRequest.response.statusCode = 404;
+      await httpRequest.response.close();
+      return;
+    }
+    final socket = await WebSocketTransformer.upgrade(httpRequest);
+    _sockets.add(socket);
+    connectionCount++;
+    socket.add(
+      jsonEncode(<String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'event',
+        'params': <String, dynamic>{
+          'type': 'gateway.ready',
+          'payload': <String, dynamic>{
+            'heartbeat': true,
+            'replay_epoch': epoch,
+          },
+        },
+      }),
+    );
+    socket.listen((raw) {
+      final request = jsonDecode(raw as String) as Map<String, dynamic>;
+      requests.add(<String, dynamic>{
+        ...request,
+        'connection': connectionCount,
+      });
+      unawaited(_answer(socket, request));
+    });
+  }
+
+  Future<void> _answer(WebSocket socket, Map<String, dynamic> request) async {
+    final id = request['id'];
+    final method = request['method'];
+    final params = request['params'] is Map<String, dynamic>
+        ? request['params'] as Map<String, dynamic>
+        : const <String, dynamic>{};
+    if (method == 'gateway.ping') {
+      _send(socket, <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': id,
+        'result': <String, dynamic>{'ok': true},
+      });
+      return;
+    }
+    if (method == 'session.events.since') {
+      final sessionId = (params['session_id'] ?? '').toString();
+      final lastSeen = params['last_seen'] is int
+          ? params['last_seen'] as int
+          : -1;
+      final answer = sinceResult == null
+          ? <String, dynamic>{
+              'epoch': epoch,
+              'events': const <Object>[],
+              'latest_seq': 0,
+              'truncated': false,
+            }
+          : await sinceResult!(sessionId, lastSeen);
+      _send(socket, <String, dynamic>{
+        'jsonrpc': '2.0',
+        'id': id,
+        'result': answer,
+      });
+      return;
+    }
+    _send(socket, <String, dynamic>{
+      'jsonrpc': '2.0',
+      'id': id,
+      'error': <String, dynamic>{
+        'code': -32601,
+        'message': 'unknown method $method',
+      },
+    });
+  }
+
+  void _send(WebSocket socket, Map<String, dynamic> frame) {
+    try {
+      socket.add(jsonEncode(frame));
+    } catch (_) {
+      // A socket dropped mid-answer is exactly what the reconnect test wants.
+    }
+  }
+
+  /// Push one server event frame on the newest socket.
+  ///
+  /// Awaits the socket: the client's `connect()` resolves on the handshake, and
+  /// the fixture's upgrade handler may not have registered the socket on this
+  /// shared event loop yet, so the very first frame of a test would otherwise
+  /// race the registration.
+  Future<void> sendEvent(
+    Map<String, dynamic> params, {
+    int? socketIndex,
+  }) async {
+    final index = socketIndex ?? -1; // -1 = newest socket
+    await _waitFor(
+      () => index < 0 ? _sockets.isNotEmpty : _sockets.length > index,
+    );
+    final socket = _sockets[index < 0 ? _sockets.length - 1 : index];
+    socket.add(
+      jsonEncode(<String, dynamic>{
+        'jsonrpc': '2.0',
+        'method': 'event',
+        'params': params,
+      }),
+    );
+  }
+
+  Future<void> dropSocket() async {
+    final sockets = List<WebSocket>.from(_sockets);
+    _sockets.clear();
+    for (final socket in sockets) {
+      await socket.close(WebSocketStatus.goingAway, 'fixture drop');
+    }
+  }
+
+  Future<void> stop() async {
+    for (final socket in _sockets) {
+      await socket.close();
+    }
+    _sockets.clear();
+    await _server.close(force: true);
+  }
+}
