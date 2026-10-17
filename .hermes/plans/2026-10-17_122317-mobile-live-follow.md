@@ -529,3 +529,15 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 - 评审：**APPROVE**（规格 1-7 PASS；屏幕 seq 门正确性获独立确认：无 seq 放行、turn 作用域与传输同规则、退出清；变异矩阵独立复现，仅 M7/M8 存活）。
 - 偏差/观察（归档）：① 停止不 bump `_responseGeneration`（避免杀并行本地提交流，用 `interruptPrompt`）；② 统一 reconcile 取代两处 `_reapplyFollowedProjection`；③ **首帧 delta 按既有语义清状态条**（跟随态沿用"流式即进度"表现，停止键仍在）——接受；④ 终态帧未校验 `turnId`（迟到/异回合帧会结束当前跟随，靠下次 resume 自愈）——观察项；⑤ 屏幕水位 `_followStreamSeq` 只随退出清（epoch 变化危害不可达）。
 - 带入 Phase 5：① **桥调用点无测试钉**（M7 存活：回退旧白名单 16 用例全绿）——补 socket 级放行断言；② `_followProjectionSource` 退出清零是载重行但无钉（M8 存活）——补注释或一例；③ 截断回读尚未接（`onReplayTruncated` 需从 WsClient 转发到 client 监听者 → chat `_fetchMessages()`）；④ 跟随 + 待审 reattach 同场时终态帧被跟随分支先消费、重拉延后到下次 resync tick（自愈）——T5.3 冲突守卫范畴；⑤ 冷启动（无任何历史状态直接 resume 带 inflight）需显式用例。
+
+### Phase 5 — 收尾（✅ 完成，2026-10-17）
+- 提交：`f1babd6`（截断回读接线：token 监听 + 未绑定停车场；显式冷启动用例；跟随×reattach 冲突收口（**先清 `_pendingReattachResync` 再退跟随**，反序会把退出重拉吞掉，已被独立复现证实）；M7 桥调用点 socket 级钉 + M8 源清零真测试钉；6 文件 +9 测试）。
+- 门禁：analyze 0；全量 **1382**（1373 + 9）；编排者 2 连、复审 2 连全绿。
+- 评审：**APPROVE**（T5-1..T5-4 全 PASS；6 个变异探针独立复现全 RED；"提前截断报告停车场"经验证成立且必要——不泄漏/不错投；clear-then-exit 顺序独立证实；冷启动为**覆盖钉**（无诚实 RED，评审用探针证明非空洞）；提交信息用 `feat` 而非计划模板 `test`（含生产改动，更准确，记档））。
+- 接受遗留（复审 Minor，均自愈）：① 截断回读经 `_fetchMessages` 会 `_loading=true` → 跟随中闪一次 spinner（一往返后 reconcile 复原）；② pending resync 武装时该回读让位给 resync 自身重读；③ `_openSocket` 清停车场注释称"新 socket 会重报"但水位已推进——仅"无屏会话"跨 socket 换代时静默丢失；④ 注册序/异常隔离仅文档未单独钉（与 P2/P3 同风格）。
+
+### Phase 6 — 文档与总验收（✅ 完成，2026-10-17）
+- `AGENTS.md`：overlay 表新增「重连续接 + 实时跟随」+ 新节（目标/提交清单/硬不变量/测试门禁/已知遗留）；门禁基线 1288 → **1382**。
+- 技能：`hermes-android-client` → `references/connection-persistence.md` 补 §10（P5 落地与坑）；SKILL.md 指针与基线更新。
+- 最终门禁：analyze 0 + 全量 **1382**；真机 QA 由用户亲自执行（本次开发未跑设备）。
+- 收口结论：六阶段全部关闭；桌面端能力对照的三缺口（补发 / 投影重建 / 渲染放行）全部补齐——「回来接上并持续传输」链路成立。
