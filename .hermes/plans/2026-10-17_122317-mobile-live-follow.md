@@ -508,3 +508,10 @@ git ls-remote fork refs/heads/main   # 与本地 sha 对上再报成功
 - 合理偏差（已归档）：① seq 门分域——带 `turn_id` 的帧按回合内编号去重（本仓 v2 协议每回合从 1 重编号；stock 传输流从不带 `turn_id`，行为与桌面一致）；② 夹具竞态修正（`sendEvent` 等待 socket 注册）。
 - ⚠️ **带入 Phase 2 的硬要求**：`desktop_gateway_client._openSocket` 每次重连 `close()` 旧 WsClient 并 `new` 新实例 → 水位清零、补发在真机链路不会触发。Phase 2 必须让重连**复用同一 WsClient**（每连接新票 → `_ticket` 目前 `final`、`connect()` 无参，需最小扩展），重连路径不得调 `close()`，并加"重连后仍发出 since 请求（last_seen=水位）"的正向断言。
 - 复审接受遗留：回合水位按首现顺序淘汰（非 LRU，已钉测试）；`_lastSeenSeq`（按会话）无上限（接受）；`onReplayTruncated` 的 UI 消费方在 Phase 5。
+
+### Phase 2 — 生命周期（✅ 完成，2026-10-17）
+- 提交：`832beea`（2A 重连复用同一 WsClient + `rotateTicket`，水位跨重连存活；正向测试钉 `last_seen`）；`b080c7a`（2B-i async/session-bound 监听 token 多路 + 全量迁移，13 处调用点）；`f212c1b`（2B-ii `GatewayClientRegistry` 应用级共享 + 聊天页借用/回退不关 + `setConnectionListener` token 化 + 控制器合一，10 文件 +14 测试）；`973c132`（2C 评审 Important 回归：连接身份字段变更/删除时失效共享 client；标签/API-key 不失效）；`eea88a3`（2D 测试稳定性：夹具晚写竞态根因修复 + 72 处等待点加固）。
+- 门禁：analyze 0；全量 **1334**；2D-fix 后 **10 连 + 编排者 3 连独立复跑全部 RC=0**。
+- 评审：合并评审 **APPROVE**（2A 的 RED 被评审在 scratch 副本独立复现；三提交逐项 PASS）；唯一 Important（共享 client 不失效）→ 2C 闭环。**发现并修复上游遗留夹具竞态**（`client.capabilities` 落 default 回帧 + 晚写 `StreamSink closed`；基线复跑 ~25%/run 可复现）——修后 13 连全绿。
+- 合理偏差（归档）：① registry 失效放在 store（ConnectionManager notifier）+ main 接线，而非各 Home 对话框内联（单一收口、避免循环依赖；真 Home 删除路径与 App 真实编辑各一条 widget 测试钉住）；② 身份字段 = 计划清单 + `port`；label/apiKey/gatewayPrefix 不失效（各钉测试）；③ 控制器借用时 `close()` 跳过 `_client.close()` 与 `_registry.closeAll()`；④ 2D-fix 顺带修复 cwd-binding 夹具同款 capabilities 晚写；⑤ 新增少量 `@visibleForTesting` 观测点（`connectionListenerCount`、`gatewayBaseUrl`、`testDesktopGatewayObserver`）。
+- 带入后续（已记录，非回归）：`SessionListScreen`/`WorkspaceScreen(projects)`/`CronScreen` 仍有 route-local socket；通知路径对"连接列表页时后台回合完成"仍按现状（Phase 4/后续）。
