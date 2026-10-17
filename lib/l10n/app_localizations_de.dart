@@ -2490,4 +2490,7 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get could_not_save_chat_pin =>
       'Chat konnte auf diesem Gerät nicht angeheftet werden';
+
+  @override
+  String get live_turn_following => 'Running · auto-syncing';
 }

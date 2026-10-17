@@ -2485,6 +2485,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get could_not_save_chat_pin =>
       'Não foi possível salvar a fixação neste dispositivo';
+
+  @override
+  String get live_turn_following => 'Running · auto-syncing';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).

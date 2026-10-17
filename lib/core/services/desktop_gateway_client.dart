@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import 'capability_registry.dart';
 import 'connection_manager.dart';
+import 'gateway_live_turn.dart';
 import 'gateway_turn_coordinator.dart';
 import 'gateway_turn_journal.dart';
 import 'projects_gateway_client.dart';
@@ -16,6 +17,11 @@ typedef DesktopAsyncEventCallback =
 typedef DesktopAsyncEventSessionPredicate = bool Function(String sessionId);
 typedef DesktopConnectionCallback =
     void Function(DesktopConnectionState connectionState);
+
+/// A live-turn update for one mobile session, or null when the gateway no
+/// longer reports a turn for it (which is what ends a follow).
+typedef DesktopLiveTurnCallback =
+    void Function(String mobileSessionId, LiveTurnProjection? projection);
 
 enum DesktopConnectionState {
   disconnected,
@@ -81,6 +87,26 @@ class DesktopGatewayClient {
   /// Session-bound listeners keyed by their registration token, in delivery
   /// order. Shared for the same reason as [_asyncListeners].
   final Map<Object, GatewayTurnSessionBoundCallback> _sessionBoundListeners = {};
+
+  /// The latest live-turn projection per mobile session.
+  ///
+  /// Populated from every `session.resume` answer (see [_rememberBinding]) and
+  /// read back when a chat screen mounts onto a connection that was already
+  /// attached — the socket, and with it the last snapshot, outlive the page.
+  /// A session with no running turn is absent, never present with an empty
+  /// projection: absence is the signal that ends a follow.
+  final Map<String, LiveTurnProjection> _liveProjections = {};
+
+  /// Live-turn listeners keyed by their registration token, in delivery order.
+  ///
+  /// Multiplexed for the same reason as [_asyncListeners]: the shared
+  /// connection is observed by the mounted chat screen and, later, by whatever
+  /// else follows the same session.
+  final Map<Object, DesktopLiveTurnCallback> _liveTurnListeners = {};
+
+  /// Per-token `acceptsSession` predicates, absent for uncapped listeners.
+  final Map<Object, DesktopAsyncEventSessionPredicate>
+  _liveTurnListenerAccepts = {};
   GatewayTurnCoordinatorRegistry? _turnCoordinatorRegistry;
   ProjectsGatewayClient? _projects;
   final CapabilityRegistry _capabilities = CapabilityRegistry();
@@ -535,6 +561,62 @@ class DesktopGatewayClient {
         );
       });
     }
+    // Publish the live-turn projection for whoever follows this session.
+    //
+    // A resume is the only authority on whether a turn is running, so every
+    // binding refreshes the store: a projection left over from an earlier
+    // attach would keep a screen "following" a turn that has already settled.
+    // A create (no `resumed` payload) is the one answer that proves there is
+    // no turn to follow — the gateway held no such session at all.
+    final resumedForProjection = binding.resumed;
+    _publishLiveTurn(
+      mobileSessionId,
+      resumedForProjection == null
+          ? null
+          : LiveTurnProjection.fromResume(_resumePayload(resumedForProjection)),
+    );
+  }
+
+  /// Re-shapes a typed resume answer back into the wire payload the projection
+  /// parses, so the parse rules live in exactly one place
+  /// ([LiveTurnProjection.fromResume]).
+  static Map<String, dynamic> _resumePayload(ResumedGatewaySession resumed) => {
+    if (resumed.running != null) 'running': resumed.running,
+    if (resumed.status != null) 'status': resumed.status,
+    if (resumed.inflight != null) 'inflight': resumed.inflight,
+  };
+
+  /// Stores the latest live-turn projection for [mobileSessionId] and fans it
+  /// out to every live-turn listener.
+  ///
+  /// A null [projection] means the gateway reports no turn for that session:
+  /// the stored entry is dropped — so a screen mounting later reads "nothing
+  /// live" instead of a settled turn's leftovers — and listeners are told, so
+  /// a screen that is following can leave follow mode.
+  ///
+  /// Registration order is delivery order, and a listener that throws is
+  /// swallowed: the same contract as [_dispatchAsyncEvent]. The store is
+  /// already authoritative when this runs, so one observer must not strand the
+  /// others nor abort the resume that reported the state.
+  void _publishLiveTurn(
+    String mobileSessionId,
+    LiveTurnProjection? projection,
+  ) {
+    if (projection == null) {
+      _liveProjections.remove(mobileSessionId);
+    } else {
+      _liveProjections[mobileSessionId] = projection;
+    }
+    if (_liveTurnListeners.isEmpty) return;
+    for (final entry in List.of(_liveTurnListeners.entries)) {
+      final acceptsSession = _liveTurnListenerAccepts[entry.key];
+      if (acceptsSession != null && !acceptsSession(mobileSessionId)) continue;
+      try {
+        entry.value(mobileSessionId, projection);
+      } catch (_) {
+        // Swallowed on purpose: see the contract above.
+      }
+    }
   }
 
   /// The gateway's stored session key bound to a mobile session id, when a
@@ -604,8 +686,109 @@ class DesktopGatewayClient {
   Future<void> ensureSession(
     String sessionId, {
     String? workingDirectory,
+    bool refresh = false,
   }) async {
-    await _connect(sessionId, workingDirectory: workingDirectory);
+    if (!refresh) {
+      await _connect(sessionId, workingDirectory: workingDirectory);
+      return;
+    }
+    await _refreshSession(sessionId, workingDirectory: workingDirectory);
+  }
+
+  /// Registers a live-turn listener and returns its removal token.
+  ///
+  /// A live-turn listener is told the projection of a session's running turn
+  /// every time a resume reports one — including the resume that re-attaches
+  /// an already-mapped session — and is told null when the gateway reports no
+  /// turn, which is what ends a follow. Listeners coexist instead of replacing
+  /// one another: delivery order is registration order.
+  ///
+  /// [acceptsSession] caps which mobile session ids this listener receives.
+  Object addLiveTurnListener(
+    DesktopLiveTurnCallback callback, {
+    DesktopAsyncEventSessionPredicate? acceptsSession,
+  }) {
+    final token = Object();
+    _liveTurnListeners[token] = callback;
+    if (acceptsSession != null) {
+      _liveTurnListenerAccepts[token] = acceptsSession;
+    }
+    return token;
+  }
+
+  /// Detaches exactly the listener [token] was returned for.
+  ///
+  /// A stale token — one already removed, or belonging to a closed client — is
+  /// a no-op, so a teardown path can run twice safely.
+  void removeLiveTurnListener(Object token) {
+    _liveTurnListeners.remove(token);
+    _liveTurnListenerAccepts.remove(token);
+  }
+
+  /// How many live-turn listeners are attached.
+  ///
+  /// Exposed for the same reason as [connectionListenerCount]: "the disposed
+  /// screen detached its own listener" has no other observable, because a
+  /// callback that fires into a disposed screen returns immediately anyway.
+  @visibleForTesting
+  int get liveTurnListenerCount => _liveTurnListeners.length;
+
+  /// The gateway's latest live-turn projection for [mobileSessionId], or null
+  /// when it reports no running turn.
+  ///
+  /// Read-through companion to [addLiveTurnListener]: a chat screen mounting
+  /// onto a connection that is already attached reads the snapshot taken by
+  /// the last resume instead of waiting for the next one.
+  LiveTurnProjection? liveTurnProjectionFor(String mobileSessionId) =>
+      _liveProjections[mobileSessionId];
+
+  /// Re-attaches [mobileSessionId] and re-publishes its live-turn projection.
+  ///
+  /// A mapped session is not enough for a screen that is opening onto a turn
+  /// that may still be running: the binding it holds can predate the turn
+  /// entirely, and the snapshot the screen needs is the current one. So this
+  /// path always issues `session.resume` — on a live session that is an
+  /// idempotent attach (the gateway adds this caller to the session's
+  /// fan-out), not a takeover — and then lets [_rememberBinding] publish.
+  ///
+  /// It deliberately never creates: `session.create` is the NEW-chat
+  /// semantics, and answering "session not found" with it would mint a second
+  /// session where the user expects the one they came back for. A gone durable
+  /// row means there is no live turn, so the projection is cleared and the
+  /// caller is left with an unbound-but-usable session; any later real action
+  /// re-binds through the normal path, which may create.
+  Future<void> _refreshSession(
+    String mobileSessionId, {
+    String? workingDirectory,
+  }) async {
+    final requestedWorkingDirectory = workingDirectory?.trim();
+    if (requestedWorkingDirectory != null &&
+        requestedWorkingDirectory.isNotEmpty) {
+      _workingDirectories[mobileSessionId] = requestedWorkingDirectory;
+    }
+    final client = await _ensureSocket();
+    final storedSessionId =
+        _storedSessionIds[mobileSessionId] ?? mobileSessionId;
+    try {
+      final resumed = await client.resumeSessionDetails(storedSessionId);
+      _rememberBinding(
+        mobileSessionId,
+        _DesktopGatewayBinding(
+          runtimeSessionId: resumed.runtimeSessionId,
+          storedSessionId: storedSessionId,
+          resumed: resumed,
+        ),
+      );
+    } on JsonRpcError catch (error) {
+      if (error.code != 4007 &&
+          !error.message.toLowerCase().contains('session not found')) {
+        rethrow;
+      }
+      // The runtime mapping is stale; drop it so the next session-scoped call
+      // goes through the normal resume-or-create path.
+      _gatewaySessionIds.remove(mobileSessionId);
+      _publishLiveTurn(mobileSessionId, null);
+    }
   }
 
   /// The dashboard client backing this gateway's auth/ticket flow.
@@ -1327,6 +1510,9 @@ class DesktopGatewayClient {
     _asyncListenerAccepts.clear();
     _sessionBoundListeners.clear();
     _connectionListeners.clear();
+    _liveTurnListeners.clear();
+    _liveTurnListenerAccepts.clear();
+    _liveProjections.clear();
     _projects = null;
     _ws?.close();
     _ws = null;

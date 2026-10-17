@@ -674,5 +674,6 @@
   "pin_on_this_device": "在此设备上置顶",
   "unpin_on_this_device": "在此设备上取消置顶",
   "pinned_on_this_device": "在此设备上置顶的聊天",
-  "could_not_save_chat_pin": "无法在此设备上保存聊天置顶"
+  "could_not_save_chat_pin": "无法在此设备上保存聊天置顶",
+  "live_turn_following": "运行中 · 自动同步中"
 }

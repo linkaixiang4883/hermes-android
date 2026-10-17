@@ -20,6 +20,7 @@ import '../services/composer_draft_store.dart';
 import '../services/chat_model_override_store.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
+import '../services/gateway_live_turn.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_coordinator.dart';
 import '../services/gateway_turn_recovery.dart';
@@ -214,6 +215,19 @@ class TestDesktopAsyncEventHook {
   void Function(StreamEvent event)? handler;
 }
 
+/// Test seam for the live-turn projections the shared gateway client pushes to
+/// a mounted chat screen.
+///
+/// The screen fills [handler] in `initState`, where it also registers its
+/// listener on the client; a test then hands it the projection a
+/// `session.resume` would have produced, without a socket — real local WS
+/// traffic cannot share a suite with TestWidgetsFlutterBinding.
+@visibleForTesting
+class TestDesktopLiveTurnHook {
+  void Function(String mobileSessionId, LiveTurnProjection? projection)?
+  handler;
+}
+
 /// Repeat usage frames share the incoming total; skipping them avoids a
 /// redundant rebuild for the same turn snapshot.
 @visibleForTesting
@@ -310,6 +324,13 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final TestDesktopAsyncEventHook? testDesktopAsyncEventHook;
 
+  /// Passed by tests when no real Desktop gateway is configured: the screen
+  /// attaches its live-turn handler to this hook in `initState`, so a test can
+  /// deliver the projection a `session.resume` snapshot would have produced
+  /// without a live socket.
+  @visibleForTesting
+  final TestDesktopLiveTurnHook? testDesktopLiveTurnHook;
+
   /// Supplies an authoritative Projects tree without a real gateway.
   @visibleForTesting
   final TestProjectOverviewLoader? testProjectOverviewLoader;
@@ -362,6 +383,7 @@ class ChatScreen extends StatefulWidget {
     this.testTurnNotifications,
     this.testDesktopConnectionHook,
     this.testDesktopAsyncEventHook,
+    this.testDesktopLiveTurnHook,
     this.testProjectOverviewLoader,
     this.testDesktopSessionEnsured,
     this.testDesktopGatewayObserver,
@@ -401,6 +423,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Object? _desktopAsyncEventToken;
   Object? _desktopSessionBoundToken;
   Object? _desktopConnectionListenerToken;
+  Object? _desktopLiveTurnToken;
 
   /// Whether this screen built the gateway client it bound to, and is
   /// therefore the one that closes it.
@@ -442,6 +465,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _sending = false;
   bool _streaming = false;
   GatewayTurnStatus? _gatewayTurnStatus;
+
+  /// Whether this screen is showing a turn that is running somewhere else —
+  /// the gateway resumed this chat with an `inflight` snapshot — rather than
+  /// one it submitted itself.
+  ///
+  /// [LiveTurnProjection] rebuilds the bubbles, but the transcript still
+  /// belongs to the stored rows: the flag is what tells the exit path that the
+  /// projected rows in [_messages] are a reconstruction to drop and refetch.
+  bool _followLiveTurn = false;
+
+  /// The status this screen put up for follow mode, so leaving it clears only
+  /// that one: the turn-recovery path publishes its own `recovery` status, and
+  /// an exit must not wipe it.
+  GatewayTurnStatus? _followLiveTurnStatus;
   _ResponseTransport _activeResponseTransport = _ResponseTransport.none;
   String? _activeClientTurnId;
   bool _recoveringTurn = false;
@@ -617,8 +654,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _desktopSessionBoundToken = gateway.addSessionBoundListener(
           _onSessionBound,
         );
+        // Follow the running turn, not just the socket. The shared connection
+        // outlives this route, so the resume below is what refreshes the
+        // snapshot this screen rebuilds its bubbles from.
+        _desktopLiveTurnToken = gateway.addLiveTurnListener(_onDesktopLiveTurn);
+        widget.testDesktopLiveTurnHook?.handler = _onDesktopLiveTurn;
         widget.testDesktopGatewayObserver?.call(gateway);
-        unawaited(_ensureDesktopSession());
+        // Entering the chat asks for the CURRENT snapshot: the binding this
+        // client already holds may predate the turn the user came back for.
+        unawaited(_ensureDesktopSession(refresh: true));
       } on ArgumentError {
         // The regular mobile chat remains usable; selection surfaces the
         // actionable configuration error when Desktop attachments are needed.
@@ -774,6 +818,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (desktopConnectionListenerToken != null) {
       _desktopGateway?.removeConnectionListener(desktopConnectionListenerToken);
     }
+    final desktopLiveTurnToken = _desktopLiveTurnToken;
+    if (desktopLiveTurnToken != null) {
+      _desktopGateway?.removeLiveTurnListener(desktopLiveTurnToken);
+    }
     // Only a client this screen built is a client this screen closes. A client
     // borrowed from the application registry stays open — with its socket, its
     // session bindings and its replay watermarks — so the turn that is still
@@ -866,10 +914,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // resume is also an explicit recovery signal. Force the session path
         // to restart a socket immediately after any prolonged offline period;
         // the history retry itself remains gated on the connected callback.
-        unawaited(_ensureDesktopSession());
+        // The refresh also re-reads the live-turn snapshot: a turn that
+        // started (or finished) while the app was away must be picked up here.
+        unawaited(_ensureDesktopSession(refresh: true));
         _requestImmediateReattachResync();
       } else if (_desktopGateway != null) {
-        unawaited(_ensureDesktopSession());
+        unawaited(_ensureDesktopSession(refresh: true));
       }
       if (_legacyTransportFallback) {
         unawaited(_resyncLegacyHistoryAfterResume());
@@ -1029,7 +1079,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _ensureDesktopSession() async {
+  Future<void> _ensureDesktopSession({bool refresh = false}) async {
     if (!shouldEstablishLegacyDesktopSession(
       widget.session,
       legacyTransportFallback: _legacyTransportFallback,
@@ -1046,6 +1096,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       await gateway.ensureSession(
         widget.session.id,
         workingDirectory: widget.projectWorkingDirectory,
+        // A refresh re-attaches even when the session is already mapped, which
+        // is what a chat entry and an app resume need: the snapshot must be the
+        // current one, not the one taken when the socket came up.
+        refresh: refresh,
       );
     } catch (_) {
       // The composer remains available. The next send retries with a fresh
@@ -1053,6 +1107,99 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     unawaited(_refreshProjectName());
+    // The resume above may well have reported a running turn. The listener
+    // usually delivered it already; reading the stored projection here is
+    // idempotent and covers the case where the snapshot predates this screen.
+    final projection = gateway.liveTurnProjectionFor(widget.session.id);
+    if (projection != null) _enterFollowMode(projection);
+  }
+
+  /// A live-turn update from the shared connection: the projection of this
+  /// chat's running turn, or null when the gateway reports none.
+  void _onDesktopLiveTurn(
+    String mobileSessionId,
+    LiveTurnProjection? projection,
+  ) {
+    if (!mounted || mobileSessionId != widget.session.id) return;
+    if (projection == null || !projection.isLive) {
+      // The turn settled (or vanished) while this client was only observing:
+      // hand the transcript back to the stored rows.
+      _exitFollowMode();
+      return;
+    }
+    _enterFollowMode(projection);
+  }
+
+  /// Rebuilds the running turn from a resume snapshot and follows it.
+  ///
+  /// Follow mode is a RECONSTRUCTION of a turn this screen did not submit: a
+  /// partial reply, its prompt and a state that says the gateway is still
+  /// working. It is deliberately idempotent — the same snapshot must not paint
+  /// the turn twice — and it never touches a locally pending reply, whose
+  /// bubbles belong to the submit that started it.
+  ///
+  /// Phase 4 streams the deltas into the row projected here; this phase
+  /// rebuilds it once and leaves the follow/watch/exit state machine behind.
+  void _enterFollowMode(LiveTurnProjection projection) {
+    if (!mounted) return;
+    if (!projection.isLive) {
+      _exitFollowMode();
+      return;
+    }
+    final assistant = _lastAssistantMessage();
+    final localPending =
+        assistant != null &&
+        assistant['_gateway_pending_response'] == true &&
+        assistant['_follow_projection'] != true;
+    final userText = projection.user.trim();
+    setState(() {
+      _followLiveTurn = true;
+      _streaming = true;
+      _sending = true;
+      final followStatus = GatewayTurnStatus(
+        kind: 'recovery',
+        text: context.l10n.live_turn_following,
+      );
+      _followLiveTurnStatus = followStatus;
+      _gatewayTurnStatus = followStatus;
+      if (localPending) return;
+      final lastUser = _messages.lastWhere(
+        (message) => message['role'] == 'user',
+        orElse: () => const <String, dynamic>{},
+      );
+      if (userText.isNotEmpty &&
+          (lastUser['content']?.toString() ?? '').trim() != userText) {
+        _messages.add({'role': 'user', 'content': userText});
+      }
+      _messages.removeWhere((message) => message['_follow_projection'] == true);
+      _messages.add({
+        'role': 'assistant',
+        'content': projection.assistant,
+        '_gateway_pending_response': true,
+        '_follow_projection': true,
+      });
+    });
+    _scheduleStreamingFollow();
+  }
+
+  /// Leaves follow mode: there is no running turn to follow any more.
+  ///
+  /// The projected rows go with it — they were a reconstruction, and the
+  /// committed transcript now owns that reply — so the history is refetched and
+  /// the real rows take their place.
+  void _exitFollowMode() {
+    if (!_followLiveTurn) return;
+    setState(() {
+      _followLiveTurn = false;
+      _streaming = false;
+      _sending = false;
+      if (identical(_gatewayTurnStatus, _followLiveTurnStatus)) {
+        _gatewayTurnStatus = null;
+      }
+      _followLiveTurnStatus = null;
+      _messages.removeWhere((message) => message['_follow_projection'] == true);
+    });
+    unawaited(_fetchMessages());
   }
 
   void _editAndResend(String text) {

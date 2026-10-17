@@ -2401,6 +2401,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get could_not_save_chat_pin => '无法在此设备上保存聊天置顶';
+
+  @override
+  String get live_turn_following => '运行中 · 自动同步中';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -4794,4 +4797,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get could_not_save_chat_pin => '无法在此设备上保存聊天置顶';
+
+  @override
+  String get live_turn_following => '运行中 · 自动同步中';
 }

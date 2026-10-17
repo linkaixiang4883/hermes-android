@@ -2468,4 +2468,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get could_not_save_chat_pin =>
       'Could not save chat pin on this device';
+
+  @override
+  String get live_turn_following => 'Running · auto-syncing';
 }

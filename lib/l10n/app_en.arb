@@ -703,5 +703,6 @@
   "pin_on_this_device": "Pin on this device",
   "unpin_on_this_device": "Unpin on this device",
   "pinned_on_this_device": "Pinned on this device",
-  "could_not_save_chat_pin": "Could not save chat pin on this device"
+  "could_not_save_chat_pin": "Could not save chat pin on this device",
+  "live_turn_following": "Running · auto-syncing"
 }

@@ -4196,6 +4196,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Could not save chat pin on this device'**
   String get could_not_save_chat_pin;
+
+  /// No description provided for @live_turn_following.
+  ///
+  /// In en, this message translates to:
+  /// **'Running · auto-syncing'**
+  String get live_turn_following;
 }
 
 class _AppLocalizationsDelegate

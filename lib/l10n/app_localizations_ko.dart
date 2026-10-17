@@ -2422,4 +2422,7 @@ class AppLocalizationsKo extends AppLocalizations {
 
   @override
   String get could_not_save_chat_pin => '이 기기에 채팅 고정을 저장할 수 없습니다';
+
+  @override
+  String get live_turn_following => 'Running · auto-syncing';
 }

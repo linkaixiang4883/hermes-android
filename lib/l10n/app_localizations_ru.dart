@@ -2490,4 +2490,7 @@ class AppLocalizationsRu extends AppLocalizations {
   @override
   String get could_not_save_chat_pin =>
       'Не удалось сохранить закрепление чата на этом устройстве';
+
+  @override
+  String get live_turn_following => 'Running · auto-syncing';
 }
