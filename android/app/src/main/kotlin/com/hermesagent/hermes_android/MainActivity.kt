@@ -11,6 +11,8 @@ import android.os.Build
 import android.os.Bundle
 import android.provider.MediaStore
 import android.provider.OpenableColumns
+import android.provider.Settings
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.FileProvider
@@ -26,6 +28,7 @@ class MainActivity : FlutterActivity() {
     private val shareChannelName = "com.hermesagent.hermes_android/share"
     private val launchChannelName = "com.hermesagent.hermes_android/launch"
     private val downloadsChannelName = "com.hermesagent.hermes_android/downloads"
+    private val TAG = "HermesDownloads"
     private val notificationChannelId = "hermes_media_downloads"
     private val notificationPermissionRequest = 4310
     private val quickChatAction = "com.hermesagent.hermes_android.action.QUICK_CHAT"
@@ -86,14 +89,36 @@ class MainActivity : FlutterActivity() {
                             val name = filename.substringAfterLast('/')
                             Thread {
                                 val saved = saveToDownloads(name, mimeType, bytes)
-                                val installIntent =
-                                    if (saved != null && installAfterSave) buildInstallIntent(name, bytes) else null
+                                Log.i(TAG, "saveToDownloads filename=$name saved=$saved mime=$mimeType")
+                                var installIntent: Intent? = null
+                                var installStatus = "none"
+                                if (saved != null && installAfterSave) {
+                                    val mayInstall = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                                        packageManager.canRequestPackageInstalls()
+                                    Log.i(TAG, "install requested; mayInstall=$mayInstall")
+                                    installIntent = if (mayInstall) buildInstallIntent(name, bytes) else null
+                                    installStatus = when {
+                                        !mayInstall -> "permission"
+                                        installIntent == null -> "failed"
+                                        else -> "launched"
+                                    }
+                                }
                                 runOnUiThread {
-                                    if (installIntent != null) {
-                                        runCatching { startActivity(installIntent) }
+                                    if (installStatus == "launched" && installIntent != null) {
+                                        try {
+                                            startActivity(installIntent)
+                                        } catch (e: Exception) {
+                                            Log.w(TAG, "installer launch failed", e)
+                                            installStatus = "failed"
+                                        }
+                                    } else if (installStatus == "permission") {
+                                        openInstallPermissionSettings()
                                     }
                                     if (saved != null) postSavedNotification(name, installIntent)
-                                    result.success(saved)
+                                    result.success(
+                                        if (saved == null) null
+                                        else mapOf("filename" to saved, "install" to installStatus)
+                                    )
                                 }
                             }.start()
                         }
@@ -119,8 +144,22 @@ class MainActivity : FlutterActivity() {
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
             }
         } catch (e: Exception) {
+            Log.w(TAG, "buildInstallIntent failed for $filename", e)
             null
         }
+    }
+
+    /// Opens the system "install unknown apps" page for this app — the
+    /// permission surface Android 8+ uses instead of a runtime dialog.
+    private fun openInstallPermissionSettings() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+        runCatching {
+            startActivity(
+                Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+            Log.i(TAG, "opened install-permission settings")
+        }.onFailure { Log.w(TAG, "install-permission settings failed", it) }
     }
 
     /// Posts the "saved" notification. For an APK both the tap and the

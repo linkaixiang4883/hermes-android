@@ -2954,6 +2954,12 @@ abstract class AppLocalizations {
   /// **'Saved to Downloads — opening the installer…'**
   String get media_card_saved_installing;
 
+  /// No description provided for @media_card_saved_install_permission.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to Downloads — allow installing unknown apps for Hermes, then tap download again'**
+  String get media_card_saved_install_permission;
+
   /// No description provided for @media_card_share.
   ///
   /// In en, this message translates to:

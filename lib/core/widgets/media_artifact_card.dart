@@ -129,24 +129,29 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
       widget.ref.filename,
       _mime,
     );
-    final savedText = installAfterSave
-        ? context.l10n.media_card_saved_installing
-        : context.l10n.media_card_saved_to_downloads;
+    final l10n = context.l10n;
     try {
-      final saved = await MediaDownloadSaver.save(
+      final result = await MediaDownloadSaver.save(
         bytes: bytes,
         filename: widget.ref.filename,
         mimeType: _mime,
         installAfterSave: installAfterSave,
       );
       if (!mounted) return;
-      if (saved == null) {
+      if (result == null) {
+        // Older Android: the platform cannot write the Downloads collection,
+        // so hand it to the share sheet like before.
         await _saveAndShare();
         return;
       }
+      final message = result.installPermissionMissing
+          ? l10n.media_card_saved_install_permission
+          : result.installLaunched
+          ? l10n.media_card_saved_installing
+          : l10n.media_card_saved_to_downloads;
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
-        ..showSnackBar(SnackBar(content: Text(savedText)));
+        ..showSnackBar(SnackBar(content: Text(message)));
     } catch (e) {
       if (mounted) setState(() => _error = e.toString());
     }

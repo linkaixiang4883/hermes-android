@@ -1629,6 +1629,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get media_card_saved_installing => '已保存到下载目录，正在打开安装…';
 
   @override
+  String get media_card_saved_install_permission =>
+      '已保存到下载目录，请允许 Hermes 安装未知应用后重试';
+
+  @override
   String get media_card_share => '分享';
 
   @override
@@ -4041,6 +4045,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get media_card_saved_installing => '已保存到下载目录，正在打开安装…';
+
+  @override
+  String get media_card_saved_install_permission =>
+      '已保存到下载目录，请允许 Hermes 安装未知应用后重试';
 
   @override
   String get media_card_share => '分享';

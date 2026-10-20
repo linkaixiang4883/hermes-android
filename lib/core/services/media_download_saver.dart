@@ -14,24 +14,58 @@ class MediaDownloadSaver {
     'com.hermesagent.hermes_android/downloads',
   );
 
-  /// Returns the saved display name, or null when the platform cannot save
+  /// Returns the save outcome, or null when the platform cannot save
   /// natively (older Android, or no plugin in the host process). A platform
   /// failure throws so the card can surface it instead of a fake success.
-  static Future<String?> save({
+  static Future<MediaDownloadSaveResult?> save({
     required Uint8List bytes,
     required String filename,
     String? mimeType,
     bool installAfterSave = false,
   }) async {
     try {
-      return await channel.invokeMethod<String>('saveToDownloads', {
+      final raw = await channel.invokeMethod<dynamic>('saveToDownloads', {
         'bytes': bytes,
         'filename': filename,
         'mimeType': mimeType,
         'installAfterSave': installAfterSave,
       });
+      if (raw is String) {
+        // Older platform builds answered with the saved name only.
+        return MediaDownloadSaveResult(filename: raw, installStatus: 'none');
+      }
+      if (raw is Map) {
+        final saved = raw['filename']?.toString() ?? '';
+        if (saved.isEmpty) return null;
+        return MediaDownloadSaveResult(
+          filename: saved,
+          installStatus: raw['install']?.toString() ?? 'none',
+        );
+      }
+      return null;
     } on MissingPluginException {
       return null;
     }
   }
+}
+
+/// Outcome of [MediaDownloadSaver.save].
+class MediaDownloadSaveResult {
+  /// The display name the platform saved under.
+  final String filename;
+
+  /// `launched` — the system installer was started; `permission` — this app
+  /// may not install yet and the platform opened the "install unknown apps"
+  /// settings page; `failed` — the installer could not be prepared; `none` —
+  /// the save was not an install request.
+  final String installStatus;
+
+  const MediaDownloadSaveResult({
+    required this.filename,
+    required this.installStatus,
+  });
+
+  bool get installLaunched => installStatus == 'launched';
+
+  bool get installPermissionMissing => installStatus == 'permission';
 }

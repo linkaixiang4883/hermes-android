@@ -1689,6 +1689,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Saved to Downloads — opening the installer…';
 
   @override
+  String get media_card_saved_install_permission =>
+      'Saved to Downloads — allow installing unknown apps for Hermes, then tap download again';
+
+  @override
   String get media_card_share => 'Share';
 
   @override

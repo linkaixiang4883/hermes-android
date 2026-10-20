@@ -68,7 +68,7 @@ void main() {
     final calls = <MethodCall>[];
     mockDownloadsChannel((call) async {
       calls.add(call);
-      return 'report.pdf';
+      return {'filename': 'report.pdf', 'install': 'none'};
     });
 
     await pumpCard(tester);
@@ -93,7 +93,7 @@ void main() {
     final calls = <MethodCall>[];
     mockDownloadsChannel((call) async {
       calls.add(call);
-      return 'release.apk';
+      return {'filename': 'release.apk', 'install': 'launched'};
     });
 
     await tester.pumpWidget(
@@ -125,6 +125,44 @@ void main() {
     expect(
       find.text('Saved to Downloads — opening the installer…'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('a blocked install says the permission step out loud', (
+    tester,
+  ) async {
+    const apkRef = MediaTagRef(path: '/srv/data/release.apk');
+    mockDownloadsChannel(
+      (call) async => {'filename': 'release.apk', 'install': 'permission'},
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Scaffold(
+          body: MediaArtifactCard(ref: apkRef, filesClient: _FakeFiles.new),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const Key('media-card-download-/srv/data/release.apk')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      find.text(
+        'Saved to Downloads — allow installing unknown apps for Hermes, '
+        'then tap download again',
+      ),
+      findsOneWidget,
+      reason:
+          'the system has no runtime dialog for this permission: the card '
+          'must point the user at the settings page it opened',
     );
   });
 
