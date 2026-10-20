@@ -44,9 +44,10 @@
 | clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
 | 重连续接 + 实时跟随 | `ws_client`（seq 门/补发/`onReplayTruncated`）+ `desktop_gateway_client`（`rotateTicket` 复用/多路监听/`ensureSession(refresh:)`/`LiveTurnProjection`/`addReplayTruncatedListener`）+ `gateway_client_registry.dart`（应用级共享，main.dart 下发）+ `chat_screen`（跟随态/`_localSubmitActive`/`_acceptFollowStreamFrame`/`_reconcileFollowAfterTranscriptReplace`）+ 1 key（`live_turn_following`） | 机制全图与坑：技能 `hermes-android-client → references/connection-persistence.md` §6-§11；**硬不变量见下节**；真机 QA 已过（2026-10-18） |
 | 审批卡回合终帧清场（App 侧） | `chat_screen`（`_clearTurnEndBlockingPrompts` + 两处终帧钩子 + `_approvalTurnEndDismissed` + `_expireSensitivePromptById`）+ `test/chat_turn_notification_wiring_test.dart`（+3） | 上游缺口（`4db6cd5`）：某客户端应答后其它端**不发撤销帧**；桌面端回合结束自清（窗口=剩余回合时长）、手机端此前无对等机制；服务端不补（update 会覆盖，用户决议 2026-10-18），纯 App 侧自愈；全档见技能 `hermes-android-client → references/server-requests-0.21.3.md`「跨客户端撤卡缺口」节 |
+| MEDIA 卡保存到下载（App 侧） | `media_artifact_card`（下载按钮/非图片行点按 = 保存）+ `media_download_saver`（channel `.../downloads`）+ `MainActivity.saveToDownloads`（MediaStore API 29+，<29 回退分享）+ `test/media_artifact_card_test.dart`（+2） | 上游卡只"下载→分享面板"（`d4e13bc`）；现在普通文件直接落系统 Downloads（通知栏可见），分享按钮保留；APK 同路径（安装需系统"未知来源"授权）；细节见技能 `pc-to-phone-media-delivery.md` 新增节 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1395**（2026-10-20 流式卡片可交互修复后；此前 1392 = 连接状态种子修复、1390 = 审批卡清场轮）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1397**（2026-10-20 MEDIA 保存到下载后；此前 1395 = 流式卡片可交互、1392 = 连接状态种子）。
 
 ## 重连续接 + 实时跟随（2026-10-17 六阶段 + 2026-10-18 QA 修复轮落地）
 
