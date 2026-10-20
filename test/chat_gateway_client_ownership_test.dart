@@ -24,6 +24,8 @@ import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
 import 'package:hermes_android/core/services/gateway_client_registry.dart';
 import 'package:hermes_android/core/services/gateway_turn_application_controller.dart';
+import 'package:hermes_android/core/models/projects_tree_overview.dart';
+import 'package:hermes_android/core/widgets/chat_context_header.dart';
 import 'package:hermes_android/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -100,6 +102,45 @@ void main() {
     client.removeConnectionListener(witnessToken);
     expect(client.connectionListenerCount, 0);
   });
+
+  testWidgets(
+    'a borrowed client that is already connected seeds the header as connected',
+    (tester) async {
+      final registry = GatewayClientRegistry();
+      addTearDown(registry.close);
+      final connection = _connection(desktopGatewayUrl: 'https://host:8642');
+
+      // The session list / draft owner opened this connection earlier, so the
+      // screen borrows a live instance and will never see its
+      // connecting -> connected transition: there is none left to see.
+      final shared = registry.clientFor(connection);
+      shared.debugSetConnectionState(DesktopConnectionState.connected);
+
+      // A draft session keeps _ensureDesktopSession from opening a socket of
+      // its own, and the injected project loader keeps the header's sticky
+      // lookup off the gateway — otherwise the refresh path below would open
+      // one and dispatch `connecting` over the seeded state. What is asserted
+      // is the header's first paint, seeded from the borrowed client.
+      await _pumpChat(
+        tester,
+        connection: connection,
+        gatewayRegistry: registry,
+        session: _draftSession(),
+        projectOverviewLoader: () async => ProjectsTreeOverview.empty,
+      );
+
+      final header = tester.widget<ChatContextHeader>(
+        find.byType(ChatContextHeader),
+      );
+      expect(
+        header.connectionStatus,
+        ChatConnectionStatus.connected,
+        reason:
+            'a borrowed client that is already up must not read as offline '
+            'just because this screen missed the transition',
+      );
+    },
+  );
 
   testWidgets('a chat screen without a registry still closes its own client', (
     tester,
@@ -195,6 +236,8 @@ Future<void> _pumpChat(
   required SavedConnection connection,
   GatewayClientRegistry? gatewayRegistry,
   ValueChanged<DesktopGatewayClient>? onGatewayBound,
+  Session? session,
+  TestProjectOverviewLoader? projectOverviewLoader,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -202,8 +245,9 @@ Future<void> _pumpChat(
       supportedLocales: AppLocalizations.supportedLocales,
       home: ChatScreen(
         connection: connection,
-        session: _session(),
+        session: session ?? _session(),
         gatewayRegistry: gatewayRegistry,
+        testProjectOverviewLoader: projectOverviewLoader,
         testDesktopGatewayObserver: onGatewayBound,
         testApiClient: ApiClient(
           baseUrl: 'http://fixture.example',
@@ -248,4 +292,18 @@ Session _session() => Session(
   isActive: true,
   preview: '',
   startedAt: 1,
+);
+
+/// A draft chat: opening it binds the borrowed client but never opens a
+/// socket of its own, so a test-seeded connection state stands untouched.
+Session _draftSession() => Session(
+  id: 'mob-ownership-draft',
+  title: 'Ownership fixture draft',
+  model: 'fixture-model',
+  source: 'test',
+  messageCount: 0,
+  isActive: true,
+  preview: '',
+  startedAt: 1,
+  isLocalDraft: true,
 );

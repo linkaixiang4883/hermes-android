@@ -347,6 +347,31 @@ void main() {
       client.removeConnectionListener(droppedToken);
       expect(client.connectionListenerCount, 1);
     });
+
+    test('the current state survives a connect no listener watched', () async {
+      final gateway = await _RegistryFakeGateway.start();
+      addTearDown(gateway.stop);
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(client.close);
+
+      // No listener while the socket comes up: the shape of a borrowed client
+      // that connected before any screen asked about it. Listeners only hear
+      // transitions, so the client itself must retain the state a later
+      // borrower reads at attach.
+      expect(client.connectionState, DesktopConnectionState.disconnected);
+      await client.ensureSession(_mobile);
+      await _waitFor(
+        () => client.connectionState == DesktopConnectionState.connected,
+      );
+
+      expect(
+        client.connectionState,
+        DesktopConnectionState.connected,
+        reason: 'a dispatch with no listeners attached must still be kept',
+      );
+    });
   });
 
   group('the draft/notification owner', () {

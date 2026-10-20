@@ -763,6 +763,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _desktopConnectionListenerToken = gateway.addConnectionListener(
           _onDesktopConnectionChanged,
         );
+        // The listener only hears transitions. A borrowed client may have
+        // connected before this screen mounted (the registry hands out
+        // long-lived instances — the session list or the draft owner opens
+        // the connection first), so seed from what the client holds now;
+        // without this the header claimed offline for the whole visit.
+        _desktopConnectionState = gateway.connectionState;
         _desktopSessionBoundToken = gateway.addSessionBoundListener(
           _onSessionBound,
         );

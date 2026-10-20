@@ -92,6 +92,10 @@ class DesktopGatewayClient {
   /// of leaving a stale one behind or evicting a live one.
   final Map<Object, DesktopConnectionCallback> _connectionListeners = {};
 
+  /// The last dispatched connection state, kept even with no listener
+  /// attached: a borrowed client may connect before any screen registers.
+  DesktopConnectionState _connectionState = DesktopConnectionState.disconnected;
+
   /// Session-bound listeners keyed by their registration token, in delivery
   /// order. Shared for the same reason as [_asyncListeners].
   final Map<Object, GatewayTurnSessionBoundCallback> _sessionBoundListeners = {};
@@ -1003,6 +1007,23 @@ class DesktopGatewayClient {
   @visibleForTesting
   String get gatewayBaseUrl => _baseUrl;
 
+  /// The last connection state this client dispatched.
+  ///
+  /// Listeners only hear transitions. A screen that borrows an
+  /// already-connected client (the registry hands out long-lived instances —
+  /// the session list or the draft owner opens the connection first) reads
+  /// this once at attach so its first paint does not claim offline.
+  DesktopConnectionState get connectionState => _connectionState;
+
+  /// Drives a connection-state transition without a socket.
+  ///
+  /// The widget test binding carries no real transport, so a test that mounts
+  /// a screen against an already-connected borrowed client seeds the state
+  /// here. Production paths only dispatch through [_dispatchConnectionState].
+  @visibleForTesting
+  void debugSetConnectionState(DesktopConnectionState state) =>
+      _dispatchConnectionState(state);
+
   /// How many connection-state listeners are attached.
   ///
   /// Exposed for the ownership tests: "the disposed screen detached its own
@@ -1021,6 +1042,9 @@ class DesktopGatewayClient {
   /// the connect path that reported the state, so its failure is swallowed
   /// here — the same contract as [_dispatchAsyncEvent].
   void _dispatchConnectionState(DesktopConnectionState state) {
+    // Keep the state even when nobody is listening: a borrowed client can
+    // connect while every screen that will ask about it later is unmounted.
+    _connectionState = state;
     if (_connectionListeners.isEmpty) return;
     for (final listener in List.of(_connectionListeners.values)) {
       try {
