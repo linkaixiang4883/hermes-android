@@ -80,9 +80,52 @@ void main() {
     expect(calls.single.method, 'saveToDownloads');
     final args = calls.single.arguments as Map;
     expect(args['filename'], 'report.pdf');
+    expect(args['installAfterSave'], isFalse);
     expect(args['bytes'], isA<Uint8List>());
     expect((args['bytes'] as Uint8List).length, 4);
     expect(find.text('Saved to Downloads'), findsOneWidget);
+  });
+
+  testWidgets('an APK save asks the platform to open the installer', (
+    tester,
+  ) async {
+    const apkRef = MediaTagRef(path: '/srv/data/release.apk');
+    final calls = <MethodCall>[];
+    mockDownloadsChannel((call) async {
+      calls.add(call);
+      return 'release.apk';
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Scaffold(
+          body: MediaArtifactCard(ref: apkRef, filesClient: _FakeFiles.new),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(
+      find.byKey(const Key('media-card-download-/srv/data/release.apk')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(calls, hasLength(1));
+    final args = calls.single.arguments as Map;
+    expect(args['filename'], 'release.apk');
+    expect(
+      args['installAfterSave'],
+      isTrue,
+      reason: 'the platform is the only side that can raise the installer',
+    );
+    expect(
+      find.text('Saved to Downloads — opening the installer…'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

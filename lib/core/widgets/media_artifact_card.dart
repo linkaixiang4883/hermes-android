@@ -125,12 +125,19 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
   Future<void> _saveToDownloads() async {
     final bytes = await _ensureBytes();
     if (bytes == null || !mounted) return;
-    final savedText = context.l10n.media_card_saved_to_downloads;
+    final installAfterSave = isAndroidPackageFile(
+      widget.ref.filename,
+      _mime,
+    );
+    final savedText = installAfterSave
+        ? context.l10n.media_card_saved_installing
+        : context.l10n.media_card_saved_to_downloads;
     try {
       final saved = await MediaDownloadSaver.save(
         bytes: bytes,
         filename: widget.ref.filename,
         mimeType: _mime,
+        installAfterSave: installAfterSave,
       );
       if (!mounted) return;
       if (saved == null) {

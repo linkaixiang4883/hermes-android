@@ -273,6 +273,14 @@ List<_SourceRange> _markdownCodeRanges(String text, {required bool isFinal}) {
 }
 
 /// One `MEDIA:` reference extracted from assistant text.
+/// Whether [path] names an Android package the media card should hand to the
+/// system installer after saving. The mime is authoritative; the extension is
+/// the fallback for gateways that send `application/octet-stream`.
+bool isAndroidPackageFile(String path, String? mimeType) {
+  if (mimeType == 'application/vnd.android.package-archive') return true;
+  return path.toLowerCase().endsWith('.apk');
+}
+
 class MediaTagRef {
   /// The gateway-host path to fetch (never a local path — always resolve
   /// through the session's gateway `fs/download`).

@@ -21,12 +21,14 @@ class MediaDownloadSaver {
     required Uint8List bytes,
     required String filename,
     String? mimeType,
+    bool installAfterSave = false,
   }) async {
     try {
       return await channel.invokeMethod<String>('saveToDownloads', {
         'bytes': bytes,
         'filename': filename,
         'mimeType': mimeType,
+        'installAfterSave': installAfterSave,
       });
     } on MissingPluginException {
       return null;

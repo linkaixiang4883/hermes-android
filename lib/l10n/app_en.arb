@@ -470,6 +470,7 @@
   "media_card_tap_to_download": "Tap to download",
   "media_card_save_to_downloads": "Save to Downloads",
   "media_card_saved_to_downloads": "Saved to Downloads",
+  "media_card_saved_installing": "Saved to Downloads — opening the installer…",
   "media_card_share": "Share",
   "still_loading_your_projects": "Still loading your projects.",
   "stop": "Stop",

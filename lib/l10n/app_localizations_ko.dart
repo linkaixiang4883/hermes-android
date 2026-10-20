@@ -1638,6 +1638,10 @@ class AppLocalizationsKo extends AppLocalizations {
   String get media_card_saved_to_downloads => 'Saved to Downloads';
 
   @override
+  String get media_card_saved_installing =>
+      'Saved to Downloads — opening the installer…';
+
+  @override
   String get media_card_share => 'Share';
 
   @override

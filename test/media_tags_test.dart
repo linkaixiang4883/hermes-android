@@ -560,4 +560,34 @@ void main() {
     expect(capturedSessionId, 'stored-session-42');
     expect(files.requested, ['/srv/result.pdf']);
   });
+
+  group('isAndroidPackageFile', () {
+    test('recognises the package mime and the extension', () {
+      expect(
+        isAndroidPackageFile('release.apk', null),
+        isTrue,
+        reason: 'the extension alone is enough',
+      );
+      expect(
+        isAndroidPackageFile('RELEASE.APK', 'application/octet-stream'),
+        isTrue,
+        reason: 'gateways that send octet-stream still name a package',
+      );
+      expect(
+        isAndroidPackageFile(
+          'payload.bin',
+          'application/vnd.android.package-archive',
+        ),
+        isTrue,
+        reason: 'the mime is authoritative when it says so',
+      );
+      expect(isAndroidPackageFile('report.pdf', null), isFalse);
+      expect(isAndroidPackageFile('notes.txt', 'text/plain'), isFalse);
+      expect(
+        isAndroidPackageFile('apk-backup.zip', null),
+        isFalse,
+        reason: 'a name that merely mentions apk is not a package',
+      );
+    });
+  });
 }
