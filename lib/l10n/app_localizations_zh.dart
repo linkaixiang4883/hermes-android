@@ -1620,6 +1620,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get media_card_tap_to_download => '点按下载';
 
   @override
+  String get media_card_save_to_downloads => '保存到下载';
+
+  @override
+  String get media_card_saved_to_downloads => '已保存到下载目录';
+
+  @override
+  String get media_card_share => '分享';
+
+  @override
   String get still_loading_your_projects => '正在加载你的项目。';
 
   @override
@@ -4020,6 +4029,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get media_card_tap_to_download => '点按下载';
+
+  @override
+  String get media_card_save_to_downloads => '保存到下载';
+
+  @override
+  String get media_card_saved_to_downloads => '已保存到下载目录';
+
+  @override
+  String get media_card_share => '分享';
 
   @override
   String get still_loading_your_projects => '正在加载你的项目。';

@@ -7,6 +7,7 @@ import 'package:hermes_android/core/l10n/l10n.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../services/media_download_saver.dart';
 import '../services/remote_files_client.dart';
 import '../utils/media_tags.dart';
 
@@ -115,6 +116,32 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
         setState(() => _error = e.toString());
       }
       return null;
+    }
+  }
+
+  /// Saves the bytes into the system Downloads collection (Android 10+).
+  /// Older releases cannot write it without storage permissions, so they keep
+  /// the pre-existing delivery — the system share sheet.
+  Future<void> _saveToDownloads() async {
+    final bytes = await _ensureBytes();
+    if (bytes == null || !mounted) return;
+    final savedText = context.l10n.media_card_saved_to_downloads;
+    try {
+      final saved = await MediaDownloadSaver.save(
+        bytes: bytes,
+        filename: widget.ref.filename,
+        mimeType: _mime,
+      );
+      if (!mounted) return;
+      if (saved == null) {
+        await _saveAndShare();
+        return;
+      }
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(savedText)));
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 
@@ -338,17 +365,30 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-              trailing: IconButton(
-                key: Key('media-card-download-${widget.ref.path}'),
-                tooltip: l10n.media_card_download,
-                icon: const Icon(Icons.download_outlined),
-                onPressed: loading ? null : () => unawaited(_saveAndShare()),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    key: Key('media-card-download-${widget.ref.path}'),
+                    tooltip: l10n.media_card_save_to_downloads,
+                    icon: const Icon(Icons.download_outlined),
+                    onPressed: loading
+                        ? null
+                        : () => unawaited(_saveToDownloads()),
+                  ),
+                  IconButton(
+                    key: Key('media-card-share-${widget.ref.path}'),
+                    tooltip: l10n.media_card_share,
+                    icon: const Icon(Icons.share_outlined),
+                    onPressed: loading ? null : () => unawaited(_saveAndShare()),
+                  ),
+                ],
               ),
               onTap: loading
                   ? null
                   : (isImage
                         ? _showImagePreview
-                        : () => unawaited(_saveAndShare())),
+                        : () => unawaited(_saveToDownloads())),
             ),
           ],
         ),

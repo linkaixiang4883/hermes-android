@@ -1,8 +1,11 @@
 package com.hermesagent.hermes_android
 
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
+import android.provider.MediaStore
 import android.provider.OpenableColumns
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -14,11 +17,13 @@ import java.util.UUID
 class MainActivity : FlutterActivity() {
     private val shareChannelName = "com.hermesagent.hermes_android/share"
     private val launchChannelName = "com.hermesagent.hermes_android/launch"
+    private val downloadsChannelName = "com.hermesagent.hermes_android/downloads"
     private val quickChatAction = "com.hermesagent.hermes_android.action.QUICK_CHAT"
     private val maxSharedItems = 10
     private val maxSharedBytes = 64L * 1024L * 1024L
     private var shareChannel: MethodChannel? = null
     private var launchChannel: MethodChannel? = null
+    private var downloadsChannel: MethodChannel? = null
     private var initialShareIntent: Intent? = null
     private var initialLaunchAction: String? = null
 
@@ -53,6 +58,55 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+        }
+        downloadsChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, downloadsChannelName).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "saveToDownloads" -> {
+                        val bytes = call.argument<ByteArray>("bytes")
+                        val filename = call.argument<String>("filename")?.trim().orEmpty()
+                        val mimeType = call.argument<String>("mimeType")
+                        result.success(
+                            if (bytes == null || filename.isEmpty()) null
+                            else saveToDownloads(filename.substringAfterLast('/'), mimeType, bytes)
+                        )
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    /// Writes [bytes] into the system Downloads collection (MediaStore, API 29+).
+    /// Returns the saved display name, or null when this release predates
+    /// scoped storage — the caller then falls back to the share sheet.
+    private fun saveToDownloads(filename: String, mimeType: String?, bytes: ByteArray): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val resolver = contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, filename)
+            put(MediaStore.Downloads.MIME_TYPE, mimeType ?: "application/octet-stream")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        val stream = try {
+            resolver.openOutputStream(uri)
+        } catch (e: Exception) {
+            null
+        }
+        if (stream == null) {
+            runCatching { resolver.delete(uri, null, null) }
+            return null
+        }
+        return try {
+            stream.use { it.write(bytes) }
+            values.clear()
+            values.put(MediaStore.Downloads.IS_PENDING, 0)
+            resolver.update(uri, values, null, null)
+            filename
+        } catch (e: Exception) {
+            runCatching { resolver.delete(uri, null, null) }
+            throw e
         }
     }
 

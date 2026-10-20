@@ -2936,6 +2936,24 @@ abstract class AppLocalizations {
   /// **'Tap to download'**
   String get media_card_tap_to_download;
 
+  /// No description provided for @media_card_save_to_downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Save to Downloads'**
+  String get media_card_save_to_downloads;
+
+  /// No description provided for @media_card_saved_to_downloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Saved to Downloads'**
+  String get media_card_saved_to_downloads;
+
+  /// No description provided for @media_card_share.
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get media_card_share;
+
   /// No description provided for @still_loading_your_projects.
   ///
   /// In en, this message translates to:
