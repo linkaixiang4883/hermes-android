@@ -7,7 +7,19 @@ class ChatReasoningItem {
   final String text;
   final bool initiallyExpanded;
 
-  const ChatReasoningItem(this.text, this.initiallyExpanded);
+  /// Stable identity of the reasoning BLOCK (the message it belongs to).
+  ///
+  /// The reasoning card's expansion belongs to the block, not to its current
+  /// text: keying the tile by content rebuilt it on every streamed token and
+  /// collapsed it under the finger (the "thinking card cannot be opened"
+  /// report).
+  final String identity;
+
+  const ChatReasoningItem(
+    this.text,
+    this.initiallyExpanded, {
+    this.identity = '',
+  });
 }
 
 /// Project a raw Hermes message list into the heterogeneous list the chat
@@ -46,7 +58,8 @@ List<dynamic> buildChatDisplayItems({
     currentGroup.clear();
   }
 
-  for (final msg in messages) {
+  for (var index = 0; index < messages.length; index++) {
+    final msg = messages[index];
     final rawRole = (msg['role'] as String?) ?? 'assistant';
     final role = rawRole == 'agent' ? 'assistant' : rawRole;
     if (isToolResultMessage(msg)) {
@@ -67,6 +80,7 @@ List<dynamic> buildChatDisplayItems({
         ChatReasoningItem(
           reasoning,
           verbose || msg['_gateway_reasoning_verbose'] == true,
+          identity: msg['id']?.toString() ?? 'message-$index',
         ),
       );
     }

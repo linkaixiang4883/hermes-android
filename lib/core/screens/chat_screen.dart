@@ -657,6 +657,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _scrollCoordinator = ChatScrollCoordinator();
   final _endAffordanceController = ChatEndAffordanceController();
   bool _streamFollowScheduled = false;
+
+  /// True while a finger is down on the transcript. The streaming follow
+  /// must not jump to the end under it: that is what made taps on the
+  /// reasoning / tool cards land on whatever scrolled into their place.
+  bool _transcriptPointerDown = false;
   bool _initialEndFrameScheduled = false;
   double? _initialEndLastExtent;
   int _initialEndStableFrames = 0;
@@ -1822,12 +1827,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
+  void _releaseTranscriptPointer() {
+    if (!_transcriptPointerDown) return;
+    _transcriptPointerDown = false;
+    // Catch up with everything that streamed while the finger was down.
+    _scheduleStreamingFollow();
+  }
+
   void _scheduleStreamingFollow() {
     if (_streamFollowScheduled) return;
     _streamFollowScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _streamFollowScheduled = false;
       if (!mounted) return;
+      if (_transcriptPointerDown) {
+        if (_scrollController.hasClients) {
+          _syncEndAffordance(
+            _scrollController.position,
+            clearUnreadAtEnd: false,
+          );
+        }
+        return;
+      }
       final target = _scrollCoordinator.streamingContentChanged();
       if (target != null) {
         _applyScrollTarget(target);
@@ -5475,7 +5496,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       verbose: _verboseMode,
     );
 
-    return NotificationListener<ScrollMetricsNotification>(
+    return Listener(
+      onPointerDown: (_) => _transcriptPointerDown = true,
+      onPointerUp: (_) => _releaseTranscriptPointer(),
+      onPointerCancel: (_) => _releaseTranscriptPointer(),
+      child: NotificationListener<ScrollMetricsNotification>(
       onNotification: (notification) {
         _syncEndAffordance(notification.metrics, clearUnreadAtEnd: false);
         return false;
@@ -5502,6 +5527,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               return GatewayReasoningCard(
                 text: item.text,
                 initiallyExpanded: item.initiallyExpanded,
+                identity: item.identity,
               );
             }
             if (item is GatewayNotice) {
@@ -5539,6 +5565,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             );
           },
         ),
+      ),
       ),
     );
   }

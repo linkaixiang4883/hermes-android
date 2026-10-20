@@ -7,9 +7,14 @@ class GatewayReasoningCard extends StatelessWidget {
   final String text;
   final bool initiallyExpanded;
 
+  /// Stable identity of the reasoning block (see [ChatReasoningItem.identity]).
+  /// An empty value keeps the tile unkeyed (single-card embeds and tests).
+  final String identity;
+
   const GatewayReasoningCard({
     required this.text,
     this.initiallyExpanded = false,
+    this.identity = '',
     super.key,
   });
 
@@ -19,7 +24,9 @@ class GatewayReasoningCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        key: PageStorageKey<String>('gateway-reasoning-${text.hashCode}'),
+        key: identity.isEmpty
+            ? null
+            : PageStorageKey<String>('gateway-reasoning-$identity'),
         initiallyExpanded: initiallyExpanded,
         leading: const Icon(Icons.psychology_outlined),
         title: Text(context.l10n.reasoning),

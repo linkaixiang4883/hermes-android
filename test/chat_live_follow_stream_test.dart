@@ -362,6 +362,210 @@ void main() {
     );
   });
 
+  testWidgets(
+    'the reasoning card stays open while the thinking keeps streaming',
+    (tester) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      final history = _StreamHistoryHttpClient();
+      await _pumpChat(
+        tester,
+        history: history,
+        liveTurnHook: liveTurn,
+        asyncHook: asyncHook,
+      );
+
+      liveTurn.handler?.call(_sessionId, _runningTurn);
+      await tester.pump();
+
+      asyncHook.handler?.call(
+        StreamEvent(
+          type: 'reasoning.delta',
+          data: {'text': 'weighing options', 'session_id': _sessionId, 'seq': 4},
+          sessionId: _sessionId,
+          seq: 4,
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(GatewayReasoningCard), findsOneWidget);
+
+      await tester.tap(find.byType(GatewayReasoningCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(
+        find.text('weighing options'),
+        findsOneWidget,
+        reason: 'the tapped reasoning card must open',
+      );
+
+      // Another token grows the SAME block: its expansion must survive the
+      // rebuild (the tile identity is the block, not its current text).
+      asyncHook.handler?.call(
+        StreamEvent(
+          type: 'reasoning.delta',
+          data: {'text': ' and more', 'session_id': _sessionId, 'seq': 5},
+          sessionId: _sessionId,
+          seq: 5,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        find.text('weighing options and more'),
+        findsOneWidget,
+        reason:
+            'a streaming token must not rebuild the tile into a closed one '
+            '(the "cannot open while it streams" report)',
+      );
+    },
+  );
+
+  testWidgets(
+    'a completed tool card opens and stays open while the turn streams on',
+    (tester) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      final history = _StreamHistoryHttpClient();
+      await _pumpChat(
+        tester,
+        history: history,
+        liveTurnHook: liveTurn,
+        asyncHook: asyncHook,
+      );
+
+      liveTurn.handler?.call(_sessionId, _runningTurn);
+      await tester.pump();
+
+      asyncHook.handler?.call(
+        _tool('tool.start', id: 't1', name: 'web_search'),
+      );
+      asyncHook.handler?.call(
+        StreamEvent(
+          type: 'tool.progress',
+          data: {
+            'tool_id': 't1',
+            'name': 'web_search',
+            'detail': 'searching the web',
+            'session_id': _sessionId,
+          },
+          sessionId: _sessionId,
+        ),
+      );
+      asyncHook.handler?.call(
+        _tool('tool.complete', id: 't1', name: 'web_search'),
+      );
+      await tester.pump();
+      expect(find.byType(GatewayActivityCard), findsOneWidget);
+      expect(
+        find.text('searching the web'),
+        findsNothing,
+        reason: 'a finished card starts collapsed',
+      );
+
+      await tester.tap(find.byType(GatewayActivityCard));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(
+        find.text('searching the web'),
+        findsOneWidget,
+        reason: 'the tapped tool card must open',
+      );
+
+      asyncHook.handler?.call(
+        StreamEvent(
+          type: 'message.delta',
+          data: {'text': ' next', 'session_id': _sessionId, 'seq': 6},
+          sessionId: _sessionId,
+          seq: 6,
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        find.text('searching the web'),
+        findsOneWidget,
+        reason: 'a later streamed token must not collapse the opened card',
+      );
+    },
+  );
+
+  testWidgets(
+    'the streaming follow holds while a finger is on the transcript',
+    (tester) async {
+      final liveTurn = TestDesktopLiveTurnHook();
+      final asyncHook = TestDesktopAsyncEventHook();
+      final history = _StreamHistoryHttpClient()
+        ..rows = [
+          {'id': 1, 'role': 'user', 'content': 'hi'},
+          for (var i = 0; i < 40; i++)
+            {'id': 100 + i, 'role': 'assistant', 'content': 'filler line $i'},
+        ];
+      await _pumpChat(
+        tester,
+        history: history,
+        liveTurnHook: liveTurn,
+        asyncHook: asyncHook,
+      );
+
+      liveTurn.handler?.call(_sessionId, _runningTurn);
+      await tester.pump();
+      asyncHook.handler?.call(_delta(' one', seq: 2));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final listView = tester.widget<ListView>(
+        find.byType(ListView).first,
+      );
+      final controller = listView.controller!;
+      expect(
+        controller.offset,
+        controller.position.maxScrollExtent,
+        reason: 'the follow sits at the end before the touch',
+      );
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.byType(ListView).first),
+      );
+      addTearDown(() async {
+        try {
+          await gesture.up();
+        } catch (_) {}
+      });
+      final heldOffset = controller.offset;
+
+      // Long enough to wrap: the assertion below is about real layout growth,
+      // not about the string differing.
+      asyncHook.handler?.call(_delta(' ${'streaming words ' * 40}', seq: 3));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        controller.position.maxScrollExtent,
+        greaterThan(heldOffset),
+        reason: 'the streamed text grew under the finger',
+      );
+      expect(
+        controller.offset,
+        heldOffset,
+        reason:
+            'a finger on the transcript must hold the auto-follow — jumping '
+            'under it is what swallowed taps on the reasoning/tool cards',
+      );
+
+      await gesture.up();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(
+        controller.offset,
+        controller.position.maxScrollExtent,
+        reason: 'lifting the finger catches up to the end',
+      );
+    },
+  );
+
   testWidgets('a terminal frame ends the follow and refetches the transcript', (
     tester,
   ) async {
