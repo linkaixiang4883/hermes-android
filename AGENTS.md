@@ -46,7 +46,7 @@
 | 审批卡回合终帧清场（App 侧） | `chat_screen`（`_clearTurnEndBlockingPrompts` + 两处终帧钩子 + `_approvalTurnEndDismissed` + `_expireSensitivePromptById`）+ `test/chat_turn_notification_wiring_test.dart`（+3） | 上游缺口（`4db6cd5`）：某客户端应答后其它端**不发撤销帧**；桌面端回合结束自清（窗口=剩余回合时长）、手机端此前无对等机制；服务端不补（update 会覆盖，用户决议 2026-10-18），纯 App 侧自愈；全档见技能 `hermes-android-client → references/server-requests-0.21.3.md`「跨客户端撤卡缺口」节 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1392**（2026-10-18 连接状态种子修复后；此前 1390 = 审批卡清场轮、1387 = live-follow QA 修复轮）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1395**（2026-10-20 流式卡片可交互修复后；此前 1392 = 连接状态种子修复、1390 = 审批卡清场轮）。
 
 ## 重连续接 + 实时跟随（2026-10-17 六阶段 + 2026-10-18 QA 修复轮落地）
 
