@@ -21,16 +21,21 @@ import '../models/projects_tree_overview.dart';
 import '../services/android_share_intent_service.dart';
 import '../services/attachment_draft_service.dart';
 import '../services/chat_space_store.dart';
+import '../services/chat_visibility.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_journal.dart';
+import '../services/live_session_watcher.dart';
 import '../services/local_chat_pin_store.dart';
+import '../services/prompt_notifier.dart';
 import '../services/project_folder_provisioner.dart';
 import '../services/projects_repository.dart';
 import '../services/quick_chat_store.dart';
 import '../services/remote_files_client.dart';
+import '../services/turn_completion_notifier.dart';
+import '../services/turn_notification_service.dart';
 import '../services/shared_attachment_preparer.dart';
 import '../theme/hermes_theme.dart';
 import '../utils/activity_feed.dart';
@@ -252,6 +257,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   /// Reaches the live Activity pane for the same reason.
   final _activityKey = GlobalKey<ActivityPaneState>();
+
+  LiveSessionWatcher? _sessionWatcher;
+  PromptNotifier? _promptNotifier;
+  TurnCompletionNotifier? _completionNotifier;
+  bool _notificationsAttached = false;
 
   /// Reaches the action-only Activity view opened from Home.
   final _inboxKey = GlobalKey<ActivityPaneState>();
@@ -550,6 +560,56 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _attachGatewayNotifications();
+  }
+
+  /// App-level notification wiring: watcher (attach running sessions), prompt
+  /// notifier (approvals/input for any session), completion notifier.
+  ///
+  /// Attached once the gateway client exists. A REST-only connection has no
+  /// shared client and therefore no prompts to notify about.
+  void _attachGatewayNotifications() {
+    if (_notificationsAttached) return;
+    final registry = widget.gatewayRegistry;
+    if (registry == null) return;
+    final client = registry.clientFor(widget.connection);
+    _notificationsAttached = true;
+    final l10n = context.l10n;
+    final watcher = LiveSessionWatcher(client: client);
+    _sessionWatcher = watcher;
+    watcher.start();
+    _promptNotifier = PromptNotifier(
+      notifications: TurnNotificationService.shared,
+      titleFor: watcher.titleFor,
+      formatTitle: ({required approval, sessionTitle}) {
+        final base = approval ? l10n.approval_needed : l10n.input_needed;
+        return sessionTitle == null || sessionTitle.isEmpty
+            ? base
+            : '$base — $sessionTitle';
+      },
+      approveLabel: () => l10n.approve,
+      denyLabel: () => l10n.deny,
+    )..attach(client.pendingPrompts, connectionId: widget.connection.id);
+    _completionNotifier = TurnCompletionNotifier(
+      notifications: TurnNotificationService.shared,
+      titleFor: watcher.titleFor,
+      isSessionVisible: (gatewaySessionId) {
+        final mobileId = client.mobileSessionIdForGateway(gatewaySessionId);
+        return mobileId != null && ChatVisibility.visible.shows(mobileId);
+      },
+      formatTitle: ({required failed, sessionTitle}) {
+        final base = failed ? l10n.the_turn_failed : l10n.hermes_response_ready;
+        return sessionTitle == null || sessionTitle.isEmpty
+            ? base
+            : '$base — $sessionTitle';
+      },
+    )..attach(client, connectionId: widget.connection.id);
+    unawaited(TurnNotificationService.shared.ensureInitialized());
+  }
+
+  @override
   void initState() {
     super.initState();
     _initialization = _initialize();
@@ -683,6 +743,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   void dispose() {
+    _sessionWatcher?.stop();
+    _promptNotifier?.detach();
+    _completionNotifier?.detach();
     // Only tear down what this screen created; an injected repository stays
     // owned by whoever supplied it.
     if (_ownsRepository) {

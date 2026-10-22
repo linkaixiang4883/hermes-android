@@ -477,6 +477,22 @@ class TurnNotificationService {
     return true;
   }
 
+  /// Cancels one notification previously posted through [showKind].
+  Future<void> cancelKind({
+    required HermesNotificationKind kind,
+    required String eventId,
+    String? sessionId,
+    String? connectionId,
+  }) {
+    final identity = jsonEncode([
+      kind.name,
+      connectionId ?? '',
+      sessionId ?? '',
+      eventId,
+    ]);
+    return _sink.cancel(notificationIdFor(identity));
+  }
+
   /// Settings "send test": bypasses gating like the desktop panel does, so a
   /// silent OS-level permission failure can be told apart from a dead feature.
   Future<bool> sendTestNotification({

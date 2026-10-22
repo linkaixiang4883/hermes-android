@@ -124,103 +124,6 @@ void main() {
     }
   }
 
-  testWidgets('a turn settling in the background posts a notification', (
-    tester,
-  ) async {
-    await pumpChat(tester);
-
-    // Android moved the app off screen.
-    background(tester);
-    await tester.pump();
-
-    turnSession.settle(_completedState());
-    await tester.pump();
-
-    expect(sink.shown, hasLength(1));
-    // The session title tells the user which chat answered.
-    expect(sink.shown.single.body, contains('Roadmap'));
-  });
-
-  testWidgets('a turn settling in the foreground posts nothing', (
-    tester,
-  ) async {
-    await pumpChat(tester);
-
-    // App is on screen: the user already watches the answer arrive.
-    turnSession.settle(_completedState());
-    await tester.pump();
-
-    expect(sink.shown, isEmpty);
-  });
-
-  testWidgets('returning to the app clears the pending notifications', (
-    tester,
-  ) async {
-    await pumpChat(tester);
-
-    background(tester);
-    await tester.pump();
-    turnSession.settle(_completedState());
-    await tester.pump();
-
-    foreground(tester);
-    await tester.pump();
-
-    expect(sink.cancelAllCount, greaterThanOrEqualTo(1));
-  });
-
-  testWidgets(
-    'a failed turn settling in the background posts the failure notification',
-    (WidgetTester tester) async {
-      await pumpChat(tester);
-      background(tester);
-
-      turnSession.settle(_failedState());
-      await tester.pump();
-
-      expect(sink.shown, hasLength(1));
-      expect(sink.shown.single.channel.id, 'hermes_turn_notifications');
-      expect(sink.shown.single.title, contains('failed'));
-    },
-  );
-
-  testWidgets(
-    'an interrupted turn is reported as failed, never response ready',
-    (WidgetTester tester) async {
-      await pumpChat(tester);
-      background(tester);
-
-      turnSession.settle(_interruptedState());
-      await tester.pump();
-
-      expect(sink.shown, hasLength(1));
-      expect(sink.shown.single.title, contains('failed'));
-      expect(sink.shown.single.body, isNot(contains('Response ready')));
-    },
-  );
-
-  testWidgets(
-    'an approval arriving while backgrounded posts a notification with actions',
-    (WidgetTester tester) async {
-      await pumpChat(tester);
-      background(tester);
-
-      turnSession.emitAsync('approval.request', {
-        'server_request_id': 'req-1',
-        'command': 'rm -rf build',
-        'description': 'Remove the build folder',
-      });
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
-
-      expect(sink.shown, hasLength(1));
-      final posted = sink.shown.single;
-      expect(posted.channel.id, 'hermes_attention');
-      expect(posted.actions.map((a) => a.id), ['approve', 'reject']);
-      expect(posted.payload, contains('req-1'));
-    },
-  );
-
   testWidgets('an answered approval never opens its queued post-frame dialog', (
     WidgetTester tester,
   ) async {
@@ -524,11 +427,9 @@ void main() {
       );
       await tester.pump();
 
-      expect(sink.shown, hasLength(2));
-      expect(
-        sink.shown.map((notice) => notice.body),
-        containsAll(['Alpha: Response ready', 'Beta: Response ready']),
-      );
+      // Completion cards are app-wide now (TurnCompletionNotifier); the
+      // per-screen listener must not double-post for either session.
+      expect(sink.shown, isEmpty);
 
       foreground(tester);
       await tester.pumpWidget(const SizedBox.shrink());
@@ -542,7 +443,7 @@ void main() {
         sessionId: 'session-a',
       );
       await tester.pump();
-      expect(sink.shown, hasLength(2));
+      expect(sink.shown, isEmpty);
     },
   );
 
@@ -604,34 +505,6 @@ GatewayTurnRecoveryState _completedState({
   ),
   ackUncertain: false,
 );
-
-GatewayTurnRecoveryState _failedState() =>
-    GatewayTurnRecoveryState.initial(
-      clientTurnId: _clientTurnId,
-    ).markSubmissionStarted().applyAck(
-      const GatewayTurnAck(
-        clientTurnId: _clientTurnId,
-        turnId: 'server-turn',
-        status: GatewayRecoveryTurnStatus.failed,
-        // lastSeq stays 0 so the ack applies instead of triggering the
-        // reconcile path, which preserves the previous (null) status.
-        lastSeq: 0,
-        created: false,
-      ),
-    );
-
-GatewayTurnRecoveryState _interruptedState() =>
-    GatewayTurnRecoveryState.initial(
-      clientTurnId: _clientTurnId,
-    ).markSubmissionStarted().applyAck(
-      const GatewayTurnAck(
-        clientTurnId: _clientTurnId,
-        turnId: 'server-turn',
-        status: GatewayRecoveryTurnStatus.interrupted,
-        lastSeq: 0,
-        created: false,
-      ),
-    );
 
 /// Turn session that keeps the settle callback ChatScreen registers, so a test
 /// can fire it the way the real gateway would.

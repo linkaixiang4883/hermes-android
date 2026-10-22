@@ -2,9 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 
 import '../models/bot_profile.dart';
+import '../models/pending_prompt.dart';
 
 import 'capability_registry.dart';
 import 'connection_manager.dart';
@@ -83,8 +84,16 @@ class DesktopGatewayClient {
   /// the `profile` field on resume/create, whose stored ids are per-profile.
   final Map<String, String?> _sessionProfiles = {};
   final Map<String, GatewayServerRequest> _serverRequests = {};
+
+  /// Every supported blocking prompt this client accepted, in arrival order.
+  ///
+  /// A prompt is registered here whether or not a ChatScreen is mounted; the
+  /// notification layer and the Activity inbox read this, and answering goes
+  /// through [respondToPendingPrompt] instead of a screen.
+  final ValueNotifier<List<PendingPrompt>> pendingPrompts =
+      ValueNotifier<List<PendingPrompt>>(const []);
   final Map<String, WsClient> _serverRequestClients = {};
-  final Map<String, String> _serverRequestMobileSessionIds = {};
+  final Map<String, String?> _serverRequestMobileSessionIds = {};
   final Map<String, StreamEvent> _serverRequestEvents = {};
   final Map<WsClient, int> _serverRequestClientOrdinals = Map.identity();
   int _nextServerRequestClientOrdinal = 1;
@@ -1107,6 +1116,54 @@ class DesktopGatewayClient {
     return '$method failed';
   }
 
+  /// Listeners that see EVERY bridged event, mapped to a local session or not.
+  ///
+  /// The per-session listeners require a bound mobile id; notifications for a
+  /// session the user never opened have only the gateway id, so the central
+  /// notifier needs this door. Delivery order is registration order.
+  final Map<Object, void Function(StreamEvent event, String? mobileSessionId)>
+      _globalEventListeners = {};
+
+  Object addGlobalEventListener(
+    void Function(StreamEvent event, String? mobileSessionId) callback,
+  ) {
+    final token = Object();
+    _globalEventListeners[token] = callback;
+    return token;
+  }
+
+  void removeGlobalEventListener(Object token) {
+    _globalEventListeners.remove(token);
+  }
+
+  void _dispatchGlobalEvent(StreamEvent event, String? mobileSessionId) {
+    if (_globalEventListeners.isEmpty) return;
+    for (final listener in List.of(_globalEventListeners.values)) {
+      try {
+        listener(event, mobileSessionId);
+      } catch (_) {
+        // One observer must not strand the others.
+      }
+    }
+  }
+
+  /// Live sessions in the gateway process (`session.active_list`).
+  Future<List<Map<String, dynamic>>> listActiveSessions() async {
+    final client = await _connectControl();
+    final response = await client.send('session.active_list', const {});
+    final error = response['error'];
+    if (error != null) {
+      throw StateError(_controlErrorMessage('session.active_list', error));
+    }
+    final result = response['result'];
+    final rows = result is Map ? result['sessions'] : null;
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows.whereType<Map>())
+        Map<String, dynamic>.from(row),
+    ];
+  }
+
   /// What this gateway advertises or has been proven to support.
   ///
   /// Populated from `gateway.ready` on every connect and refined by the
@@ -1391,6 +1448,7 @@ class DesktopGatewayClient {
       final mobileSessionId = _mobileSessionIdFor(
         event.data['session_id']?.toString(),
       );
+      _dispatchGlobalEvent(deliveredEvent, mobileSessionId);
       if (mobileSessionId == null) return;
       // Durable session-scoped events plus terminal turn frames. Terminal
       // frames are also delivered through [submitPrompt] while its listener
@@ -1423,6 +1481,10 @@ class DesktopGatewayClient {
     return null;
   }
 
+  /// Reverse of the runtime binding: gateway session id -> local session id.
+  String? mobileSessionIdForGateway(String gatewaySessionId) =>
+      _mobileSessionIdFor(gatewaySessionId);
+
   String? _mobileSessionIdFor(String? gatewaySessionId) {
     if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {
       for (final entry in _gatewaySessionIds.entries) {
@@ -1438,11 +1500,8 @@ class DesktopGatewayClient {
     const supported = {'clarify', 'approval', 'sudo', 'secret'};
     if (!supported.contains(request.method)) return false;
 
-    final gatewaySessionId = request.params['session_id']?.toString();
+    final gatewaySessionId = request.params['session_id']?.toString() ?? '';
     final mobileSessionId = _mobileSessionIdFor(gatewaySessionId);
-    if (mobileSessionId == null || !_acceptsAnyAsyncEvent(mobileSessionId)) {
-      return false;
-    }
 
     final requestId = _serverRequestKey(client, request.id);
     _serverRequests[requestId] = request;
@@ -1470,20 +1529,41 @@ class DesktopGatewayClient {
         }
       }
       if (qids.isEmpty) {
-        _forgetServerRequest(requestId);
-        return false;
+        // Every question was already locked: this endpoint has nothing left to
+        // answer. Decline with NOT_SHOWN — `-32601` would withdraw the whole
+        // batch for the desktop too.
+        request.fail(4404, 'no questions left to answer');
+        return true;
       }
       data['questions'] = remainingQuestions;
       _serverClarifyRemaining[requestId] = qids;
     } else if (request.method == 'approval') {
-      final previous = _serverApprovalByMobileSession[mobileSessionId];
-      if (previous != null && previous != requestId) {
-        // ChatScreen presents one approval route at a time. Reject a concurrent
-        // request instead of replacing the visible request and stranding both.
-        _forgetServerRequest(requestId);
-        return false;
+      final scopedSession = mobileSessionId;
+      if (scopedSession == null) {
+        // A session this client never bound: register it so a notification can
+        // answer by request id; there is no screen to route it to.
+        _serverRequestEvents[requestId] = StreamEvent(
+          type: '${request.method}.request',
+          data: data,
+          sessionId: gatewaySessionId,
+        );
+        _publishPendingPrompts();
+        return true;
       }
-      _serverApprovalByMobileSession[mobileSessionId] = requestId;
+      final previous = _serverApprovalByMobileSession[scopedSession];
+      if (previous != null && previous != requestId) {
+        // One approval route per session on screen: QUEUE the second instead
+        // of rejecting it (a rejection withdraws it for everyone). The event
+        // is stored so the queue can dispatch it when the first resolves.
+        _serverRequestEvents[requestId] = StreamEvent(
+          type: '${request.method}.request',
+          data: data,
+          sessionId: gatewaySessionId,
+        );
+        _publishPendingPrompts();
+        return true;
+      }
+      _serverApprovalByMobileSession[scopedSession] = requestId;
     } else {
       // Legacy event models key sensitive prompts by `request_id`; for the
       // peer-to-peer protocol the JSON-RPC id is the response correlation.
@@ -1496,17 +1576,116 @@ class DesktopGatewayClient {
       sessionId: gatewaySessionId,
     );
     _serverRequestEvents[requestId] = event;
-    _dispatchAsyncEvent(mobileSessionId, event);
+    if (mobileSessionId != null) {
+      _dispatchAsyncEvent(mobileSessionId, event);
+    }
+    _publishPendingPrompts();
     return true;
   }
 
   void _forgetServerRequest(String requestId) {
+    final mobileSessionId = _serverRequestMobileSessionIds[requestId];
     _serverRequests.remove(requestId);
     _serverRequestClients.remove(requestId);
     _serverRequestMobileSessionIds.remove(requestId);
     _serverRequestEvents.remove(requestId);
     _serverClarifyRemaining.remove(requestId);
     _serverApprovalByMobileSession.removeWhere((_, id) => id == requestId);
+    _publishPendingPrompts();
+    if (mobileSessionId != null) _dispatchQueuedApproval(mobileSessionId);
+  }
+
+  /// Publishes the registry snapshot the notification layer and Activity read.
+  void _publishPendingPrompts() {
+    final now = DateTime.now();
+    final prompts = <PendingPrompt>[];
+    for (final entry in _serverRequests.entries) {
+      final request = entry.value;
+      final params = request.params;
+      final summary = switch (request.method) {
+        'approval' => (params['command'] ?? params['description'] ?? '')
+            .toString()
+            .trim(),
+        'clarify' => _firstClarifyQuestion(params),
+        _ => (params['prompt'] ?? params['description'] ?? request.method)
+            .toString()
+            .trim(),
+      };
+      final rawChoices = params['choices'];
+      prompts.add(
+        PendingPrompt(
+          id: entry.key,
+          method: request.method,
+          mobileSessionId: _serverRequestMobileSessionIds[entry.key],
+          gatewaySessionId: params['session_id']?.toString() ?? '',
+          summary: summary,
+          choices: rawChoices is List
+              ? [for (final choice in rawChoices) choice.toString()]
+              : const [],
+          createdAt: now,
+        ),
+      );
+    }
+    pendingPrompts.value = List.unmodifiable(prompts);
+  }
+
+  static String _firstClarifyQuestion(Map<String, dynamic> params) {
+    final questions = params['questions'];
+    if (questions is List) {
+      for (final raw in questions) {
+        if (raw is! Map) continue;
+        final text = (raw['question'] ?? raw['prompt'] ?? raw['text'] ?? '')
+            .toString()
+            .trim();
+        if (text.isNotEmpty) return text;
+      }
+    }
+    return '';
+  }
+
+  /// Routes the next queued approval for a session to its mounted screen.
+  void _dispatchQueuedApproval(String mobileSessionId) {
+    if (!_acceptsAnyAsyncEvent(mobileSessionId)) return;
+    if (_serverApprovalByMobileSession[mobileSessionId] != null) return;
+    for (final entry in _serverRequestMobileSessionIds.entries) {
+      if (entry.value != mobileSessionId) continue;
+      final request = _serverRequests[entry.key];
+      if (request == null || request.method != 'approval') continue;
+      _serverApprovalByMobileSession[mobileSessionId] = entry.key;
+      final event = _serverRequestEvents[entry.key];
+      if (event != null) _dispatchAsyncEvent(mobileSessionId, event);
+      return;
+    }
+  }
+
+  /// Answers any registered prompt by request id — no chat screen required.
+  void respondToPendingPrompt(String requestId, Map<String, dynamic> result) {
+    final request = _serverRequests[requestId];
+    if (request == null) return;
+    request.respond(result);
+    _forgetServerRequest(requestId);
+  }
+
+  /// Attaches this client to a live session without opening it.
+  ///
+  /// The gateway routes a session's frames only to that session's transport;
+  /// notifications for a never-opened chat therefore need this cheap attach
+  /// (`omit_messages` skips the history read).
+  Future<void> activateSession(String sessionId, {String? profile}) async {
+    final scopedProfile = profile?.trim();
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      _sessionProfiles[sessionId] = scopedProfile;
+    }
+    final client = await _connectControl();
+    final stored = _storedSessionIds[sessionId] ?? sessionId;
+    final params = <String, dynamic>{
+      'session_id': stored,
+      'omit_messages': true,
+    };
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      params['profile'] = scopedProfile;
+    }
+    await client.send('session.activate', params);
   }
 
   void _forgetServerRequestsFrom(WsClient client) {
@@ -1531,11 +1710,6 @@ class DesktopGatewayClient {
     _serverRequestClientOrdinals.remove(client);
   }
 
-  void _rejectServerRequest(String requestId, String message) {
-    _serverRequests[requestId]?.fail(-32601, message);
-    _forgetServerRequest(requestId);
-  }
-
   /// Replays unresolved requests when a replacement route mounts.
   ///
   /// Fan-out goes through the same predicate-aware dispatch as live frames, so
@@ -1549,19 +1723,12 @@ class DesktopGatewayClient {
     }
   }
 
-  /// Rejects requests that no mounted route can answer.
-  void rejectServerRequestsForSession(String mobileSessionId) {
-    final requestIds = _serverRequestMobileSessionIds.entries
-        .where((entry) => entry.value == mobileSessionId)
-        .map((entry) => entry.key)
-        .toList(growable: false);
-    for (final requestId in requestIds) {
-      _rejectServerRequest(
-        requestId,
-        'No mounted client can answer this request',
-      );
-    }
-  }
+  /// Called when a route-local owner detaches.
+  ///
+  /// Requests stay REGISTERED: the app-level notifier can still show and
+  /// answer them, and rejecting here used to withdraw the prompt for every
+  /// other client on the session. Declining is only ever an explicit 4404.
+  void rejectServerRequestsForSession(String mobileSessionId) {}
 
   /// Whether this client owns an unresolved peer-to-peer request.
   bool ownsServerRequest(String requestId, String method) =>

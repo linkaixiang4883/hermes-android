@@ -273,37 +273,45 @@ class HermesAppState extends State<HermesApp> {
     final sessionId = route.sessionId;
     final requestId = route.requestId;
     if (choice != null && sessionId != null && requestId != null) {
-      final approval = PendingNotificationApproval(
-        // Saved connection ids remain distinct even when two profiles point
-        // at the same endpoint with different credentials or gateway profiles.
-        connectionId: connection.id,
-        sessionId: sessionId,
-        requestId: requestId,
-        choice: choice,
-      );
-      try {
-        final session = _turnApplicationController.sessionFor(connection);
-        unawaited(
-          session
-              .tryRespondToApproval(
-                sessionId: sessionId,
-                choice: choice,
-                requestId: requestId,
-              )
-              .then((answered) {
-                // The request belongs to an open chat's route-local gateway:
-                // leave it pending so that screen answers it normally.
-                if (!answered) addPendingNotificationApproval(approval);
-              })
-              .catchError((_) {
-                // A throw is unresolved, not answered: keep the tap pending
-                // so the owning chat can still answer it.
-                addPendingNotificationApproval(approval);
-              }),
+      // The shared gateway client owns every prompt it accepted; answering it
+      // here means a notification works even when no chat screen is mounted
+      // (the app-wide registry is exactly what makes that possible).
+      final shared = _gatewayRegistry.existingFor(connection.id);
+      if (shared != null && shared.ownsServerRequest(requestId, 'approval')) {
+        shared.respondToPendingPrompt(requestId, {'choice': choice});
+      } else {
+        final approval = PendingNotificationApproval(
+          // Saved connection ids remain distinct even when two profiles point
+          // at the same endpoint with different credentials or gateway profiles.
+          connectionId: connection.id,
+          sessionId: sessionId,
+          requestId: requestId,
+          choice: choice,
         );
-      } catch (_) {
-        // A closed controller cannot answer; the owning chat still can.
-        addPendingNotificationApproval(approval);
+        try {
+          final session = _turnApplicationController.sessionFor(connection);
+          unawaited(
+            session
+                .tryRespondToApproval(
+                  sessionId: sessionId,
+                  choice: choice,
+                  requestId: requestId,
+                )
+                .then((answered) {
+                  // The request belongs to an open chat's route-local gateway:
+                  // leave it pending so that screen answers it normally.
+                  if (!answered) addPendingNotificationApproval(approval);
+                })
+                .catchError((_) {
+                  // A throw is unresolved, not answered: keep the tap pending
+                  // so the owning chat can still answer it.
+                  addPendingNotificationApproval(approval);
+                }),
+          );
+        } catch (_) {
+          // A closed controller cannot answer; the owning chat still can.
+          addPendingNotificationApproval(approval);
+        }
       }
     }
 

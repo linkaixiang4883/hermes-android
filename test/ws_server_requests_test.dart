@@ -348,13 +348,12 @@ void main() {
           'choices': ['once', 'deny'],
         },
       );
-      await _waitFor(
-        () =>
-            gateway.serverResponses.containsKey('recovery-approval-concurrent'),
-      );
+      // A second approval for the same session is QUEUED, never rejected:
+      // rejecting it would withdraw it from the gateway for every client.
       expect(
-        gateway.serverResponses['recovery-approval-concurrent']?['error'],
-        containsPair('code', -32601),
+        gateway.serverResponses.containsKey('recovery-approval-concurrent'),
+        isFalse,
+        reason: 'a queued approval must not be answered yet',
       );
       expect(
         events.where((event) => event.type == 'approval.request'),
@@ -370,6 +369,28 @@ void main() {
               .toString(),
         ),
         isTrue,
+      );
+      // Answering the first approval wakes the queued one, which now reaches
+      // the same screen as a normal second prompt.
+      await _waitFor(
+        () =>
+            events.where((event) => event.type == 'approval.request').length ==
+            2,
+      );
+      expect(
+        await session.tryRespondToApproval(
+          sessionId: 'mobile-1',
+          choice: 'deny',
+          requestId: events
+              .lastWhere((event) => event.type == 'approval.request')
+              .data['server_request_id']
+              .toString(),
+        ),
+        isTrue,
+      );
+      await _waitFor(
+        () =>
+            gateway.serverResponses.containsKey('recovery-approval-concurrent'),
       );
       expect(
         await session.tryRespondToSudo(
@@ -677,12 +698,12 @@ void main() {
         ),
       );
       session.removeAsyncEventListener('mobile-1', registration);
-      await _waitFor(
-        () => gateway.serverResponses.containsKey('recovery-pending-detach'),
-      );
+      // Detaching the screen no longer rejects the prompt: it stays in the
+      // app-level registry for the notification layer to answer.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
       expect(
-        gateway.serverResponses['recovery-pending-detach']?['error'],
-        containsPair('code', -32601),
+        gateway.serverResponses,
+        isNot(contains('recovery-pending-detach')),
       );
       gateway.sendServerRequest(
         id: 'recovery-detached',
@@ -693,13 +714,9 @@ void main() {
           'prompt': 'Detached token',
         },
       );
-      await _waitFor(
-        () => gateway.serverResponses.containsKey('recovery-detached'),
-      );
-      expect(
-        gateway.serverResponses['recovery-detached']?['error'],
-        containsPair('code', -32601),
-      );
+      // Still accepted (and registered) with no screen listening.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(gateway.serverResponses, isNot(contains('recovery-detached')));
 
       gateway.sendServerRequest(
         id: 'recovery-disconnected',
