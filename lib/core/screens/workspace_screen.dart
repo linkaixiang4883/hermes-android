@@ -27,6 +27,7 @@ import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_journal.dart';
+import '../services/keep_alive_controller.dart';
 import '../services/live_session_watcher.dart';
 import '../services/local_chat_pin_store.dart';
 import '../services/prompt_notifier.dart';
@@ -607,6 +608,9 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       },
     )..attach(client, connectionId: widget.connection.id);
     unawaited(TurnNotificationService.shared.ensureInitialized());
+    unawaited(
+      KeepAliveController.shared.syncForConnections(hasGatewayConnection: true),
+    );
   }
 
   @override

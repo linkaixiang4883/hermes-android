@@ -244,6 +244,8 @@
   "job_paused": "任务已暂停",
   "job_resumed": "任务已恢复",
   "job_triggered": "任务已触发",
+  "keep_alive": "后台保持连接",
+  "keep_alive_description": "保持 WebSocket 连接以在后台接收审批和完成通知；可能增加耗电。",
   "label": "标签",
   "last_activity": "最后活动于 {year}年{month}月{day}日",
   "last": "最后运行：{lastRun}",

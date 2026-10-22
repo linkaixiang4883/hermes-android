@@ -244,6 +244,8 @@
   "job_paused": "Job paused",
   "job_resumed": "Job resumed",
   "job_triggered": "Job triggered",
+  "keep_alive": "Keep connection alive",
+  "keep_alive_description": "Keeps the WebSocket open so approvals and completion notices arrive while the app is in the background. May use more battery.",
   "label": "Label",
   "last_activity": "Last activity {day}/{month}/{year}",
   "last": "Last: {lastRun}",

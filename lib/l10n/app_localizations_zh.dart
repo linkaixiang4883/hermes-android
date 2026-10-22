@@ -861,6 +861,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get job_triggered => '任务已触发';
 
   @override
+  String get keep_alive => '后台保持连接';
+
+  @override
+  String get keep_alive_description => '保持 WebSocket 连接以在后台接收审批和完成通知；可能增加耗电。';
+
+  @override
   String get label => '标签';
 
   @override
@@ -3316,6 +3322,12 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get job_triggered => '任务已触发';
+
+  @override
+  String get keep_alive => '后台保持连接';
+
+  @override
+  String get keep_alive_description => '保持 WebSocket 连接以在后台接收审批和完成通知；可能增加耗电。';
 
   @override
   String get label => '标签';

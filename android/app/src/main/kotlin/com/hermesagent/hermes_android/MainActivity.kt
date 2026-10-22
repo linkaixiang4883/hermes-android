@@ -36,6 +36,7 @@ class MainActivity : FlutterActivity() {
     private val shareChannelName = "com.hermesagent.hermes_android/share"
     private val launchChannelName = "com.hermesagent.hermes_android/launch"
     private val downloadsChannelName = "com.hermesagent.hermes_android/downloads"
+    private val keepAliveChannelName = "com.hermesagent.hermes_android/keep_alive"
     private val TAG = "HermesDownloads"
     private val prefsName = "hermes_downloads"
     private val installCleanupKey = "install_cleanup_v1"
@@ -49,6 +50,7 @@ class MainActivity : FlutterActivity() {
     private var shareChannel: MethodChannel? = null
     private var launchChannel: MethodChannel? = null
     private var downloadsChannel: MethodChannel? = null
+    private var keepAliveChannel: MethodChannel? = null
     private var initialShareIntent: Intent? = null
     private var initialLaunchAction: String? = null
 
@@ -148,6 +150,32 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        keepAliveChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, keepAliveChannelName).apply {
+            setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "start" -> result.success(startKeepAlive())
+                    "stop" -> result.success(HermesConnectionService.stop(this@MainActivity))
+                    else -> result.notImplemented()
+                }
+            }
+        }
+    }
+
+    /// Starts the optional foreground service and reports whether Android
+    /// accepted it. On 13+ the ongoing notification is only drawn when
+    /// POST_NOTIFICATIONS is granted, but the service itself still runs, so a
+    /// missing permission is logged and the start is reported as-is instead of
+    /// failing the caller (the setting must not look broken because of it).
+    private fun startKeepAlive(): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            Log.i(TAG, "keep-alive started without POST_NOTIFICATIONS; notification stays hidden")
+        }
+        val started = HermesConnectionService.start(this)
+        Log.i(TAG, "keep-alive start requested started=$started")
+        return started
     }
 
     /// Builds the system package-installer intent for an APK save. The bytes

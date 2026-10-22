@@ -865,6 +865,13 @@ class AppLocalizationsKo extends AppLocalizations {
   String get job_triggered => '작업 트리거됨';
 
   @override
+  String get keep_alive => 'Keep connection alive';
+
+  @override
+  String get keep_alive_description =>
+      'Keeps the WebSocket open so approvals and completion notices arrive while the app is in the background. May use more battery.';
+
+  @override
   String get label => '라벨';
 
   @override

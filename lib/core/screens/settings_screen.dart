@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/config_backup_io.dart';
 import '../services/config_backup_service.dart';
 import '../services/connection_manager.dart';
+import '../services/keep_alive_controller.dart';
 import '../services/notification_prefs.dart';
 import '../services/turn_notification_service.dart';
 import '../widgets/config_backup_card.dart';
@@ -905,6 +906,8 @@ class _NotificationSettingsState extends State<_NotificationSettings> {
         if (mounted) setState(() {});
       }),
     );
+    // The persisted keep-alive switch drives both this tile and the service.
+    unawaited(KeepAliveController.shared.load());
   }
 
   static String _kindLabel(BuildContext context, HermesNotificationKind kind) =>
@@ -981,6 +984,21 @@ class _NotificationSettingsState extends State<_NotificationSettings> {
                     ? (on) =>
                           unawaited(NotificationPrefsStore.setKind(kind, on))
                     : null,
+              ),
+            ],
+            // Only Android has the foreground service this switch controls.
+            if (Theme.of(context).platform == TargetPlatform.android) ...[
+              const Divider(height: 1),
+              ValueListenableBuilder<bool>(
+                valueListenable: KeepAliveController.shared.enabled,
+                builder: (context, enabled, _) => SwitchListTile(
+                  secondary: const Icon(Icons.podcasts_outlined),
+                  title: Text(context.l10n.keep_alive),
+                  subtitle: Text(context.l10n.keep_alive_description),
+                  value: enabled,
+                  onChanged: (on) =>
+                      unawaited(KeepAliveController.shared.setEnabled(on)),
+                ),
               ),
             ],
             const Divider(height: 1),

@@ -3,6 +3,12 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- The optional foreground service that keeps the gateway socket alive.
+         Both types are declared: remoteMessaging is the real one (API 34+),
+         dataSync is the pre-34 fallback the service requests at runtime. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <application
         android:label="${appLabel}"
         android:name="${applicationName}"
@@ -44,6 +50,14 @@
                 <data android:mimeType="*/*" />
             </intent-filter>
         </activity>
+        <!-- Keeps the process (and the gateway WebSocket) alive in the
+             background. Not exported: only this app starts it via the
+             com.hermesagent.hermes_android/keep_alive channel. -->
+        <service
+            android:name=".HermesConnectionService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="remoteMessaging|dataSync" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.downloads"

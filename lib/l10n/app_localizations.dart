@@ -1588,6 +1588,18 @@ abstract class AppLocalizations {
   /// **'Job triggered'**
   String get job_triggered;
 
+  /// No description provided for @keep_alive.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep connection alive'**
+  String get keep_alive;
+
+  /// No description provided for @keep_alive_description.
+  ///
+  /// In en, this message translates to:
+  /// **'Keeps the WebSocket open so approvals and completion notices arrive while the app is in the background. May use more battery.'**
+  String get keep_alive_description;
+
   /// No description provided for @label.
   ///
   /// In en, this message translates to:

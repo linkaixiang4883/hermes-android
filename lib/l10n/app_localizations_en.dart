@@ -885,6 +885,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get job_triggered => 'Job triggered';
 
   @override
+  String get keep_alive => 'Keep connection alive';
+
+  @override
+  String get keep_alive_description =>
+      'Keeps the WebSocket open so approvals and completion notices arrive while the app is in the background. May use more battery.';
+
+  @override
   String get label => 'Label';
 
   @override
