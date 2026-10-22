@@ -4233,6 +4233,54 @@ abstract class AppLocalizations {
   /// **'Could not open the bot chat: {error}'**
   String bot_chat_open_failed(String error);
 
+  /// No description provided for @groups.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups'**
+  String get groups;
+
+  /// No description provided for @group_new.
+  ///
+  /// In en, this message translates to:
+  /// **'New group'**
+  String get group_new;
+
+  /// No description provided for @group_members.
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get group_members;
+
+  /// No description provided for @group_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No groups yet'**
+  String get group_empty;
+
+  /// No description provided for @group_send_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not send: {error}'**
+  String group_send_failed(String error);
+
+  /// No description provided for @group_stopped.
+  ///
+  /// In en, this message translates to:
+  /// **'Group stopped'**
+  String get group_stopped;
+
+  /// No description provided for @group_disbanded.
+  ///
+  /// In en, this message translates to:
+  /// **'Group disbanded'**
+  String get group_disbanded;
+
+  /// No description provided for @group_approval_needed.
+  ///
+  /// In en, this message translates to:
+  /// **'A member is waiting for approval'**
+  String get group_approval_needed;
+
   /// No description provided for @compress_context.
   ///
   /// In en, this message translates to:

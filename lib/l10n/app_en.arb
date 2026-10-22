@@ -690,6 +690,21 @@
       }
     }
   },
+  "groups": "Groups",
+  "group_new": "New group",
+  "group_members": "Members",
+  "group_empty": "No groups yet",
+  "group_send_failed": "Could not send: {error}",
+  "@group_send_failed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "group_stopped": "Group stopped",
+  "group_disbanded": "Group disbanded",
+  "group_approval_needed": "A member is waiting for approval",
   "compress_context": "Compress context",
   "compress_confirm_message": "Summarize the earlier conversation into one summary? This rewrites the stored transcript and cannot be undone.",
   "compress_done": "Context compressed",

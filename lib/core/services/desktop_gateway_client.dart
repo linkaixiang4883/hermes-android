@@ -2067,6 +2067,24 @@ class DesktopGatewayClient {
     }
     _dashboard.close();
   }
+
+  /// Sends one control-plane JSON-RPC call over the shared socket.
+  ///
+  /// The connection-scoped families (`profiles.*`, `session.list`,
+  /// `session.active_list`, `projects.*`) each grew their own typed method
+  /// here. Hosted rooms (`groups.*`) live in their own collaborator
+  /// ([GroupRoomsClient]), so they need the generic door rather than a dozen
+  /// pass-throughs: this opens/reuses the SAME socket the rest of the client
+  /// uses (never a second connection), leaving auth and reconnection exactly
+  /// where they already are. Params are forwarded untouched — callers that
+  /// need a `profile` scope add it themselves.
+  Future<Map<String, dynamic>> callControl(
+    String method,
+    Map<String, dynamic> params,
+  ) async {
+    final client = await _connectControl();
+    return client.send(method, params);
+  }
 }
 
 String documentIntakeProfileForConnection(SavedConnection connection) {

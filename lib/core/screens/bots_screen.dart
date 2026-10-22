@@ -17,6 +17,7 @@ import '../models/bot_profile.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
 import '../theme/hermes_theme.dart';
+import 'group_rooms_screen.dart';
 
 /// Reads the roster. Injectable so the pane is testable without a gateway.
 typedef BotsRosterLoader = Future<List<BotProfile>> Function();
@@ -132,10 +133,38 @@ class _BotsScreenState extends State<BotsScreen> {
     }
   }
 
+  /// Opens the hosted rooms list. Rooms are gateway-owned, so the same client
+  /// is handed down unchanged — this screen keeps ownership of its socket.
+  Future<void> _openGroupRooms() async {
+    final client = widget.client;
+    if (client == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GroupRoomsScreen(
+          connection: widget.connection,
+          client: client,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(context.l10n.bots)),
+      appBar: AppBar(
+        title: Text(context.l10n.bots),
+        actions: [
+          // Hosted group rooms live beside the roster: both are Bot Mode
+          // surfaces, and the rooms client borrows the same socket.
+          IconButton(
+            tooltip: context.l10n.groups,
+            icon: const Icon(Icons.groups_outlined),
+            onPressed: widget.client == null
+                ? null
+                : () => unawaited(_openGroupRooms()),
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(context),

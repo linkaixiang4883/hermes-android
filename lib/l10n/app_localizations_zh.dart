@@ -2426,6 +2426,32 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get groups => '群组';
+
+  @override
+  String get group_new => '新建群组';
+
+  @override
+  String get group_members => '成员';
+
+  @override
+  String get group_empty => '还没有群组';
+
+  @override
+  String group_send_failed(String error) {
+    return '发送失败：$error';
+  }
+
+  @override
+  String get group_stopped => '群组已停止';
+
+  @override
+  String get group_disbanded => '群组已解散';
+
+  @override
+  String get group_approval_needed => '有成员在等待审批';
+
+  @override
   String get compress_context => '压缩上下文';
 
   @override
@@ -4887,6 +4913,32 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String bot_chat_open_failed(String error) {
     return '打开 bot 聊天失败：$error';
   }
+
+  @override
+  String get groups => '群组';
+
+  @override
+  String get group_new => '新建群组';
+
+  @override
+  String get group_members => '成员';
+
+  @override
+  String get group_empty => '还没有群组';
+
+  @override
+  String group_send_failed(String error) {
+    return '发送失败：$error';
+  }
+
+  @override
+  String get group_stopped => '群组已停止';
+
+  @override
+  String get group_disbanded => '群组已解散';
+
+  @override
+  String get group_approval_needed => '有成员在等待审批';
 
   @override
   String get compress_context => '压缩上下文';

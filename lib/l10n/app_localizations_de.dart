@@ -2515,6 +2515,32 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get groups => 'Groups';
+
+  @override
+  String get group_new => 'New group';
+
+  @override
+  String get group_members => 'Members';
+
+  @override
+  String get group_empty => 'No groups yet';
+
+  @override
+  String group_send_failed(String error) {
+    return 'Could not send: $error';
+  }
+
+  @override
+  String get group_stopped => 'Group stopped';
+
+  @override
+  String get group_disbanded => 'Group disbanded';
+
+  @override
+  String get group_approval_needed => 'A member is waiting for approval';
+
+  @override
   String get compress_context => 'Compress context';
 
   @override
