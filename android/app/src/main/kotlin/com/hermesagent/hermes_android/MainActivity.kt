@@ -4,7 +4,9 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -23,12 +25,22 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.Locale
 import java.util.UUID
+import org.json.JSONObject
 
 class MainActivity : FlutterActivity() {
+    /// A MediaStore row this app wrote, kept as both the display name the
+    /// caller reports back and the uri whose row is deleted once the APK's
+    /// install lands on a later launch.
+    private data class SavedDownload(val filename: String, val uri: String)
+
     private val shareChannelName = "com.hermesagent.hermes_android/share"
     private val launchChannelName = "com.hermesagent.hermes_android/launch"
     private val downloadsChannelName = "com.hermesagent.hermes_android/downloads"
     private val TAG = "HermesDownloads"
+    private val prefsName = "hermes_downloads"
+    private val installCleanupKey = "install_cleanup_v1"
+    /// Age after which an uninstalled APK copy in cacheDir/install is noise.
+    private val installCacheMaxAgeMs = 7L * 24L * 60L * 60L * 1000L
     private val notificationChannelId = "hermes_media_downloads"
     private val notificationPermissionRequest = 4310
     private val quickChatAction = "com.hermesagent.hermes_android.action.QUICK_CHAT"
@@ -44,6 +56,11 @@ class MainActivity : FlutterActivity() {
         initialShareIntent = intent.takeIf(::isShareIntent)
         initialLaunchAction = launchActionFor(intent)
         super.onCreate(savedInstanceState)
+        // An in-place APK install replaces this process, so the saved copy can
+        // only be deleted on the first launch of the new version. Keeping the
+        // accounting off the UI thread means a slow resolver never delays the
+        // first frame, and every failure inside is swallowed to a log line.
+        Thread({ reconcileInstallCleanup() }, "hermes-install-cleanup").start()
     }
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
@@ -89,7 +106,7 @@ class MainActivity : FlutterActivity() {
                             val name = filename.substringAfterLast('/')
                             Thread {
                                 val saved = saveToDownloads(name, mimeType, bytes)
-                                Log.i(TAG, "saveToDownloads filename=$name saved=$saved mime=$mimeType")
+                                Log.i(TAG, "saveToDownloads filename=$name saved=${saved?.filename} mime=$mimeType")
                                 var installIntent: Intent? = null
                                 var installStatus = "none"
                                 if (saved != null && installAfterSave) {
@@ -107,6 +124,10 @@ class MainActivity : FlutterActivity() {
                                     if (installStatus == "launched" && installIntent != null) {
                                         try {
                                             startActivity(installIntent)
+                                            // This process dies with the install, so
+                                            // record what to delete before handing
+                                            // over to the installer.
+                                            rememberInstallCleanup(name, saved?.uri)
                                         } catch (e: Exception) {
                                             Log.w(TAG, "installer launch failed", e)
                                             installStatus = "failed"
@@ -114,10 +135,10 @@ class MainActivity : FlutterActivity() {
                                     } else if (installStatus == "permission") {
                                         openInstallPermissionSettings()
                                     }
-                                    if (saved != null) postSavedNotification(name, installIntent)
+                                    if (saved != null) postSavedNotification(saved.filename, installIntent)
                                     result.success(
                                         if (saved == null) null
-                                        else mapOf("filename" to saved, "install" to installStatus)
+                                        else mapOf("filename" to saved.filename, "install" to installStatus)
                                     )
                                 }
                             }.start()
@@ -135,8 +156,8 @@ class MainActivity : FlutterActivity() {
     /// OEM build.
     private fun buildInstallIntent(filename: String, bytes: ByteArray): Intent? {
         return try {
-            val dir = File(cacheDir, "install").apply { mkdirs() }
-            val file = File(dir, filename)
+            val file = installCacheFile(filename)
+            file.parentFile?.mkdirs()
             file.writeBytes(bytes)
             val uri = FileProvider.getUriForFile(this, "$packageName.downloads", file)
             Intent(Intent.ACTION_VIEW).apply {
@@ -148,6 +169,128 @@ class MainActivity : FlutterActivity() {
             null
         }
     }
+
+    /// The cache copy handed to the installer, and the path the cleanup pass
+    /// deletes once the install lands.
+    private fun installCacheFile(filename: String): File = File(File(cacheDir, "install"), filename)
+
+    /// Records what to delete after the imminent install. Called right after
+    /// the installer intent is handed off: the install replaces this process,
+    /// so nothing here can wait for a result. A commit (not apply) keeps the
+    /// record on disk even if the process is killed seconds later.
+    private fun rememberInstallCleanup(filename: String, downloadsUri: String?) {
+        try {
+            val versionCode = currentVersionCode()
+            if (versionCode <= 0L) {
+                Log.w(TAG, "install cleanup skipped: version code unavailable")
+                return
+            }
+            val payload = JSONObject().apply {
+                put("versionCodeAtSave", versionCode)
+                put("downloadsUri", downloadsUri.orEmpty())
+                put("cachePath", installCacheFile(filename).absolutePath)
+                put("filename", filename)
+                put("savedAt", System.currentTimeMillis())
+            }
+            val committed = prefs().edit().putString(installCleanupKey, payload.toString()).commit()
+            Log.i(
+                TAG,
+                "install cleanup armed filename=$filename versionCode=$versionCode " +
+                    "uri=$downloadsUri committed=$committed",
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "install cleanup could not be armed", e)
+        }
+    }
+
+    /// The one-shot reconciliation of the last armed install. Runs off the UI
+    /// thread at startup: an in-place APK install kills the old process, so
+    /// the new version is the first chance to delete both copies. A bumped
+    /// version code means the install landed; an unchanged one means the user
+    /// cancelled or the install failed, so the saved APK stays available.
+    private fun reconcileInstallCleanup() {
+        try {
+            val raw = prefs().getString(installCleanupKey, null) ?: return
+            val state = runCatching { JSONObject(raw) }.getOrNull()
+            if (state == null) {
+                Log.w(TAG, "install cleanup state unreadable; dropping it")
+                prefs().edit().remove(installCleanupKey).apply()
+                return
+            }
+            val versionAtSave = state.optLong("versionCodeAtSave", -1L)
+            val downloadsUri = state.optString("downloadsUri").takeIf { it.isNotEmpty() }
+            val cachePath = state.optString("cachePath").takeIf { it.isNotEmpty() }
+            val filename = state.optString("filename")
+            val current = currentVersionCode()
+            if (versionAtSave > 0L && current > versionAtSave) {
+                if (downloadsUri != null) deleteDownloadsRow(downloadsUri)
+                if (cachePath != null) {
+                    val cacheFile = File(cachePath)
+                    Log.i(TAG, "install cleanup: cache file ${cacheFile.name} deleted=${cacheFile.delete()}")
+                }
+                prefs().edit().remove(installCleanupKey).commit()
+                Log.i(
+                    TAG,
+                    "install of $filename confirmed ($versionAtSave -> $current); " +
+                        "saved APK removed",
+                )
+            } else {
+                sweepStaleInstallCopies(keepPath = cachePath)
+                Log.i(
+                    TAG,
+                    "install of $filename not confirmed (saved at $versionAtSave, now $current); " +
+                        "keeping the saved APK",
+                )
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "install cleanup reconcile failed", e)
+        }
+    }
+
+    /// Deletes the Downloads (MediaStore) row this app inserted. Only this
+    /// app's own row is addressed, so no storage permission is involved; a
+    /// failure (row already gone, OEM restriction) is logged and ignored.
+    private fun deleteDownloadsRow(downloadsUri: String) {
+        try {
+            val deleted = contentResolver.delete(Uri.parse(downloadsUri), null, null)
+            Log.i(TAG, "install cleanup: downloads row $downloadsUri deleted=$deleted")
+        } catch (e: Exception) {
+            Log.w(TAG, "install cleanup: deleting $downloadsUri failed", e)
+        }
+    }
+
+    /// Keeps an unconfirmed install's APK for the retry, but stops old copies
+    /// from accumulating in cacheDir/install forever. Files newer than the
+    /// window — and the recorded copy itself — are left alone.
+    private fun sweepStaleInstallCopies(keepPath: String?) {
+        try {
+            val cutoff = System.currentTimeMillis() - installCacheMaxAgeMs
+            val dir = File(cacheDir, "install")
+            dir.listFiles()?.forEach { file ->
+                if (file.absolutePath == keepPath) return@forEach
+                if (file.lastModified() > cutoff) return@forEach
+                val deleted = runCatching { file.delete() }.getOrDefault(false)
+                if (deleted) Log.i(TAG, "install cleanup: dropped stale copy ${file.name}")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "install cleanup: stale sweep failed", e)
+        }
+    }
+
+    private fun currentVersionCode(): Long = try {
+        val info = packageManager.getPackageInfo(packageName, 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            info.longVersionCode
+        } else {
+            @Suppress("DEPRECATION")
+            info.versionCode.toLong()
+        }
+    } catch (e: Exception) {
+        Log.w(TAG, "package version unavailable", e)
+        -1L
+    }
+
+    private fun prefs(): SharedPreferences = getSharedPreferences(prefsName, Context.MODE_PRIVATE)
 
     /// Opens the system "install unknown apps" page for this app — the
     /// permission surface Android 8+ uses instead of a runtime dialog.
@@ -234,9 +377,10 @@ class MainActivity : FlutterActivity() {
         if (Locale.getDefault().language.startsWith("zh")) zh else en
 
     /// Writes [bytes] into the system Downloads collection (MediaStore, API 29+).
-    /// Returns the saved display name, or null when this release predates
-    /// scoped storage — the caller then falls back to the share sheet.
-    private fun saveToDownloads(filename: String, mimeType: String?, bytes: ByteArray): String? {
+    /// Returns the saved row, or null when this release predates scoped
+    /// storage — the caller then falls back to the share sheet. The uri is kept
+    /// because the cleanup pass deletes exactly this row after the APK installs.
+    private fun saveToDownloads(filename: String, mimeType: String?, bytes: ByteArray): SavedDownload? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
         val resolver = contentResolver
         val values = ContentValues().apply {
@@ -259,7 +403,7 @@ class MainActivity : FlutterActivity() {
             values.clear()
             values.put(MediaStore.Downloads.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
-            filename
+            SavedDownload(filename, uri.toString())
         } catch (e: Exception) {
             runCatching { resolver.delete(uri, null, null) }
             throw e
