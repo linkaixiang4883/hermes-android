@@ -1339,6 +1339,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       await gateway.ensureSession(
         widget.session.id,
+        profile: widget.session.profile,
         workingDirectory: widget.projectWorkingDirectory,
         // A refresh re-attaches even when the session is already mapped, which
         // is what a chat entry and an app resume need: the snapshot must be the
@@ -2071,7 +2072,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<List<Map<String, dynamic>>> _getRecentMessages(String sessionId) =>
-      _client.getMessages(sessionId, limit: _historyPageSize, latest: true);
+      _client.getMessages(
+        sessionId,
+        limit: _historyPageSize,
+        latest: true,
+        profile: widget.session.profile,
+      );
 
   /// A remote turn may start while the initial bounded transcript request is
   /// still in flight. Its stale response must not overwrite optimistic or

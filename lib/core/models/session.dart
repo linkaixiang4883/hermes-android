@@ -36,6 +36,15 @@ class Session {
   /// Whether the Gateway archived the session.
   final bool archived;
 
+  /// The Hermes profile this session lives in, when it is not the
+  /// connection's default profile.
+  ///
+  /// Bot Mode's bots are profiles: a session opened for `research` must
+  /// resume, list and hydrate its history under that profile, or every call
+  /// lands in the connection's default profile instead. Null = the
+  /// connection's own profile (see `SavedConnection.gatewayProfile`).
+  final String? profile;
+
   /// Whether this session exists only as a client-side draft.
   ///
   /// Recovery v2 may call `session.open`, so it is safe only before the first
@@ -58,6 +67,7 @@ class Session {
     this.lineageRootId,
     this.archived = false,
     this.isLocalDraft = false,
+    this.profile,
   });
 
   /// Parses one session row.

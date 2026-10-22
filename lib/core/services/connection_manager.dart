@@ -788,6 +788,7 @@ class ApiClient {
     int? limit,
     int offset = 0,
     bool latest = false,
+    String? profile,
   }) async {
     if (limit != null && limit < 0) {
       throw ArgumentError.value(limit, 'limit', 'must not be negative');
@@ -799,6 +800,10 @@ class ApiClient {
       if (limit != null) 'limit': '$limit',
       if (offset != 0) 'offset': '$offset',
       if (latest) 'order': 'latest',
+      // A bot chat's transcript lives in its own profile's state.db; without
+      // this the REST read resolves the id in the default profile.
+      if (profile != null && profile.trim().isNotEmpty)
+        'profile': profile.trim(),
     };
     final uri = Uri.parse(
       '$baseUrl/api/sessions/$sessionId/messages',

@@ -1476,9 +1476,17 @@ class WsClient {
   }
 
   /// Resume an existing session while preserving retained turn state.
-  Future<ResumedGatewaySession> resumeSessionDetails(String sessionId) async {
+  Future<ResumedGatewaySession> resumeSessionDetails(
+    String sessionId, {
+    String? profile,
+  }) async {
     final result = await send('session.resume', {
       'session_id': sessionId,
+      // A bot's canonical chat lives in ANOTHER profile's state.db; the
+      // socket's default profile would resolve a same-named stored id there
+      // (or create a second session) instead of resuming this one.
+      if (profile != null && profile.trim().isNotEmpty)
+        'profile': profile.trim(),
       // Session attachment must not carry the rendered transcript. Android
       // hydrates its visible history through bounded REST requests; returning
       // it here duplicates a potentially multi-megabyte transfer and can make
@@ -1648,11 +1656,27 @@ class WsClient {
   Future<CreatedGatewaySession> createSession({
     String? model,
     String? workingDirectory,
+    String? profile,
+    String? title,
+    bool hidden = false,
+    String? idempotencyKey,
   }) async {
     final params = <String, dynamic>{};
     if (model != null) params['model'] = model;
     final cwd = workingDirectory?.trim();
     if (cwd != null && cwd.isNotEmpty) params['cwd'] = cwd;
+    if (profile != null && profile.trim().isNotEmpty) {
+      params['profile'] = profile.trim();
+    }
+    if (title != null && title.trim().isNotEmpty) {
+      params['title'] = title.trim();
+    }
+    if (hidden) {
+      params['hidden'] = true;
+    }
+    if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty) {
+      params['idempotency_key'] = idempotencyKey.trim();
+    }
     final result = await send('session.create', params);
     if (result['error'] != null) {
       throw _gatewayResponseError(

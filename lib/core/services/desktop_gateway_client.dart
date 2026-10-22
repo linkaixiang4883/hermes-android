@@ -73,6 +73,13 @@ class DesktopGatewayClient {
   final Map<String, String> _gatewaySessionIds = {};
   final Map<String, String> _storedSessionIds = {};
   final Map<String, String> _workingDirectories = {};
+
+  /// Profile scope per mobile session id (Bot Mode: a bot's chat lives in
+  /// another profile). Absent/null = the connection's own default profile.
+  ///
+  /// Publicly the client stays keyed by [Session.id]; this map only supplies
+  /// the `profile` field on resume/create, whose stored ids are per-profile.
+  final Map<String, String?> _sessionProfiles = {};
   final Map<String, GatewayServerRequest> _serverRequests = {};
   final Map<String, WsClient> _serverRequestClients = {};
   final Map<String, String> _serverRequestMobileSessionIds = {};
@@ -294,6 +301,7 @@ class DesktopGatewayClient {
   Future<_DesktopGatewaySession> _connect(
     String mobileSessionId, {
     String? workingDirectory,
+    String? profile,
   }) async {
     final requestedWorkingDirectory = workingDirectory?.trim();
     if (requestedWorkingDirectory != null &&
@@ -311,6 +319,7 @@ class DesktopGatewayClient {
         existing,
         mobileSessionId,
         workingDirectory: effectiveWorkingDirectory,
+        profile: profile,
       );
       _rememberBinding(mobileSessionId, binding);
       return _DesktopGatewaySession(existing, binding.runtimeSessionId);
@@ -321,6 +330,7 @@ class DesktopGatewayClient {
       client,
       mobileSessionId,
       workingDirectory: effectiveWorkingDirectory,
+      profile: profile,
     );
     _rememberBinding(mobileSessionId, binding);
     return _DesktopGatewaySession(client, binding.runtimeSessionId);
@@ -333,6 +343,7 @@ class DesktopGatewayClient {
     WsClient client,
     String mobileSessionId, {
     String? workingDirectory,
+    String? profile,
   }) {
     final inFlight = _bindingInFlight[mobileSessionId];
     if (inFlight != null) return inFlight;
@@ -340,6 +351,7 @@ class DesktopGatewayClient {
       client,
       mobileSessionId,
       workingDirectory: workingDirectory,
+      profile: profile,
     );
     _bindingInFlight[mobileSessionId] = future;
     future.whenComplete(() {
@@ -530,6 +542,7 @@ class DesktopGatewayClient {
           client,
           mobileId,
           workingDirectory: _workingDirectories[mobileId],
+          profile: _sessionProfiles[mobileId],
         );
         final after = _ws;
         if (_closed || (after != null && !identical(after, client))) return;
@@ -545,11 +558,15 @@ class DesktopGatewayClient {
     WsClient client,
     String mobileSessionId, {
     String? workingDirectory,
+    String? profile,
   }) async {
     final storedSessionId =
         _storedSessionIds[mobileSessionId] ?? mobileSessionId;
     try {
-      final resumed = await client.resumeSessionDetails(storedSessionId);
+      final resumed = await client.resumeSessionDetails(
+        storedSessionId,
+        profile: profile,
+      );
       return _DesktopGatewayBinding(
         runtimeSessionId: resumed.runtimeSessionId,
         storedSessionId: storedSessionId,
@@ -565,6 +582,7 @@ class DesktopGatewayClient {
       // minted identities: runtime for this socket and stored for reconnect.
       final created = await client.createSession(
         workingDirectory: workingDirectory,
+        profile: profile,
       );
       return _DesktopGatewayBinding(
         runtimeSessionId: created.runtimeSessionId,
@@ -759,13 +777,27 @@ class DesktopGatewayClient {
   Future<void> ensureSession(
     String sessionId, {
     String? workingDirectory,
+    String? profile,
     bool refresh = false,
   }) async {
+    final scopedProfile = profile?.trim();
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      _sessionProfiles[sessionId] = scopedProfile;
+    }
+    final effectiveProfile = _sessionProfiles[sessionId];
     if (!refresh) {
-      await _connect(sessionId, workingDirectory: workingDirectory);
+      await _connect(
+        sessionId,
+        workingDirectory: workingDirectory,
+        profile: effectiveProfile,
+      );
       return;
     }
-    await _refreshSession(sessionId, workingDirectory: workingDirectory);
+    await _refreshSession(
+      sessionId,
+      workingDirectory: workingDirectory,
+      profile: effectiveProfile,
+    );
   }
 
   /// Registers a live-turn listener and returns its removal token.
@@ -895,6 +927,7 @@ class DesktopGatewayClient {
   Future<void> _refreshSession(
     String mobileSessionId, {
     String? workingDirectory,
+    String? profile,
   }) async {
     final requestedWorkingDirectory = workingDirectory?.trim();
     if (requestedWorkingDirectory != null &&
@@ -905,7 +938,10 @@ class DesktopGatewayClient {
     final storedSessionId =
         _storedSessionIds[mobileSessionId] ?? mobileSessionId;
     try {
-      final resumed = await client.resumeSessionDetails(storedSessionId);
+      final resumed = await client.resumeSessionDetails(
+        storedSessionId,
+        profile: profile,
+      );
       _rememberBinding(
         mobileSessionId,
         _DesktopGatewayBinding(
