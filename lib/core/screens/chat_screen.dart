@@ -294,6 +294,10 @@ bool isRepeatTurnUsage(TurnUsage? current, TurnUsage next) =>
 typedef TestContextUsageFetcher =
     Future<Map<String, dynamic>?> Function({required String sessionId});
 
+/// Injectable slash transport so the compress button runs without a socket.
+@visibleForTesting
+typedef TestSlashExec = Future<String> Function(String command);
+
 class _PendingSensitivePrompt {
   final GatewaySensitivePromptRequest request;
   final int responseGeneration;
@@ -423,6 +427,10 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final TestContextUsageFetcher? testContextUsageFetcher;
 
+  /// Overrides the slash transport in tests (see [_runCompress]).
+  @visibleForTesting
+  final TestSlashExec? testSlashExec;
+
   /// Lets widget tests observe the exact stored-session scope bound to an
   /// artifact tap without opening a real dashboard connection.
   @visibleForTesting
@@ -458,6 +466,7 @@ class ChatScreen extends StatefulWidget {
     this.testDesktopGatewayObserver,
     this.testStoredSessionKey,
     this.testContextUsageFetcher,
+    this.testSlashExec,
     this.testMediaFilesClient,
     super.key,
   });
@@ -1126,6 +1135,101 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
     return '';
+  }
+
+  bool _compressing = false;
+
+  bool get _canCompress =>
+      !_compressing &&
+      !_sending &&
+      !_streaming &&
+      !_localSubmitActive &&
+      !_followLiveTurn &&
+      (_desktopGateway != null || widget.testSlashExec != null);
+
+  /// One-tap context compaction — the app's first slash command.
+  ///
+  /// The gateway routes `/compress` to `command.dispatch`, which compacts the
+  /// live session synchronously: the reply lands once the stored transcript
+  /// has been rewritten. A rotation may move the session id, so the screen
+  /// re-binds and re-reads history before reporting success; the confirm
+  /// dialog is the guard because the rewrite cannot be undone.
+  Future<void> _confirmCompress() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final l10n = dialogContext.l10n;
+        return AlertDialog(
+          title: Text(l10n.compress_context),
+          content: Text(l10n.compress_confirm_message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.dismiss),
+            ),
+            FilledButton(
+              key: const Key('compress-confirm'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.compress_context),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) return;
+    await _runCompress();
+  }
+
+  Future<void> _runCompress() async {
+    if (_compressing) return;
+    setState(() => _compressing = true);
+    try {
+      final test = widget.testSlashExec;
+      final String output;
+      if (test != null) {
+        output = await test('/compress');
+      } else {
+        final gateway = _desktopGateway;
+        if (gateway == null) {
+          throw const SlashExecFailure('Not connected');
+        }
+        output = await gateway.slashExec(
+          sessionId: widget.session.id,
+          command: '/compress',
+        );
+      }
+      if (!mounted) return;
+      // The compaction rewrites the stored transcript (and may rotate the
+      // session id): re-bind, re-read, then trust the new usage numbers.
+      await _ensureDesktopSession(refresh: true);
+      await _fetchMessages();
+      await _refreshContextUsage();
+      if (!mounted) return;
+      final detail = output.replaceAll(RegExp(r'\s+'), ' ').trim();
+      final suffix = detail.isEmpty
+          ? ''
+          : ' ${detail.length <= 120 ? detail : '${detail.substring(0, 119)}…'}';
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(content: Text('${context.l10n.compress_done}$suffix')),
+        );
+    } catch (error) {
+      if (!mounted) return;
+      final message = error is SlashExecFailure
+          ? error.message
+          : error.toString();
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: Text(context.l10n.compress_failed(message)),
+            backgroundColor: Colors.orange,
+          ),
+        );
+    } finally {
+      if (mounted) setState(() => _compressing = false);
+    }
   }
 
   void _showUsageDialog() {
@@ -5227,6 +5331,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                         style: Theme.of(context).textTheme.bodySmall,
                                       ),
                                     ),
+                                    if (_desktopGateway != null ||
+                                        widget.testSlashExec != null)
+                                      IconButton(
+                                        key: const Key('compress-button'),
+                                        tooltip: context.l10n.compress_context,
+                                        visualDensity: VisualDensity.compact,
+                                        padding: EdgeInsets.zero,
+                                        constraints:
+                                            const BoxConstraints.tightFor(
+                                          width: 32,
+                                          height: 32,
+                                        ),
+                                        icon: _compressing
+                                            ? const SizedBox.square(
+                                                dimension: 16,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                ),
+                                              )
+                                            : const Icon(
+                                                Icons.compress,
+                                                size: 18,
+                                              ),
+                                        onPressed: _canCompress
+                                            ? _confirmCompress
+                                            : null,
+                                      ),
                                     Icon(
                                       Icons.chevron_right,
                                       size: 14,

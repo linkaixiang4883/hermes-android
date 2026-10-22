@@ -2395,6 +2395,20 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get compress_context => '压缩上下文';
+
+  @override
+  String get compress_confirm_message => '将较早的对话总结为一条摘要？这会重写已存历史且不可撤销。';
+
+  @override
+  String get compress_done => '上下文已压缩';
+
+  @override
+  String compress_failed(String error) {
+    return '压缩失败：$error';
+  }
+
+  @override
   String get project_move_context_pending => '项目文档将在该会话下次压缩上下文或重新打开后加载';
 
   @override
@@ -4810,6 +4824,20 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String usage_model_name(String model) {
     return '模型 $model';
+  }
+
+  @override
+  String get compress_context => '压缩上下文';
+
+  @override
+  String get compress_confirm_message => '将较早的对话总结为一条摘要？这会重写已存历史且不可撤销。';
+
+  @override
+  String get compress_done => '上下文已压缩';
+
+  @override
+  String compress_failed(String error) {
+    return '压缩失败：$error';
   }
 
   @override

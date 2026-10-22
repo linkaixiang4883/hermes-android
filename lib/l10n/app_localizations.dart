@@ -4179,6 +4179,30 @@ abstract class AppLocalizations {
   /// **'Model: {model}'**
   String usage_model_name(String model);
 
+  /// No description provided for @compress_context.
+  ///
+  /// In en, this message translates to:
+  /// **'Compress context'**
+  String get compress_context;
+
+  /// No description provided for @compress_confirm_message.
+  ///
+  /// In en, this message translates to:
+  /// **'Summarize the earlier conversation into one summary? This rewrites the stored transcript and cannot be undone.'**
+  String get compress_confirm_message;
+
+  /// No description provided for @compress_done.
+  ///
+  /// In en, this message translates to:
+  /// **'Context compressed'**
+  String get compress_done;
+
+  /// No description provided for @compress_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Compression failed: {error}'**
+  String compress_failed(String error);
+
   /// No description provided for @project_move_context_pending.
   ///
   /// In en, this message translates to:

@@ -2460,6 +2460,21 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get compress_context => 'Compress context';
+
+  @override
+  String get compress_confirm_message =>
+      'Summarize the earlier conversation into one summary? This rewrites the stored transcript and cannot be undone.';
+
+  @override
+  String get compress_done => 'Context compressed';
+
+  @override
+  String compress_failed(String error) {
+    return 'Compression failed: $error';
+  }
+
+  @override
   String get project_move_context_pending =>
       'Project files will load after this chat next compresses its context or reopens';
 

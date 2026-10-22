@@ -674,6 +674,17 @@
   "usage_bar_summary": "{used} of {max} · {percent}%",
   "usage_this_turn": "This turn: {value} tokens",
   "usage_model_name": "Model: {model}",
+  "compress_context": "Compress context",
+  "compress_confirm_message": "Summarize the earlier conversation into one summary? This rewrites the stored transcript and cannot be undone.",
+  "compress_done": "Context compressed",
+  "compress_failed": "Compression failed: {error}",
+  "@compress_failed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "project_move_context_pending": "Project files will load after this chat next compresses its context or reopens",
   "speech_recognition_use_keyboard": "Speech recognition service unavailable — use the keyboard's voice input instead",
   "dictation_ready": "Dictation ready to edit",

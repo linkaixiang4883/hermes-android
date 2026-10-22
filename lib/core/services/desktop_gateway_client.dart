@@ -43,6 +43,16 @@ enum DesktopConnectionState {
 /// The mobile OpenAI-compatible endpoint remains available for legacy
 /// profiles. When a connection supplies [SavedConnection.desktopGatewayUrl],
 /// chat writes and interactive events use this one Desktop session transport.
+/// A `slash.exec` refusal or failure, carrying the gateway's own wording.
+class SlashExecFailure implements Exception {
+  final String message;
+
+  const SlashExecFailure(this.message);
+
+  @override
+  String toString() => message;
+}
+
 class DesktopGatewayClient {
   static int _nextServerRequestNamespace = 1;
 
@@ -1582,6 +1592,46 @@ class DesktopGatewayClient {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Runs one slash command against the session's slash worker.
+  ///
+  /// `/compress` is what the chat's one-tap compaction uses: the gateway
+  /// routes it to `command.dispatch`, which compacts the live session
+  /// synchronously — the reply lands once the stored transcript has been
+  /// rewritten. The timeout is long on purpose; a large history can take
+  /// minutes. Refusals (a busy session, an older gateway) throw
+  /// [SlashExecFailure] with the gateway's own wording so the caller can
+  /// surface it instead of a generic failure.
+  Future<String> slashExec({
+    required String sessionId,
+    required String command,
+    Duration timeout = const Duration(minutes: 10),
+  }) async {
+    final gatewaySessionId = _gatewaySessionIds[sessionId];
+    final client = _ws;
+    if (gatewaySessionId == null || client == null || !client.isConnected) {
+      throw const SlashExecFailure('Not connected to the Desktop gateway');
+    }
+    final response = await client.send(
+      'slash.exec',
+      {'session_id': gatewaySessionId, 'command': command},
+      timeout: timeout,
+    );
+    final error = response['error'];
+    if (error != null) {
+      final message = error is Map
+          ? (error['message']?.toString() ?? 'slash.exec failed')
+          : error.toString();
+      throw SlashExecFailure(message);
+    }
+    final result = response['result'];
+    if (result is Map) {
+      final output = result['output']?.toString().trim() ?? '';
+      final warning = result['warning']?.toString().trim() ?? '';
+      return output.isNotEmpty ? output : warning;
+    }
+    throw const SlashExecFailure('The gateway did not answer the command');
   }
 
   WsClient _connectedClient() {
