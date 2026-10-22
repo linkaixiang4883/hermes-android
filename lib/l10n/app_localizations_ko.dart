@@ -1442,8 +1442,16 @@ class AppLocalizationsKo extends AppLocalizations {
   String get review_local_spaces => '로컬 스페이스 검토';
 
   @override
+  String get review_summary_title => 'Hermes review';
+
+  @override
   String get review_or_promote_quick_chats_past_their_retention_period =>
       '보존 기간이 지난 빠른 채팅을 검토하거나 승격하세요';
+
+  @override
+  String review_updates_count(int count) {
+    return '$count updates';
+  }
 
   @override
   String get review_the_attached_content => '첨부된 콘텐츠를 검토하세요.';

@@ -112,13 +112,61 @@ class GatewayNotice {
   static const _maxTextLength = 4000;
   static const _maxTaskIdLength = 120;
 
+  /// Detail lines a review card carries. A long-lived session reviews over and
+  /// over; the card shows the newest [_maxReviewUpdates] lines.
+  static const _maxReviewUpdates = 20;
+
   final GatewayNoticeKind kind;
   final String text;
   final String? taskId;
 
-  const GatewayNotice({required this.kind, required this.text, this.taskId});
+  /// Every distinct summary line this review card speaks for, oldest first.
+  ///
+  /// `review.summary` fires once per background memory/skill pass. Each frame
+  /// used to append another card, so a session that reviewed repeatedly ended
+  /// with a transcript tail made only of notices; the screen folds the passes
+  /// into this list instead and renders a single card.
+  final List<String> updates;
 
-  String get identity => '${kind.name}|${taskId ?? ''}|$text';
+  const GatewayNotice({
+    required this.kind,
+    required this.text,
+    this.taskId,
+    this.updates = const [],
+  });
+
+  bool get isReview => kind == GatewayNoticeKind.review;
+
+  /// How many review passes this card speaks for (1 for a single pass).
+  int get updateCount => isReview ? (updates.isEmpty ? 1 : updates.length) : 0;
+
+  /// The lines the expanded review card lists.
+  List<String> get details => isReview
+      ? (updates.isEmpty ? <String>[text] : updates)
+      : const <String>[];
+
+  /// This card after another review pass reported [next].
+  GatewayNotice withReviewUpdate(GatewayNotice next) {
+    final lines = List<String>.from(details);
+    if (!lines.contains(next.text)) lines.add(next.text);
+    final trimmed = lines.length <= _maxReviewUpdates
+        ? lines
+        : lines.sublist(lines.length - _maxReviewUpdates);
+    return GatewayNotice(
+      kind: GatewayNoticeKind.review,
+      text: next.text,
+      updates: List<String>.unmodifiable(trimmed),
+    );
+  }
+
+  String get identity => switch (kind) {
+    GatewayNoticeKind.background => '${kind.name}|${taskId ?? ''}|$text',
+    // A review card's identity moves with its count and its newest line: a
+    // dismissed card stays dismissed until another pass brings news, then it
+    // earns its place back at the bottom of the timeline.
+    GatewayNoticeKind.review =>
+      '${kind.name}||$updateCount|${details.isEmpty ? '' : details.last}',
+  };
 
   String get title => switch (kind) {
     GatewayNoticeKind.background =>

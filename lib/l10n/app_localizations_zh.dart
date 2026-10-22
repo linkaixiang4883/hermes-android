@@ -1432,8 +1432,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get review_local_spaces => '检查本地空间';
 
   @override
+  String get review_summary_title => 'Hermes 复盘';
+
+  @override
   String get review_or_promote_quick_chats_past_their_retention_period =>
       '查看或提升超出保留期限的快速聊天';
+
+  @override
+  String review_updates_count(int count) {
+    return '$count 条更新';
+  }
 
   @override
   String get review_the_attached_content => '查看附件内容。';
@@ -3881,8 +3889,16 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get review_local_spaces => '检查本地空间';
 
   @override
+  String get review_summary_title => 'Hermes 复盘';
+
+  @override
   String get review_or_promote_quick_chats_past_their_retention_period =>
       '查看或提升超出保留期限的快速聊天';
+
+  @override
+  String review_updates_count(int count) {
+    return '$count 条更新';
+  }
 
   @override
   String get review_the_attached_content => '查看附件内容。';

@@ -1488,8 +1488,16 @@ class AppLocalizationsFr extends AppLocalizations {
   String get review_local_spaces => 'Examiner les espaces locaux';
 
   @override
+  String get review_summary_title => 'Hermes review';
+
+  @override
   String get review_or_promote_quick_chats_past_their_retention_period =>
       'Examiner ou promouvoir les discussions rapides au-delà de leur période de conservation';
+
+  @override
+  String review_updates_count(int count) {
+    return '$count updates';
+  }
 
   @override
   String get review_the_attached_content => 'Examinez le contenu joint.';

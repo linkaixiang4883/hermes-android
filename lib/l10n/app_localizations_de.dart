@@ -1487,8 +1487,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get review_local_spaces => 'Lokale Bereiche überprüfen';
 
   @override
+  String get review_summary_title => 'Hermes review';
+
+  @override
   String get review_or_promote_quick_chats_past_their_retention_period =>
       'Schnellchats nach ihrer Aufbewahrungsfrist überprüfen oder hochstufen';
+
+  @override
+  String review_updates_count(int count) {
+    return '$count updates';
+  }
 
   @override
   String get review_the_attached_content => 'Überprüfe den angehängten Inhalt.';

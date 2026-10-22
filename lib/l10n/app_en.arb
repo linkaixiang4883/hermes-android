@@ -411,7 +411,9 @@
   "retry_upload": "Retry upload",
   "retrying": "Retrying {name}…",
   "review_local_spaces": "Review local spaces",
+  "review_summary_title": "Hermes review",
   "review_or_promote_quick_chats_past_their_retention_period": "Review or promote quick chats past their retention period",
+  "review_updates_count": "{count} updates",
   "review_the_attached_content": "Review the attached content.",
   "run_only_this_command": "Run only this command.",
   "running_now": "Running now",
@@ -732,5 +734,16 @@
   "unpin_on_this_device": "Unpin on this device",
   "pinned_on_this_device": "Pinned on this device",
   "could_not_save_chat_pin": "Could not save chat pin on this device",
-  "live_turn_following": "Running · auto-syncing"
+  "live_turn_following": "Running · auto-syncing",
+  "@review_summary_title": {
+    "description": "Heading of the collapsed background review card."
+  },
+  "@review_updates_count": {
+    "description": "How many memory/skill updates one review card summarises.",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

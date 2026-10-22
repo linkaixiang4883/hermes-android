@@ -2594,11 +2594,23 @@ abstract class AppLocalizations {
   /// **'Review local spaces'**
   String get review_local_spaces;
 
+  /// Heading of the collapsed background review card.
+  ///
+  /// In en, this message translates to:
+  /// **'Hermes review'**
+  String get review_summary_title;
+
   /// No description provided for @review_or_promote_quick_chats_past_their_retention_period.
   ///
   /// In en, this message translates to:
   /// **'Review or promote quick chats past their retention period'**
   String get review_or_promote_quick_chats_past_their_retention_period;
+
+  /// How many memory/skill updates one review card summarises.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} updates'**
+  String review_updates_count(int count);
 
   /// No description provided for @review_the_attached_content.
   ///

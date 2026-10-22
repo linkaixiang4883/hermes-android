@@ -481,7 +481,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final List<GatewaySubagentActivity> _subagentActivities = [];
   final Map<String, GatewayNotification> _gatewayNotifications = {};
   final Map<String, Timer> _notificationTimers = {};
-  late final List<GatewayNotice> _gatewayNotices;
+
+  /// Timetable of the session's gateway notices: one collapsed review card
+  /// plus at most [_maxBackgroundNoticeCards] completions.
+  ///
+  /// Page-local on purpose. These cards used to live in a process-wide map
+  /// keyed by session, so leaving and re-entering a chat brought back notices
+  /// the user had already read (and had no way to close).
+  final List<GatewayNotice> _gatewayNotices = [];
+
+  /// Identities closed during this visit: a replayed frame or a rebuild must
+  /// not resurrect a card the user swiped away.
+  final Set<String> _dismissedGatewayNotices = {};
+
+  static const _maxBackgroundNoticeCards = 2;
+
   bool _loading = true;
   String? _error;
   late final ApiClient _client;
@@ -678,7 +692,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   static const _initialEndFrameBudget = 12;
   static const _requiredStableEndFrames = 2;
   static const _stableExtentTolerance = 0.5;
-  static final Map<String, List<GatewayNotice>> _savedGatewayNotices = {};
 
   late final TurnNotificationService _turnNotifications;
 
@@ -752,9 +765,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _attachmentDrafts
       ..addAll(widget.initialAttachmentDrafts)
       ..addAll(widget.testInitialAttachmentDrafts);
-    _gatewayNotices = List<GatewayNotice>.from(
-      _savedGatewayNotices[_gatewayNoticeIdentity] ?? const [],
-    );
     _chatModelStore = ChatModelOverrideStore.open();
     _sessionModelRestore = _restoreSessionModelOverride();
     final hasDashboardAuth =
@@ -844,9 +854,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       '${widget.connection.gatewayPrefix ?? ''}|'
       '${widget.connection.desktopGatewayUrl ?? ''}';
 
-  String get _gatewayNoticeIdentity =>
-      '$_connectionIdentity|${widget.session.id}';
-
   void _onComposerChanged() => _composerRevision += 1;
 
   String get _storedSessionKey =>
@@ -929,9 +936,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     widget.testDesktopConnectionHook?.handler = null;
     widget.testDesktopAsyncEventHook?.handler = null;
     widget.testDesktopReplayTruncatedHook?.handler = null;
-    _savedGatewayNotices[_gatewayNoticeIdentity] = List.unmodifiable(
-      _gatewayNotices,
-    );
     _voiceComposer
       ..removeListener(_onVoiceComposerChanged)
       ..dispose();
@@ -1838,20 +1842,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Background task completions and review summaries arrive as GatewayNotice
-  /// insights; mirror them to a native notification while the app is away —
-  /// completions as background work, reviews as gateway notices.
+  /// Background task completions arrive as GatewayNotice insights; mirror them
+  /// to a native notification while the app is away.
+  ///
+  /// Review summaries keep their card in the transcript and do NOT post: the
+  /// background review runs on its own cadence, so mirroring it turned a
+  /// laptop-side review into a stream of phone notifications.
   void _notifyBackgroundNotice(GatewayNotice notice) {
     if (!_appInBackground) return;
-    final isBackground = notice.kind == GatewayNoticeKind.background;
+    if (notice.kind != GatewayNoticeKind.background) return;
     unawaited(
       _turnNotifications.showKind(
-        kind: isBackground
-            ? HermesNotificationKind.backgroundDone
-            : HermesNotificationKind.plugin,
-        title: isBackground
-            ? context.l10n.background_task_completed
-            : context.l10n.plugin_notifications,
+        kind: HermesNotificationKind.backgroundDone,
+        title: context.l10n.background_task_completed,
         body: notice.text,
         eventId: notice.identity,
         sessionId: widget.session.id,
@@ -4103,14 +4106,72 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
     final notice = GatewayNotice.fromGatewayEvent(event.type, event.data);
     if (notice == null) return;
+    if (notice.isReview) {
+      _upsertReviewNotice(notice);
+      return;
+    }
+    if (_dismissedGatewayNotices.contains(notice.identity)) return;
     if (_gatewayNotices.any((item) => item.identity == notice.identity)) return;
     _notifyBackgroundNotice(notice);
     setState(() {
       _gatewayNotices.add(notice);
-      if (_gatewayNotices.length > 20) _gatewayNotices.removeAt(0);
-      _savedGatewayNotices[_gatewayNoticeIdentity] = List.unmodifiable(
-        _gatewayNotices,
-      );
+      _trimBackgroundNotices();
+    });
+    _scheduleStreamingFollow();
+  }
+
+  /// Fold a `review.summary` frame into the session's single review card.
+  ///
+  /// The background memory/skill agent reports every pass, and each report
+  /// used to add a card of its own — a chat left open long enough ended with a
+  /// tail of "Hermes review" cards and no way to clear them. One card now
+  /// counts the passes and keeps them as expandable detail. The card sits at
+  /// the end of the timeline so it stays the newest thing in the transcript,
+  /// and a dismissed one only returns when another pass brings news (the
+  /// identity moves with the count, see [GatewayNotice.identity]).
+  void _upsertReviewNotice(GatewayNotice incoming) {
+    final existing = _gatewayNotices.where((item) => item.isReview).toList();
+    final merged = existing.isEmpty
+        ? incoming
+        : existing.first.withReviewUpdate(incoming);
+    final dismissed = _dismissedGatewayNotices.contains(merged.identity);
+    if (dismissed && existing.isEmpty) return;
+    final unchanged =
+        existing.length == 1 &&
+        existing.first.identity == merged.identity &&
+        identical(_gatewayNotices.last, existing.first);
+    if (unchanged) return;
+    setState(() {
+      _gatewayNotices.removeWhere((item) => item.isReview);
+      if (!dismissed) _gatewayNotices.add(merged);
+    });
+    _scheduleStreamingFollow();
+  }
+
+  /// Two completion cards are enough to notice the work; the oldest one is the
+  /// least interesting, so it is the one dropped.
+  void _trimBackgroundNotices() {
+    var excess =
+        _gatewayNotices
+            .where((item) => item.kind == GatewayNoticeKind.background)
+            .length -
+        _maxBackgroundNoticeCards;
+    if (excess <= 0) return;
+    for (final notice in List<GatewayNotice>.from(_gatewayNotices)) {
+      if (excess <= 0) break;
+      if (notice.kind != GatewayNoticeKind.background) continue;
+      _gatewayNotices.remove(notice);
+      excess -= 1;
+    }
+  }
+
+  /// Swipe a notice away. The identity joins the session's dismissed set first,
+  /// so the frame that produced it (or a rebuild from the same state) cannot
+  /// bring it back.
+  void _dismissGatewayNotice(GatewayNotice notice) {
+    _dismissedGatewayNotices.add(notice.identity);
+    setState(() {
+      _gatewayNotices.removeWhere((item) => item.identity == notice.identity);
     });
     _scheduleStreamingFollow();
   }
@@ -5669,7 +5730,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               );
             }
             if (item is GatewayNotice) {
-              return GatewayNoticeCard(notice: item);
+              return GatewayNoticeCard(
+                notice: item,
+                onDismiss: () => _dismissGatewayNotice(item),
+              );
             }
 
             final msg = item as Map<String, dynamic>;
