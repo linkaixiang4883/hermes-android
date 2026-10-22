@@ -29,6 +29,7 @@ import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_journal.dart';
 import '../services/keep_alive_controller.dart';
 import '../services/live_session_watcher.dart';
+import '../services/observed_turn_store.dart';
 import '../services/local_chat_pin_store.dart';
 import '../services/prompt_notifier.dart';
 import '../services/project_folder_provisioner.dart';
@@ -262,6 +263,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   LiveSessionWatcher? _sessionWatcher;
   PromptNotifier? _promptNotifier;
   TurnCompletionNotifier? _completionNotifier;
+  ObservedTurnStore? _observedTurns;
+  Object? _observedTurnsToken;
   bool _notificationsAttached = false;
 
   /// Reaches the action-only Activity view opened from Home.
@@ -500,15 +503,30 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     SavedConnection connection,
     Map<String, String> sessionTitles,
   ) async {
+    final l10n = context.l10n;
     final endpointDigest = endpointDigestForConnection(connection);
     if (endpointDigest == null) {
       return const ActivityFeed(groups: [], blockedCount: 0, runningCount: 0);
     }
-    return readActivityFeed(
+    final journalFeed = await readActivityFeed(
       journal: _journal ??= GatewayTurnJournal(),
       connectionId: connection.id,
       endpointDigest: endpointDigest,
-      l10n: context.l10n,
+      l10n: l10n,
+      sessionTitles: sessionTitles,
+    );
+    if (!journalFeed.isEmpty) return journalFeed;
+    // Stock gateways have no turn-recovery journal. The observed store hears
+    // every fan-out frame, and the prompt registry is the live "needs you"
+    // half — together they keep Activity honest without one.
+    final observed = _observedTurns;
+    if (observed == null) return journalFeed;
+    final client = widget.gatewayRegistry?.existingFor(connection.id);
+    return buildObservedActivityFeed(
+      turns: observed.entries,
+      prompts: client?.pendingPrompts.value ?? const [],
+      l10n: l10n,
+      now: DateTime.now(),
       sessionTitles: sessionTitles,
     );
   }
@@ -593,6 +611,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       approveLabel: () => l10n.approve,
       denyLabel: () => l10n.deny,
     )..attach(client.pendingPrompts, connectionId: widget.connection.id);
+    final observed = ObservedTurnStore();
+    _observedTurns = observed;
+    unawaited(observed.load());
+    _observedTurnsToken = client.addGlobalEventListener((event, mobileId) {
+      final gatewayId = event.data['session_id']?.toString() ?? '';
+      observed.observe(event, mobileId, title: watcher.titleFor(gatewayId));
+    });
     _completionNotifier = TurnCompletionNotifier(
       notifications: TurnNotificationService.shared,
       titleFor: watcher.titleFor,
@@ -750,6 +775,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     _sessionWatcher?.stop();
     _promptNotifier?.detach();
     _completionNotifier?.detach();
+    final observedToken = _observedTurnsToken;
+    final observedClient = widget.gatewayRegistry?.existingFor(
+      widget.connection.id,
+    );
+    if (observedToken != null && observedClient != null) {
+      observedClient.removeGlobalEventListener(observedToken);
+    }
     // Only tear down what this screen created; an injected repository stays
     // owned by whoever supplied it.
     if (_ownsRepository) {

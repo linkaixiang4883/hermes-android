@@ -9,6 +9,7 @@ import 'core/services/config_backup.dart';
 import 'core/services/config_backup_io.dart';
 import 'core/services/config_backup_service.dart';
 import 'core/services/connection_manager.dart';
+import 'core/services/keep_alive_controller.dart';
 import 'core/services/gateway_client_registry.dart';
 import 'core/services/gateway_turn_application_controller.dart';
 import 'core/services/local_chat_pin_store.dart';
@@ -223,8 +224,18 @@ class HermesAppState extends State<HermesApp> {
     // credentials when it was built, so without this signal the change would
     // only take effect after a restart, and a deleted connection would leave a
     // socket reconnecting to a host the user removed.
-    widget.connManager.onConnectionClientInvalidated =
-        _gatewayRegistry.closeConnection;
+    widget.connManager.onConnectionClientInvalidated = (connectionId) {
+      _gatewayRegistry.closeConnection(connectionId);
+      // The foreground service exists for gateway notifications; with no
+      // saved connection left there is nothing to keep alive.
+      if (widget.connManager.getConnections().isEmpty) {
+        unawaited(
+          KeepAliveController.shared.syncForConnections(
+            hasGatewayConnection: false,
+          ),
+        );
+      }
+    };
     _turnApplicationController = GatewayTurnApplicationController(
       registry: _gatewayRegistry,
     );

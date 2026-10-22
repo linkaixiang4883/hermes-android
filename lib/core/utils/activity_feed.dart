@@ -31,7 +31,9 @@ library;
 
 import '../../l10n/app_localizations.dart';
 import '../models/gateway_turn_contract.dart';
+import '../models/pending_prompt.dart';
 import '../services/gateway_turn_journal.dart';
+import '../services/observed_turn_store.dart';
 import '../theme/hermes_theme.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -368,3 +370,110 @@ Future<ActivityFeed> readActivityFeed({
     return const ActivityFeed(groups: [], blockedCount: 0, runningCount: 0);
   }
 }
+
+/// Builds the Activity feed from observed fan-out frames plus the app-wide
+/// blocking-prompt registry.
+///
+/// This is the stock-gateway source: `turn_recovery` journals do not exist
+/// there, so [buildActivityFeed] returns nothing and the screen used to sit
+/// empty. Observed turns are coarser (one row per chat, not per turn) but they
+/// are real, and the prompt rows are exactly the work that needs the user.
+ActivityFeed buildObservedActivityFeed({
+  required Iterable<ObservedTurn> turns,
+  required Iterable<PendingPrompt> prompts,
+  required AppLocalizations l10n,
+  required DateTime now,
+  Map<String, String> sessionTitles = const {},
+  Duration completedWindow = kActivityCompletedWindow,
+  int groupLimit = kActivityGroupLimit,
+}) {
+  if (groupLimit <= 0) {
+    throw ArgumentError.value(groupLimit, 'groupLimit', 'must be positive');
+  }
+  final needsYou = <ActivityItem>[];
+  for (final prompt in prompts) {
+    final sessionId = prompt.mobileSessionId ?? prompt.gatewaySessionId;
+    if (sessionId.isEmpty) continue;
+    needsYou.add(
+      ActivityItem(
+        sessionId: sessionId,
+        title: sessionTitles[sessionId],
+        clientTurnId: prompt.id,
+        label: prompt.summary.isEmpty
+            ? l10n.waiting_for_your_input
+            : prompt.summary,
+        status: HermesStatus.blocked,
+        updatedAt: prompt.createdAt,
+      ),
+    );
+  }
+  final running = <ActivityItem>[];
+  final failed = <ActivityItem>[];
+  final completed = <ActivityItem>[];
+  final cutoff = now.subtract(completedWindow);
+  for (final turn in turns) {
+    final sessionId = turn.mobileSessionId ?? turn.gatewaySessionId;
+    if (sessionId.isEmpty) continue;
+    final item = ActivityItem(
+      sessionId: sessionId,
+      title: sessionTitles[sessionId] ?? turn.title,
+      clientTurnId: 'observed-${turn.gatewaySessionId}',
+      label: switch (turn.state) {
+        'running' => l10n.status_running,
+        'failed' => l10n.the_turn_failed,
+        _ => l10n.status_completed,
+      },
+      status: switch (turn.state) {
+        'running' => HermesStatus.running,
+        'failed' => HermesStatus.failed,
+        _ => HermesStatus.completed,
+      },
+      updatedAt: turn.updatedAt,
+    );
+    switch (turn.state) {
+      case 'running':
+        running.add(item);
+      case 'failed':
+        failed.add(item);
+      default:
+        if (turn.updatedAt.isAfter(cutoff)) completed.add(item);
+    }
+  }
+  List<ActivityItem> cap(List<ActivityItem> items) {
+    items.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+    return items.take(groupLimit).toList(growable: false);
+  }
+
+  final groups = <ActivityGroup>[
+    if (needsYou.isNotEmpty)
+      ActivityGroup(
+        kind: ActivityGroupKind.needsYou,
+        items: cap(needsYou),
+        totalCount: needsYou.length,
+      ),
+    if (running.isNotEmpty)
+      ActivityGroup(
+        kind: ActivityGroupKind.running,
+        items: cap(running),
+        totalCount: running.length,
+      ),
+    if (failed.isNotEmpty)
+      ActivityGroup(
+        kind: ActivityGroupKind.failed,
+        items: cap(failed),
+        totalCount: failed.length,
+      ),
+    if (completed.isNotEmpty)
+      ActivityGroup(
+        kind: ActivityGroupKind.completed,
+        items: cap(completed),
+        totalCount: completed.length,
+      ),
+  ];
+  return ActivityFeed(
+    groups: groups,
+    blockedCount: needsYou.length,
+    runningCount: running.length,
+  );
+}
+
