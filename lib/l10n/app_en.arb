@@ -674,6 +674,18 @@
   "usage_bar_summary": "{used} of {max} · {percent}%",
   "usage_this_turn": "This turn: {value} tokens",
   "usage_model_name": "Model: {model}",
+  "bots": "Bots",
+  "bots_subtitle": "Each bot is a Hermes profile with its own permanent chat, memory and skills.",
+  "bots_empty": "No profiles yet",
+  "bots_load_failed": "Could not load bots",
+  "bot_chat_open_failed": "Could not open the bot chat: {error}",
+  "@bot_chat_open_failed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
   "compress_context": "Compress context",
   "compress_confirm_message": "Summarize the earlier conversation into one summary? This rewrites the stored transcript and cannot be undone.",
   "compress_done": "Context compressed",

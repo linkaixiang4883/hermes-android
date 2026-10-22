@@ -2477,6 +2477,24 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get bots => 'Bots';
+
+  @override
+  String get bots_subtitle =>
+      'Each bot is a Hermes profile with its own permanent chat, memory and skills.';
+
+  @override
+  String get bots_empty => 'No profiles yet';
+
+  @override
+  String get bots_load_failed => 'Could not load bots';
+
+  @override
+  String bot_chat_open_failed(String error) {
+    return 'Could not open the bot chat: $error';
+  }
+
+  @override
   String get compress_context => 'Compress context';
 
   @override

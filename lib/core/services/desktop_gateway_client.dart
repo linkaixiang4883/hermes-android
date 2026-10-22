@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import '../models/bot_profile.dart';
+
 import 'capability_registry.dart';
 import 'connection_manager.dart';
 import 'gateway_live_turn.dart';
@@ -980,6 +982,129 @@ class DesktopGatewayClient {
       final client = await _connectControl();
       return client.send(method, params);
     }, capabilities: _capabilities);
+  }
+
+  // ── Bots (Bot Mode's roster over profiles) ───────────────────────────
+
+  static const String botChatTitle = 'Bot Chat';
+
+  /// Lists this machine's Hermes profiles with their canonical chat rows.
+  ///
+  /// A bot IS a profile; `canonical_session` is resolved server-side on every
+  /// listing (the client never carries a session-id pointer).
+  Future<List<BotProfile>> listProfiles() async {
+    final client = await _connectControl();
+    final response = await client.send('profiles.list', const {
+      'include_sessions': true,
+    });
+    final error = response['error'];
+    if (error != null) {
+      throw StateError(_controlErrorMessage('profiles.list', error));
+    }
+    final result = response['result'];
+    final rows = result is Map ? result['profiles'] : null;
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows.whereType<Map>())
+        BotProfile.fromJson(Map<String, dynamic>.from(row)),
+    ];
+  }
+
+  /// Stored sessions matching a title — the canonical-chat registry lookup.
+  Future<List<Map<String, dynamic>>> listSessions({
+    String? profile,
+    String? title,
+    bool includeHidden = false,
+    int? limit,
+  }) async {
+    final client = await _connectControl();
+    final params = <String, dynamic>{};
+    final scopedProfile = profile?.trim();
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      params['profile'] = scopedProfile;
+    }
+    if (title != null && title.isNotEmpty) {
+      params['title'] = title;
+    }
+    if (includeHidden) {
+      params['include_hidden'] = true;
+    }
+    if (limit != null) {
+      params['limit'] = limit;
+    }
+    final response = await client.send('session.list', params);
+    final error = response['error'];
+    if (error != null) {
+      throw StateError(_controlErrorMessage('session.list', error));
+    }
+    final result = response['result'];
+    final rows = result is Map ? result['sessions'] : null;
+    if (rows is! List) return const [];
+    return [
+      for (final row in rows.whereType<Map>())
+        Map<String, dynamic>.from(row),
+    ];
+  }
+
+  /// The bot's ONE canonical chat, resolved by title — never by a stored id.
+  ///
+  /// Resolution order mirrors the desktop plugin: look up the hidden
+  /// `Bot Chat` row; create it when absent (hidden, with a stable
+  /// idempotency key); then look AGAIN so a concurrent creator wins and both
+  /// callers land on the same row instead of forking the relationship.
+  Future<Session> resolveBotChat(String profile) async {
+    final scope = profile.trim();
+    if (scope.isEmpty) throw ArgumentError('profile is required');
+    final existing = await _findCanonicalBotChat(scope);
+    if (existing != null) return existing;
+
+    final client = await _connectControl();
+    final created = await client.send('session.create', {
+      'profile': scope,
+      'title': botChatTitle,
+      'hidden': true,
+      'idempotency_key': 'hermes-android-bot-chat-$scope',
+    });
+    if (created['error'] != null) {
+      throw StateError(_controlErrorMessage('session.create', created['error']));
+    }
+    final adopted = await _findCanonicalBotChat(scope);
+    if (adopted != null) return adopted;
+    throw StateError(
+      'The gateway created no "$botChatTitle" session for $scope',
+    );
+  }
+
+  Future<Session?> _findCanonicalBotChat(String profile) async {
+    final rows = await listSessions(
+      profile: profile,
+      title: botChatTitle,
+      includeHidden: true,
+      limit: 1,
+    );
+    if (rows.isEmpty) return null;
+    final row = rows.first;
+    final id = (row['resolved_id'] ?? row['id'])?.toString().trim() ?? '';
+    if (id.isEmpty) return null;
+    return Session(
+      id: id,
+      title: (row['title'] ?? botChatTitle).toString(),
+      model: (row['model'] ?? 'Default').toString(),
+      source: (row['source'] ?? 'bot').toString(),
+      messageCount: (row['message_count'] as num?)?.toInt() ?? 0,
+      isActive: row['is_active'] == true,
+      preview: (row['preview'] ?? '').toString(),
+      startedAt: (row['started_at'] as num?)?.toDouble() ?? 0,
+      profile: profile,
+    );
+  }
+
+  String _controlErrorMessage(String method, Object error) {
+    if (error is Map) {
+      final message = error['message']?.toString().trim() ?? '';
+      if (message.isNotEmpty) return message;
+    }
+    return '$method failed';
   }
 
   /// What this gateway advertises or has been proven to support.

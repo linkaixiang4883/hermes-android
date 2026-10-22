@@ -51,6 +51,7 @@ import 'memory_screen.dart';
 import 'settings_screen.dart';
 import 'skills_screen.dart';
 import '../widgets/share_text_review_sheet.dart';
+import 'bots_screen.dart';
 import 'workspace_sessions_screen.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -1377,6 +1378,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         _openWorkspaceSessionView(WorkspaceSessionView.unassigned);
       case 'archived-quick':
         _openWorkspaceSessionView(WorkspaceSessionView.archivedQuick);
+      case 'bots':
+        final registry = widget.gatewayRegistry;
+        final client =
+            registry?.clientFor(connection) ??
+            DesktopGatewayClient.fromConnection(connection);
+        _push(
+          BotsScreen(
+            connection: connection,
+            client: client,
+            ownsClient: registry == null,
+            onOpenSession: (session) => unawaited(_openSession(session)),
+          ),
+        );
       case 'files':
         unawaited(_openFiles());
       case 'cron':

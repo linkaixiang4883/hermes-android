@@ -107,6 +107,12 @@ List<MoreSection> buildMoreSections({
           icon: Icons.archive_outlined,
         ),
         MoreEntry(
+          id: 'bots',
+          title: l10n.bots,
+          subtitle: l10n.bots_subtitle,
+          icon: Icons.smart_toy_outlined,
+        ),
+        MoreEntry(
           id: 'files',
           title: l10n.files,
           subtitle: l10n.browse_the_miniserver_folders_behind_your_projects,

@@ -4179,6 +4179,36 @@ abstract class AppLocalizations {
   /// **'Model: {model}'**
   String usage_model_name(String model);
 
+  /// No description provided for @bots.
+  ///
+  /// In en, this message translates to:
+  /// **'Bots'**
+  String get bots;
+
+  /// No description provided for @bots_subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Each bot is a Hermes profile with its own permanent chat, memory and skills.'**
+  String get bots_subtitle;
+
+  /// No description provided for @bots_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No profiles yet'**
+  String get bots_empty;
+
+  /// No description provided for @bots_load_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load bots'**
+  String get bots_load_failed;
+
+  /// No description provided for @bot_chat_open_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open the bot chat: {error}'**
+  String bot_chat_open_failed(String error);
+
   /// No description provided for @compress_context.
   ///
   /// In en, this message translates to:

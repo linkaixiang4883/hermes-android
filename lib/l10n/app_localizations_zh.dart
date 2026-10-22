@@ -2395,6 +2395,23 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get bots => 'Bots';
+
+  @override
+  String get bots_subtitle => '每个 bot 是一个 Hermes profile，有独立的永久聊天、记忆与技能。';
+
+  @override
+  String get bots_empty => '还没有任何 profile';
+
+  @override
+  String get bots_load_failed => '无法加载 Bots';
+
+  @override
+  String bot_chat_open_failed(String error) {
+    return '打开 bot 聊天失败：$error';
+  }
+
+  @override
   String get compress_context => '压缩上下文';
 
   @override
@@ -4824,6 +4841,23 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String usage_model_name(String model) {
     return '模型 $model';
+  }
+
+  @override
+  String get bots => 'Bots';
+
+  @override
+  String get bots_subtitle => '每个 bot 是一个 Hermes profile，有独立的永久聊天、记忆与技能。';
+
+  @override
+  String get bots_empty => '还没有任何 profile';
+
+  @override
+  String get bots_load_failed => '无法加载 Bots';
+
+  @override
+  String bot_chat_open_failed(String error) {
+    return '打开 bot 聊天失败：$error';
   }
 
   @override
