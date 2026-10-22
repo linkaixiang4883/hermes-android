@@ -48,15 +48,22 @@
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1404**（2026-10-20 上下文压缩按钮后；此前 1400 = 安装权限流、1399 = MEDIA 安装/通知）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1471**（2026-10-22 Bot Mode/审批通知/Activity/FGS 全部落地后；P3=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
 
-## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 施工中）
+## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
 > 计划：`.hermes/plans/2026-10-22_164019-bot-mode-approvals-activity-apk.md`。每包完成即更新本节；门禁基线随包递增。
 
 **进度**
 - [x] **P0 profile 维度**（`bfa87f4`，1410 测试）：`Session.profile`（null=连接默认）；`DesktopGatewayClient._sessionProfiles`（按 mobile id 记），`session.resume/create` 与 REST `/messages` 带 `profile`；`_rebindStoredSessions` 重连沿用。**决定**：不做复合映射键——对外监听 API 仍以 `Session.id` 为键，profile 只作为 per-session 事实随绑定传递（runtime id 全局唯一，反向映射无歧义）。
-- [x] **P1 Bots 名册 + 单聊**（`bf461eb`，1414 测试）：More → Bots 页（`bots_screen.dart`，5s 轮询 `profiles.list`）；点 bot → `session.list{title:'Bot Chat',include_hidden:true}` → 无则 `session.create{title,hidden,idempotency_key}` → **重查收养**；`Session.profile` 全链（P0）让其聊天落在该 profile。入口放在 More（非 Chats 分段——体积考虑，后续可调） · [ ] P1B 群组 · [ ] P2 审批/通知/watcher/FGS · [ ] P3 Activity · [ ] P4 APK 自删 · [ ] P4B 通知卡治理 · [ ] P5 收尾
+- [x] **P1 Bots 名册 + 单聊**（`bf461eb`，1414 测试）：More → Bots 页（`bots_screen.dart`，5s 轮询 `profiles.list`）；点 bot → `session.list{title:'Bot Chat',include_hidden:true}` → 无则 `session.create{title,hidden,idempotency_key}` → **重查收养**；`Session.profile` 全链（P0）让其聊天落在该 profile。入口放在 More（非 Chats 分段——体积考虑，后续可调）
+- [x] **P1B 群组房间**（`059290a`，+33 测试）：`group_rooms_client.dart`（groups.* 全套 RPC + 容错模型）；`group_rooms_screen`（5s 列表 + 创建，`seatable_profiles` 选成员）；`group_room_screen`（`state` 取游标 → 2s `groups.log{since_seq}` 增量；user/member/turn/room 事件渲染；发送单飞 + event_id 落盘重试；approve/retry/stop/rename/disband）；入口 = Bots 页 AppBar「群组」；`DesktopGatewayClient` 仅加 `callControl()`。
+- [x] **P2 审批/完成通知中央化**（`aa97c1a`，1421）：`pendingPrompts` 全会话接纳（未映射也登记；不显示才回 `4404`，绝不 `-32601`）；clarify 全锁 `4404`；同会话并发审批排队；`respondToPendingPrompt` 应用级应答；`LiveSessionWatcher`（5s `session.active_list` + `session.activate{omit_messages}`）；`PromptNotifier`/`TurnCompletionNotifier` 消费全局事件；`ChatVisibility` 抑制前台会话；ChatScreen 不再自己发审批/完成通知。
+- [x] **P2-6 FGS 保活**（`9e6cd23`，+10 测试）：`HermesConnectionService`（`remoteMessaging`；SDK 29–33 退 `dataSync`），常驻通知 channel `hermes_connection`；`KeepAliveController` 默认开、设置页开关、无连接即停（main 连接删除回调已接）。
+- [x] **P3 Activity**（`d99a4b9`，+6 测试）：`ObservedTurnStore`（全量扇出帧 → running/completed/failed，100 上限、持久化）+ `buildObservedActivityFeed`（stock 网关回落源 + `pendingPrompts` 待处理组）；journal 有数据时只读 journal（二选一）。
+- [x] **P4 APK 自删**（`edd0027`）：安装启动落盘 `install_cleanup_v1`；下次启动版本号变大才删 MediaStore 行+缓存 APK，否则只清 ≥7 天缓存副本。
+- [x] **P4B 通知卡治理**（`482d9a2`，+5 测试）：review.summary 合并一张可关闭复盘卡、background 最多 2 张、去进程级 static 缓存、review 不发系统通知。
+- [x] **P5 收尾**：文档/技能更新；最终门禁 **1471**；APK 已构建补签（arm64）。
 
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1471**（2026-10-22 全部工作包后；P2=1421、P1=1414、P0=1410、此前 1404）。
 
