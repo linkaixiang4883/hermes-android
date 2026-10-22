@@ -50,6 +50,16 @@
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1404**（2026-10-20 上下文压缩按钮后；此前 1400 = 安装权限流、1399 = MEDIA 安装/通知）。
 
+## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 施工中）
+
+> 计划：`.hermes/plans/2026-10-22_164019-bot-mode-approvals-activity-apk.md`。每包完成即更新本节；门禁基线随包递增。
+
+**进度**
+- [x] **P0 profile 维度**（`bfa87f4`，1410 测试）：`Session.profile`（null=连接默认）；`DesktopGatewayClient._sessionProfiles`（按 mobile id 记），`session.resume/create` 与 REST `/messages` 带 `profile`；`_rebindStoredSessions` 重连沿用。**决定**：不做复合映射键——对外监听 API 仍以 `Session.id` 为键，profile 只作为 per-session 事实随绑定传递（runtime id 全局唯一，反向映射无歧义）。
+- [x] **P1 Bots 名册 + 单聊**（`bf461eb`，1414 测试）：More → Bots 页（`bots_screen.dart`，5s 轮询 `profiles.list`）；点 bot → `session.list{title:'Bot Chat',include_hidden:true}` → 无则 `session.create{title,hidden,idempotency_key}` → **重查收养**；`Session.profile` 全链（P0）让其聊天落在该 profile。入口放在 More（非 Chats 分段——体积考虑，后续可调） · [ ] P1B 群组 · [ ] P2 审批/通知/watcher/FGS · [ ] P3 Activity · [ ] P4 APK 自删 · [ ] P4B 通知卡治理 · [ ] P5 收尾
+
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1471**（2026-10-22 全部工作包后；P2=1421、P1=1414、P0=1410、此前 1404）。
+
 ## 重连续接 + 实时跟随（2026-10-17 六阶段 + 2026-10-18 QA 修复轮落地）
 
 **目标**：离开聊天页/挂后台/被杀后回来，自动从 `session.resume` 的 `inflight` 重建「进行中那一轮」并**持续实时显示**（delta/interim/工具/思考），终态自动收尾——对齐桌面端。不依赖前台服务/推送（那是独立的后续工作）。
