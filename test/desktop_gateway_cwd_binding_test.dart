@@ -50,6 +50,10 @@ class _FakeGateway {
   /// Answers the first `session.create` with an error, then succeeds.
   bool failFirstCreate = false;
 
+  /// Rejects the first create that carries `cwd_explicit` (older gateway),
+  /// then accepts the retry without it.
+  bool rejectCwdExplicitOnce = false;
+
   /// When set, `session.resume` succeeds for this id instead of 4007.
   String? liveSessionId;
 
@@ -108,7 +112,14 @@ class _FakeGateway {
         }
       case 'session.create':
         creates.add(params);
-        if (failFirstCreate) {
+        if (rejectCwdExplicitOnce && params.containsKey('cwd_explicit')) {
+          rejectCwdExplicitOnce = false;
+          reply(null, error: {
+            'code': -32602,
+            'message':
+                'invalid params for session.create: cwd_explicit: Extra inputs are not permitted',
+          });
+        } else if (failFirstCreate) {
           failFirstCreate = false;
           reply(null, error: {'code': -32603, 'message': 'gateway hiccup'});
         } else {
@@ -179,8 +190,8 @@ void main() {
 
       expect(attachment.refText, '@file:one');
       expect(gateway.creates, hasLength(2));
-      expect(gateway.creates.first, {'cwd': '/srv/p1'});
-      expect(gateway.creates.last, {'cwd': '/srv/p1'});
+      expect(gateway.creates.first, {'cwd': '/srv/p1', 'cwd_explicit': true});
+      expect(gateway.creates.last, {'cwd': '/srv/p1', 'cwd_explicit': true});
     },
   );
 
@@ -212,7 +223,28 @@ void main() {
       // about the create that precedes it.
     }
 
-    expect(gateway.creates.single, {'cwd': '/srv/p2'});
+    expect(gateway.creates.single, {'cwd': '/srv/p2', 'cwd_explicit': true});
+  });
+
+  test('an older gateway rejects cwd_explicit; the create is retried without it',
+      () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    gateway.rejectCwdExplicitOnce = true;
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    await client.ensureSession('mob-old', workingDirectory: '/srv/p3');
+
+    expect(gateway.creates, hasLength(2));
+    expect(gateway.creates.first, {'cwd': '/srv/p3', 'cwd_explicit': true});
+    expect(gateway.creates.last, {'cwd': '/srv/p3'});
   });
 
   test('a chat that already exists is never re-homed by the remembered '

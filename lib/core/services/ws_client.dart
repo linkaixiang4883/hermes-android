@@ -1660,11 +1660,20 @@ class WsClient {
     String? title,
     bool hidden = false,
     String? idempotencyKey,
+    bool? cwdExplicit,
   }) async {
     final params = <String, dynamic>{};
     if (model != null) params['model'] = model;
     final cwd = workingDirectory?.trim();
-    if (cwd != null && cwd.isNotEmpty) params['cwd'] = cwd;
+    if (cwd != null && cwd.isNotEmpty) {
+      params['cwd'] = cwd;
+      // #52589 provenance: a deliberately chosen workspace (a Project folder)
+      // must not be overridden by the target profile's configured terminal.cwd.
+      // Older gateways reject the field; [DesktopGatewayClient] retries without.
+      if (cwdExplicit != null) {
+        params['cwd_explicit'] = cwdExplicit;
+      }
+    }
     if (profile != null && profile.trim().isNotEmpty) {
       params['profile'] = profile.trim();
     }

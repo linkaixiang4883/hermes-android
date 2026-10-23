@@ -591,13 +591,40 @@ class DesktopGatewayClient {
       // New mobile chats do not exist in Hermes yet. Stock Hermes rejects a
       // client-supplied `session_id` on session.create, so retain both gateway-
       // minted identities: runtime for this socket and stored for reconnect.
-      final created = await client.createSession(
+      final created = await _createSessionWithCwdProvenance(
+        client,
         workingDirectory: workingDirectory,
         profile: profile,
       );
       return _DesktopGatewayBinding(
         runtimeSessionId: created.runtimeSessionId,
         storedSessionId: created.storedSessionId,
+      );
+    }
+  }
+
+  /// `session.create` with `cwd_explicit`, dropped once for older gateways.
+  ///
+  /// Desktop does the same (its DROPPABLE_CREATE_FIELDS): a backend predating
+  /// #122899 rejects the whole create at admission, so the field is retried
+  /// away instead of losing the chat.
+  Future<CreatedGatewaySession> _createSessionWithCwdProvenance(
+    WsClient client, {
+    required String? workingDirectory,
+    required String? profile,
+  }) async {
+    final hasCwd = workingDirectory?.trim().isNotEmpty == true;
+    try {
+      return await client.createSession(
+        workingDirectory: workingDirectory,
+        profile: profile,
+        cwdExplicit: hasCwd ? true : null,
+      );
+    } on JsonRpcError catch (error) {
+      if (!hasCwd || !error.message.contains('cwd_explicit')) rethrow;
+      return client.createSession(
+        workingDirectory: workingDirectory,
+        profile: profile,
       );
     }
   }
