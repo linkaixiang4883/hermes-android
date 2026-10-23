@@ -529,6 +529,52 @@ void main() {
       );
     });
 
+    test('discovery asks capabilities and follows next_offset to the end', () async {
+      final rpc = _RecordingRpc([
+        _ok({
+          'driver': true,
+          'seatable_profiles': ['research'],
+          'methods': ['groups.list'],
+          'max_log_limit': 50,
+        }),
+        _ok({
+          'rooms': [_roomJson(roomId: 'room-1')],
+          'next_offset': 1,
+        }),
+        _ok({
+          'rooms': [_roomJson(roomId: 'room-2', name: 'Second room')],
+          'next_offset': null,
+        }),
+      ]);
+
+      final discovery = await GroupRoomsClient(rpc.call).discover(pageSize: 1);
+
+      expect(
+        rpc.calls.map((call) => call.method),
+        ['groups.capabilities', 'groups.list', 'groups.list'],
+      );
+      expect(rpc.calls[1].params['offset'], 0);
+      expect(rpc.calls[2].params['offset'], 1);
+      expect(
+        discovery.rooms.map((room) => room.roomId),
+        ['room-1', 'room-2'],
+      );
+      expect(discovery.driverAvailable, isTrue);
+      expect(discovery.capabilities.seatableProfiles, ['research']);
+    });
+
+    test('a gateway without a discussion driver says so in discovery', () async {
+      final rpc = _RecordingRpc([
+        _ok({'driver': false}),
+        _ok({'rooms': <dynamic>[], 'next_offset': null}),
+      ]);
+
+      final discovery = await GroupRoomsClient(rpc.call).discover();
+
+      expect(discovery.driverAvailable, isFalse);
+      expect(discovery.rooms, isEmpty);
+    });
+
     test('the profile scope rides along without clobbering call params', () async {
       final rpc = _RecordingRpc([_ok({'rooms': <dynamic>[]})]);
       await GroupRoomsClient(rpc.call, profile: ' sol ').list(limit: 5);

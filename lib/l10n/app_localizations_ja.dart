@@ -2515,4 +2515,11 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get live_turn_following => 'Running · auto-syncing';
+
+  @override
+  String get group_driver_offline =>
+      'Group driver is not running — members can\'t reply.';
+
+  @override
+  String get group_you => 'You';
 }

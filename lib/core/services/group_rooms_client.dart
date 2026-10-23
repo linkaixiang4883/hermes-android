@@ -219,6 +219,24 @@ class GroupRoom {
   String toString() => 'GroupRoom($roomId "$name" seq=$latestSeq)';
 }
 
+/// Everything a room list needs: the rooms, plus whether this gateway can
+/// actually run a Discussion driver for them.
+///
+/// Discovery mirrors the desktop plugin: ask `groups.capabilities` first, then
+/// page `groups.list` until `next_offset` ends. A phone that only asked for one
+/// page used to truncate installs with more than [pageSize] rooms.
+class GroupDiscovery {
+  final List<GroupRoom> rooms;
+  final GroupCapabilities capabilities;
+
+  const GroupDiscovery({
+    this.rooms = const [],
+    this.capabilities = const GroupCapabilities(),
+  });
+
+  bool get driverAvailable => capabilities.driver;
+}
+
 /// `groups.list` page. [nextOffset] is null at the end of the listing.
 class GroupRoomPage {
   final List<GroupRoom> rooms;
@@ -237,11 +255,13 @@ class GroupRoomPage {
 
 /// What this gateway can seat and how far `groups.log` may page.
 class GroupCapabilities {
+  final bool driver;
   final List<String> seatableProfiles;
   final List<String> methods;
   final int maxLogLimit;
 
   const GroupCapabilities({
+    this.driver = false,
     this.seatableProfiles = const [],
     this.methods = const [],
     this.maxLogLimit = 0,
@@ -249,6 +269,7 @@ class GroupCapabilities {
 
   factory GroupCapabilities.fromJson(Map<String, dynamic> json) {
     return GroupCapabilities(
+      driver: _flag(json['driver']),
       seatableProfiles: _strings(json['seatable_profiles']),
       methods: _strings(json['methods']),
       maxLogLimit: _integer(json['max_log_limit']),
@@ -585,6 +606,32 @@ class GroupRoomsClient {
     return GroupCapabilities.fromJson(
       await _request('groups.capabilities', const {}),
     );
+  }
+
+  /// `groups.capabilities` + every `groups.list` page.
+  ///
+  /// Matches the desktop discovery loop: no fixed single page, and the
+  /// capabilities answer travels with the rooms so the caller can warn when
+  /// the gateway has no Discussion driver.
+  Future<GroupDiscovery> discover({
+    bool includeDisbanded = false,
+    int pageSize = 100,
+  }) async {
+    final capabilities = await this.capabilities();
+    final rooms = <GroupRoom>[];
+    var offset = 0;
+    for (;;) {
+      final page = await list(
+        includeDisbanded: includeDisbanded,
+        limit: pageSize,
+        offset: offset,
+      );
+      rooms.addAll(page.rooms);
+      final next = page.nextOffset;
+      if (next == null || next <= offset || page.rooms.isEmpty) break;
+      offset = next;
+    }
+    return GroupDiscovery(rooms: rooms, capabilities: capabilities);
   }
 
   /// `groups.list` — live rooms by default; disbanded ones only on request.

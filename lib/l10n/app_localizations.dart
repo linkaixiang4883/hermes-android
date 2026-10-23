@@ -4358,6 +4358,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Running · auto-syncing'**
   String get live_turn_following;
+
+  /// No description provided for @group_driver_offline.
+  ///
+  /// In en, this message translates to:
+  /// **'Group driver is not running — members can\'t reply.'**
+  String get group_driver_offline;
+
+  /// No description provided for @group_you.
+  ///
+  /// In en, this message translates to:
+  /// **'You'**
+  String get group_you;
 }
 
 class _AppLocalizationsDelegate

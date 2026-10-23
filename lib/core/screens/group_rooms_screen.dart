@@ -79,6 +79,9 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
   bool _loading = true;
   bool _creating = false;
   String? _error;
+
+  /// Null until a live discovery answers; a test loader leaves it unknown.
+  bool? _driverAvailable;
   Timer? _poll;
 
   GroupRoomsClient? _roomsClient;
@@ -100,13 +103,18 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
     super.dispose();
   }
 
-  GroupRoomsLoader get _loader =>
-      widget.testLoader ?? () => _roomsClient!.list(limit: 100);
+  Future<GroupRoomPage> _readRooms() async {
+    final injected = widget.testLoader;
+    if (injected != null) return injected();
+    final discovery = await _roomsClient!.discover();
+    _driverAvailable = discovery.driverAvailable;
+    return GroupRoomPage(rooms: discovery.rooms);
+  }
 
   Future<void> _load() async {
     if (!mounted) return;
     try {
-      final page = await _loader();
+      final page = await _readRooms();
       if (!mounted) return;
       setState(() {
         _rooms = page.rooms;
@@ -239,7 +247,18 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
             : const Icon(Icons.add),
         label: Text(context.l10n.group_new),
       ),
-      body: RefreshIndicator(onRefresh: _load, child: _buildBody(context)),
+      body: Column(
+        children: [
+          if (_driverAvailable == false)
+            _DriverOfflineStrip(
+              key: const ValueKey('group-driver-offline'),
+              text: context.l10n.group_driver_offline,
+            ),
+          Expanded(
+            child: RefreshIndicator(onRefresh: _load, child: _buildBody(context)),
+          ),
+        ],
+      ),
     );
   }
 
@@ -429,6 +448,47 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
           child: Text(context.l10n.create),
         ),
       ],
+    );
+  }
+}
+
+/// The gateway answered `groups.capabilities` with `driver: false`: rooms may
+/// exist but no member will ever answer. Say so instead of letting the user
+/// type into a dead room.
+class _DriverOfflineStrip extends StatelessWidget {
+  final String text;
+
+  const _DriverOfflineStrip({super.key, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: HermesSpacing.md,
+          vertical: HermesSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.portable_wifi_off_outlined,
+              size: 16,
+              color: theme.colorScheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: HermesSpacing.sm),
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

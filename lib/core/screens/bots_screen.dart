@@ -16,7 +16,9 @@ import 'package:hermes_android/core/l10n/l10n.dart';
 import '../models/bot_profile.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
+import '../services/group_rooms_client.dart';
 import '../theme/hermes_theme.dart';
+import 'group_room_screen.dart';
 import 'group_rooms_screen.dart';
 
 /// Reads the roster. Injectable so the pane is testable without a gateway.
@@ -24,6 +26,11 @@ typedef BotsRosterLoader = Future<List<BotProfile>> Function();
 
 /// Resolves (and, first time, creates) one bot's canonical chat.
 typedef BotChatOpener = Future<Session> Function(BotProfile bot);
+
+/// Reads the hosted-room roster shown beside the bots, like the desktop
+/// roster's group rows. Injectable so the pane stays testable without a
+/// gateway.
+typedef BotsGroupsLoader = Future<GroupRoomPage> Function();
 
 class BotsScreen extends StatefulWidget {
   final SavedConnection connection;
@@ -47,6 +54,9 @@ class BotsScreen extends StatefulWidget {
   /// Poll cadence while visible — the desktop roster uses the same window.
   final Duration refreshInterval;
 
+  @visibleForTesting
+  final BotsGroupsLoader? testGroups;
+
   const BotsScreen({
     super.key,
     required this.connection,
@@ -55,6 +65,7 @@ class BotsScreen extends StatefulWidget {
     this.onOpenSession,
     this.testLoader,
     this.testOpener,
+    this.testGroups,
     this.refreshInterval = const Duration(seconds: 5),
   });
 
@@ -62,10 +73,48 @@ class BotsScreen extends StatefulWidget {
   State<BotsScreen> createState() => _BotsScreenState();
 }
 
+class _SectionHeader extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget? trailing;
+
+  const _SectionHeader({required this.icon, required this.label, this.trailing});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        HermesSpacing.md,
+        HermesSpacing.md,
+        HermesSpacing.md,
+        HermesSpacing.xs,
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 16, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: HermesSpacing.sm),
+          Expanded(
+            child: Text(
+              label,
+              style: theme.textTheme.labelMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
 class _BotsScreenState extends State<BotsScreen> {
   List<BotProfile> _bots = const [];
+  List<GroupRoom> _groups = const [];
   bool _loading = true;
   String? _error;
+  String? _groupsError;
   String? _opening;
   Timer? _poll;
 
@@ -96,6 +145,7 @@ class _BotsScreenState extends State<BotsScreen> {
         _error = null;
         _loading = false;
       });
+      await _loadGroups();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -105,6 +155,48 @@ class _BotsScreenState extends State<BotsScreen> {
         _loading = false;
       });
     }
+  }
+
+  /// Rooms are listed next to the bots (desktop roster parity), so an existing
+  /// group is one tap away instead of hidden behind the app-bar icon. A room
+  /// failure never blanks the bot roster: it keeps its own error line.
+  Future<void> _loadGroups() async {
+    final injected = widget.testGroups;
+    final client = widget.client;
+    if (injected == null && client == null) return;
+    try {
+      final GroupRoomPage page;
+      if (injected != null) {
+        page = await injected();
+      } else {
+        final discovery = await GroupRoomsClient.forGateway(client!).discover();
+        page = GroupRoomPage(rooms: discovery.rooms);
+      }
+      if (!mounted) return;
+      setState(() {
+        _groups = page.rooms;
+        _groupsError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _groupsError = error.toString();
+      });
+    }
+  }
+
+  Future<void> _openGroup(GroupRoom room) async {
+    final client = widget.client;
+    if (client == null) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => GroupRoomScreen(
+          connection: widget.connection,
+          room: room,
+          rooms: GroupRoomsClient.forGateway(client),
+        ),
+      ),
+    );
   }
 
   Future<void> _open(BotProfile bot) async {
@@ -173,7 +265,7 @@ class _BotsScreenState extends State<BotsScreen> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_loading && _bots.isEmpty) {
+    if (_loading && _bots.isEmpty && _groups.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     if (_bots.isEmpty && _error != null) {
@@ -207,7 +299,7 @@ class _BotsScreenState extends State<BotsScreen> {
         ],
       );
     }
-    if (_bots.isEmpty) {
+    if (_bots.isEmpty && _groups.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(HermesSpacing.lg),
         children: [
@@ -231,37 +323,93 @@ class _BotsScreenState extends State<BotsScreen> {
         ],
       );
     }
-    return ListView.separated(
-      itemCount: _bots.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final bot = _bots[index];
-        final opening = _opening == bot.name;
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: Theme.of(context).colorScheme.secondaryContainer,
-            child: Text(bot.initial),
+    final theme = Theme.of(context);
+    return ListView(
+      children: [
+        if (_groups.isNotEmpty) ...[
+          _SectionHeader(
+            icon: Icons.forum_outlined,
+            label: context.l10n.groups,
+            trailing: Text(
+              '${_groups.length}',
+              style: theme.textTheme.labelSmall,
+            ),
           ),
-          title: Text(bot.title),
-          subtitle: Text(
-            [
-              if (bot.model.trim().isNotEmpty) bot.model.trim(),
-              if (bot.preview.isNotEmpty) bot.preview,
-              if (bot.preview.isEmpty && bot.description.isNotEmpty)
-                bot.description,
-            ].join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+          for (final room in _groups)
+            ListTile(
+              key: ValueKey('bots-group-${room.roomId}'),
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.tertiaryContainer,
+                child: Text(
+                  room.title.isEmpty
+                      ? '?'
+                      : room.title.substring(0, 1).toUpperCase(),
+                  style: TextStyle(color: theme.colorScheme.onTertiaryContainer),
+                ),
+              ),
+              title: Text(room.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+              subtitle: Text(
+                [
+                  context.l10n.group_members,
+                  if (room.members.isNotEmpty)
+                    room.members.map((member) => member.label).join(' · '),
+                ].join(' · '),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: widget.client == null
+                  ? null
+                  : () => unawaited(_openGroup(room)),
+            ),
+          const Divider(height: 1),
+        ],
+        if (_groupsError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: HermesSpacing.md,
+              vertical: HermesSpacing.sm,
+            ),
+            child: Text(
+              context.l10n.failed(_groupsError!),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
           ),
-          trailing: opening
-              ? const SizedBox.square(
-                  dimension: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.chevron_right),
-          onTap: opening ? null : () => unawaited(_open(bot)),
-        );
-      },
+        if (_bots.isNotEmpty)
+          _SectionHeader(
+            icon: Icons.smart_toy_outlined,
+            label: context.l10n.bots,
+          ),
+        for (final bot in _bots) ...[
+          ListTile(
+            leading: CircleAvatar(
+              backgroundColor: theme.colorScheme.secondaryContainer,
+              child: Text(bot.initial),
+            ),
+            title: Text(bot.title),
+            subtitle: Text(
+              [
+                if (bot.model.trim().isNotEmpty) bot.model.trim(),
+                if (bot.preview.isNotEmpty) bot.preview,
+                if (bot.preview.isEmpty && bot.description.isNotEmpty)
+                  bot.description,
+              ].join(' · '),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            trailing: _opening == bot.name
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.chevron_right),
+            onTap: _opening == bot.name ? null : () => unawaited(_open(bot)),
+          ),
+          const Divider(height: 1),
+        ],
+      ],
     );
   }
 }

@@ -822,7 +822,17 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       itemCount: renderable.length,
       itemBuilder: (context, index) {
         final event = renderable[index];
-        if (event.isMessage) return _MessageBubble(event: event);
+        if (event.isMessage) {
+          final previous = index == 0 ? null : renderable[index - 1];
+          return _PostTile(
+            event: event,
+            startsRound:
+                event.isUserMessage &&
+                previous != null &&
+                previous.isMessage &&
+                !previous.isUserMessage,
+          );
+        }
         if (event.isTurn) return _TurnLine(event: event);
         return _SystemLine(text: _systemText(context, event));
       },
@@ -893,75 +903,156 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
 
 enum _RoomMenuAction { stop, rename, disband }
 
-class _MessageBubble extends StatelessWidget {
+/// One room post, forum-style: author header, body, attachments.
+///
+/// Group rooms are long-running discussions, not a 1:1 chat — bubbles hide who
+/// said what once several bots answer in a row. A post keeps the author, the
+/// @handle and the time on its own line, and [startsRound] draws the seam
+/// between a user prompt and the member replies that follow it.
+class _PostTile extends StatelessWidget {
   final GroupEvent event;
+  final bool startsRound;
 
-  const _MessageBubble({required this.event});
+  const _PostTile({required this.event, this.startsRound = false});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isUser = event.isUserMessage;
+    final author = event.authorLabel.isEmpty
+        ? (isUser ? context.l10n.group_you : '')
+        : event.authorLabel;
+    final handle = event.actor.handle.trim();
+    final initial = author.isEmpty ? '?' : author.substring(0, 1).toUpperCase();
+    final time = _formatPostTime(event.ts);
+    final bubbleColor = isUser
+        ? theme.colorScheme.primaryContainer.withValues(alpha: 0.45)
+        : theme.colorScheme.surfaceContainerLow;
+    final borderColor = isUser
+        ? theme.colorScheme.primary.withValues(alpha: 0.35)
+        : theme.colorScheme.outlineVariant;
+
     return Padding(
-      padding: const EdgeInsets.only(bottom: HermesSpacing.sm),
-      child: Column(
-        crossAxisAlignment:
-            isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      padding: EdgeInsets.only(
+        top: startsRound ? HermesSpacing.lg : 0,
+        bottom: HermesSpacing.md,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (event.authorLabel.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 2),
-              child: Text(
-                event.authorLabel,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * 0.78,
-            ),
-            padding: const EdgeInsets.symmetric(
-              horizontal: HermesSpacing.md,
-              vertical: HermesSpacing.sm,
-            ),
-            decoration: BoxDecoration(
-              color: isUser
-                  ? theme.colorScheme.primaryContainer
-                  : theme.colorScheme.surfaceContainerHighest,
-              borderRadius: HermesRadius.card,
-            ),
+          CircleAvatar(
+            radius: 16,
+            backgroundColor: isUser
+                ? theme.colorScheme.primary
+                : theme.colorScheme.tertiaryContainer,
             child: Text(
-              event.text,
-              style: theme.textTheme.bodyMedium?.copyWith(
+              isUser ? context.l10n.group_you.substring(0, 1) : initial,
+              style: theme.textTheme.labelMedium?.copyWith(
                 color: isUser
-                    ? theme.colorScheme.onPrimaryContainer
-                    : theme.colorScheme.onSurface,
+                    ? theme.colorScheme.onPrimary
+                    : theme.colorScheme.onTertiaryContainer,
               ),
             ),
           ),
-          if (event.attachments.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.attach_file,
-                    size: 12,
-                    color: theme.colorScheme.onSurfaceVariant,
+          const SizedBox(width: HermesSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        author,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (handle.isNotEmpty && handle != author) ...[
+                      const SizedBox(width: HermesSpacing.xs),
+                      Text(
+                        '@$handle',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    if (time.isNotEmpty)
+                      Text(
+                        time,
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: HermesSpacing.md,
+                    vertical: HermesSpacing.sm,
                   ),
-                  Text(
-                    '${event.attachments.length}',
-                    style: theme.textTheme.labelSmall,
+                  decoration: BoxDecoration(
+                    color: bubbleColor,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: borderColor),
                   ),
-                ],
-              ),
+                  child: SelectableText(
+                    event.text,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: isUser
+                          ? theme.colorScheme.onPrimaryContainer
+                          : theme.colorScheme.onSurface,
+                    ),
+                  ),
+                ),
+                if (event.attachments.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: HermesSpacing.xs),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.attach_file,
+                          size: 12,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          '${event.attachments.length}',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
             ),
+          ),
         ],
       ),
     );
+  }
+
+  static String _formatPostTime(double seconds) {
+    if (seconds <= 0) return '';
+    final at = DateTime.fromMillisecondsSinceEpoch((seconds * 1000).round());
+    final local = at.toLocal();
+    final now = DateTime.now();
+    final hh = local.hour.toString().padLeft(2, '0');
+    final mm = local.minute.toString().padLeft(2, '0');
+    if (local.year == now.year &&
+        local.month == now.month &&
+        local.day == now.day) {
+      return '$hh:$mm';
+    }
+    return '${local.month}/${local.day} $hh:$mm';
   }
 }
 

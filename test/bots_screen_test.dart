@@ -7,6 +7,7 @@ import 'package:hermes_android/core/l10n/l10n.dart';
 import 'package:hermes_android/core/models/bot_profile.dart';
 import 'package:hermes_android/core/screens/bots_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
+import 'package:hermes_android/core/services/group_rooms_client.dart';
 
 BotProfile _bot(String name, {String display = '', String preview = ''}) =>
     BotProfile(
@@ -24,6 +25,7 @@ Future<void> _pump(
   required BotsRosterLoader loader,
   BotChatOpener? opener,
   ValueChanged<Session>? onOpen,
+  BotsGroupsLoader? groups,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -40,6 +42,7 @@ Future<void> _pump(
         ),
         testLoader: loader,
         testOpener: opener,
+        testGroups: groups,
         onOpenSession: onOpen,
         refreshInterval: const Duration(hours: 1),
       ),
@@ -61,6 +64,31 @@ void main() {
     expect(find.text('Research Bot'), findsOneWidget);
     expect(find.textContaining('last message'), findsOneWidget);
     expect(find.text('writer'), findsOneWidget);
+  });
+
+  testWidgets('existing group rooms sit beside the bots, as on desktop', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      loader: () async => [_bot('research')],
+      groups: () async => GroupRoomPage(
+        rooms: [
+          GroupRoom(
+            roomId: 'room-1',
+            name: 'Launch room',
+            members: const [
+              GroupRoomMember(profile: 'research', displayName: 'Research'),
+              GroupRoomMember(profile: 'writer', displayName: 'Writer'),
+            ],
+            latestSeq: 4,
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Launch room'), findsOneWidget);
+    expect(find.textContaining('Research · Writer'), findsOneWidget);
   });
 
   testWidgets('tapping a bot resolves its chat and hands the Session up',

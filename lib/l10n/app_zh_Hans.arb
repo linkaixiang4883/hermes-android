@@ -691,7 +691,6 @@
   "group_stopped": "群组已停止",
   "group_disbanded": "群组已解散",
   "group_approval_needed": "有成员在等待审批",
-
   "compress_context": "压缩上下文",
   "compress_confirm_message": "将较早的对话总结为一条摘要？这会重写已存历史且不可撤销。",
   "compress_done": "上下文已压缩",
@@ -704,5 +703,7 @@
   "unpin_on_this_device": "在此设备上取消置顶",
   "pinned_on_this_device": "在此设备上置顶的聊天",
   "could_not_save_chat_pin": "无法在此设备上保存聊天置顶",
-  "live_turn_following": "运行中 · 自动同步中"
+  "live_turn_following": "运行中 · 自动同步中",
+  "group_driver_offline": "群组驱动未运行，成员无法回复。",
+  "group_you": "你"
 }

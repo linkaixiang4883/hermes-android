@@ -2491,6 +2491,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get live_turn_following => '运行中 · 自动同步中';
+
+  @override
+  String get group_driver_offline => '群组驱动未运行，成员无法回复。';
+
+  @override
+  String get group_you => '你';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -4980,4 +4986,10 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get live_turn_following => '运行中 · 自动同步中';
+
+  @override
+  String get group_driver_offline => '群组驱动未运行，成员无法回复。';
+
+  @override
+  String get group_you => '你';
 }

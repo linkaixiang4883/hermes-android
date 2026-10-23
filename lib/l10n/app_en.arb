@@ -762,5 +762,7 @@
         "type": "int"
       }
     }
-  }
+  },
+  "group_driver_offline": "Group driver is not running — members can't reply.",
+  "group_you": "You"
 }
