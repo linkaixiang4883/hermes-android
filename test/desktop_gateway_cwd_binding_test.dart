@@ -184,6 +184,37 @@ void main() {
     },
   );
 
+  test('a first send with no preflight still creates inside the Project folder',
+      () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    // No ensureSession at all: the draft's first contact is the prompt. The
+    // submit path must still carry the Project folder into session.create.
+    try {
+      await client.submitPrompt(
+        sessionId: 'mob-draft',
+        text: 'hello',
+        workingDirectory: '/srv/p2',
+        onEvent: (_) {},
+        onSent: () {},
+      );
+    } catch (_) {
+      // prompt.submit itself is unanswered by this fixture; the assertion is
+      // about the create that precedes it.
+    }
+
+    expect(gateway.creates.single, {'cwd': '/srv/p2'});
+  });
+
   test('a chat that already exists is never re-homed by the remembered '
       'folder', () async {
     final gateway = _FakeGateway(

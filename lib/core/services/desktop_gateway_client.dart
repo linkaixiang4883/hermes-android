@@ -752,9 +752,13 @@ class DesktopGatewayClient {
   /// real one (stored row gone too) and propagates.
   Future<T> _callSessionScoped<T>(
     String mobileSessionId,
-    Future<T> Function(_DesktopGatewaySession session) call,
-  ) async {
-    final session = await _connect(mobileSessionId);
+    Future<T> Function(_DesktopGatewaySession session) call, {
+    String? workingDirectory,
+  }) async {
+    final session = await _connect(
+      mobileSessionId,
+      workingDirectory: workingDirectory,
+    );
     try {
       return await call(session);
     } on JsonRpcError catch (error) {
@@ -1392,6 +1396,7 @@ class DesktopGatewayClient {
     required String sessionId,
     required String name,
     required String dataUrl,
+    String? workingDirectory,
   }) async {
     return _callSessionScoped(
       sessionId,
@@ -1400,6 +1405,7 @@ class DesktopGatewayClient {
         name: name,
         dataUrl: dataUrl,
       ),
+      workingDirectory: workingDirectory,
     );
   }
 
@@ -1408,6 +1414,7 @@ class DesktopGatewayClient {
     required String text,
     required StreamCallback onEvent,
     required void Function() onSent,
+    String? workingDirectory,
   }) async {
     await _callSessionScoped(
       sessionId,
@@ -1417,7 +1424,18 @@ class DesktopGatewayClient {
         onEvent: onEvent,
         onSent: onSent,
       ),
+      // Creation can happen on the FIRST SEND rather than at screen entry
+      // (a draft whose ensure was skipped). Without the cwd here the session
+      // is born outside its Project folder and Hermes files it elsewhere.
+      workingDirectory: workingDirectory,
     );
+  }
+
+  /// Remembers the Project folder a chat belongs to, before any RPC needs it.
+  void rememberWorkingDirectory(String sessionId, String workingDirectory) {
+    final path = workingDirectory.trim();
+    if (path.isEmpty) return;
+    _workingDirectories[sessionId] = path;
   }
 
   void _installAsyncEventBridge(WsClient client) {

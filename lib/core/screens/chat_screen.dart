@@ -783,6 +783,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             shared ?? DesktopGatewayClient.fromConnection(widget.connection);
         _desktopGateway = gateway;
         _ownsClient = shared == null;
+        // Register the Project folder before ANY RPC can create the session:
+        // a draft's first send may be the creation point, and a create without
+        // the cwd files the chat outside its Project.
+        final projectFolder = widget.projectWorkingDirectory?.trim();
+        if (projectFolder != null && projectFolder.isNotEmpty) {
+          gateway.rememberWorkingDirectory(widget.session.id, projectFolder);
+        }
         _desktopAsyncEventToken = gateway.addAsyncEventListener(
           _handleDesktopAsyncEvent,
         );
@@ -1341,6 +1348,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (gateway == null) {
       unawaited(_refreshProjectName());
       return;
+    }
+    if (widget.projectWorkingDirectory?.trim().isNotEmpty == true) {
+      gateway.rememberWorkingDirectory(
+        widget.session.id,
+        widget.projectWorkingDirectory!.trim(),
+      );
     }
     var sessionEnsured = false;
     try {
@@ -2806,6 +2819,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       sessionId: widget.session.id,
       name: draft.name,
       dataUrl: dataUrl,
+      workingDirectory: widget.projectWorkingDirectory,
     );
     return AttachmentUploadReceipt(
       refText: attachment.refText,
@@ -3552,6 +3566,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 text: prompt,
                 onEvent: onEvent,
                 onSent: markPromptSent,
+                workingDirectory: widget.projectWorkingDirectory,
               );
             }
           } finally {
