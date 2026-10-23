@@ -19,6 +19,7 @@
 
 import 'package:uuid/uuid.dart';
 
+import '../models/legacy_group_chat.dart';
 import 'desktop_gateway_client.dart';
 
 /// Sends one JSON-RPC call and returns the raw envelope.
@@ -606,6 +607,36 @@ class GroupRoomsClient {
     return GroupCapabilities.fromJson(
       await _request('groups.capabilities', const {}),
     );
+  }
+
+  /// Desktop-local group chats mirrored into the profile metadata.
+  ///
+  /// Desktop's plugin keeps legacy rooms in renderer storage and publishes a
+  /// bounded copy under `ui_meta['hermes-bots-groups']` on the `default`
+  /// profile, precisely so another gateway client (this app) can show them.
+  /// They have no hosted room behind them: the caller must treat them as
+  /// read-only until Desktop promotes one to a gateway group.
+  Future<List<LegacyGroupChat>> legacyGroups({
+    String profile = 'default',
+  }) async {
+    final result = await _request('profiles.list', {
+      'include_sessions': false,
+    });
+    final rows = result['profiles'];
+    if (rows is! List) return const [];
+    Map<String, dynamic>? selected;
+    Map<String, dynamic>? fallback;
+    for (final row in rows) {
+      if (row is! Map) continue;
+      final object = _object(row);
+      fallback ??= object;
+      if (_text(object['name']).trim() == profile) {
+        selected = object;
+        break;
+      }
+    }
+    final meta = _object((selected ?? fallback)?['ui_meta']);
+    return LegacyGroupChat.listFromSnapshot(meta['hermes-bots-groups']);
   }
 
   /// `groups.capabilities` + every `groups.list` page.

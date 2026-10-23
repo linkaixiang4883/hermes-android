@@ -2526,4 +2526,11 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get group_legacy_hint =>
       'Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.';
+
+  @override
+  String get group_legacy_section => 'Desktop-local groups (read-only)';
+
+  @override
+  String get group_legacy_banner =>
+      'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.';
 }

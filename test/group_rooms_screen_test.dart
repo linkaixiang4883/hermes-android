@@ -4,6 +4,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/l10n/l10n.dart';
+import 'package:hermes_android/core/models/legacy_group_chat.dart';
 import 'package:hermes_android/core/screens/group_rooms_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/group_rooms_client.dart';
@@ -36,6 +37,7 @@ Future<void> _pump(
   required GroupRoomsLoader loader,
   GroupCapabilitiesLoader? capabilities,
   GroupRoomCreator? create,
+  LegacyGroupsLoader? legacy,
   ValueChanged<GroupRoom>? onOpenRoom,
 }) async {
   await tester.pumpWidget(
@@ -49,6 +51,7 @@ Future<void> _pump(
         testLoader: loader,
         testCapabilities: capabilities,
         testCreate: create,
+        testLegacy: legacy,
         onOpenRoom: onOpenRoom,
       ),
     ),
@@ -58,6 +61,38 @@ Future<void> _pump(
 }
 
 void main() {
+  testWidgets('surfaces desktop-local rooms read-only, with their history', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      loader: () async => const GroupRoomPage(),
+      legacy: () async => const [
+        LegacyGroupChat(
+          key: 'id:rmvhpz399-lgucn',
+          roomId: 'rmvhpz399-lgucn',
+          name: 'cjh项目讨论组',
+          messages: [
+            LegacyGroupMessage(
+              id: 'm1',
+              author: 'default',
+              fromMember: true,
+              text: 'hello from the desktop mirror',
+              atMs: 1792585862692,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    expect(find.text('cjh项目讨论组'), findsOneWidget);
+    await tester.tap(find.text('cjh项目讨论组'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('hello from the desktop mirror'), findsOneWidget);
+    expect(find.textContaining('read-only'), findsWidgets);
+  });
+
   testWidgets('lists rooms with their members and hands one to the host', (
     tester,
   ) async {

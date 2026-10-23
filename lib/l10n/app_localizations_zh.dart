@@ -2501,6 +2501,13 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get group_legacy_hint =>
       '旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。';
+
+  @override
+  String get group_legacy_section => '桌面本地群组（只读）';
+
+  @override
+  String get group_legacy_banner =>
+      '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5000,4 +5007,11 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get group_legacy_hint =>
       '旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。';
+
+  @override
+  String get group_legacy_section => '桌面本地群组（只读）';
+
+  @override
+  String get group_legacy_banner =>
+      '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
 }

@@ -575,6 +575,44 @@ void main() {
       expect(discovery.rooms, isEmpty);
     });
 
+    test('legacy groups come from the default profile metadata mirror', () async {
+      final rpc = _RecordingRpc([
+        _ok({
+          'profiles': [
+            {
+              'name': 'default',
+              'ui_meta': {
+                'hermes-bots-groups': {
+                  'version': 3,
+                  'rooms': {
+                    'id:legacy-1': {
+                      'name': 'Old room',
+                      'roomId': 'legacy-1',
+                      'log': [
+                        {
+                          'id': 'm1',
+                          'at': 1792585862692,
+                          'from': {'kind': 'member', 'name': 'default'},
+                          'text': 'from desktop',
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+      ]);
+
+      final rooms = await GroupRoomsClient(rpc.call).legacyGroups();
+
+      expect(rpc.calls.single.method, 'profiles.list');
+      expect(rpc.calls.single.params['include_sessions'], isFalse);
+      expect(rooms.single.title, 'Old room');
+      expect(rooms.single.messages.single.text, 'from desktop');
+    });
+
     test('the profile scope rides along without clobbering call params', () async {
       final rpc = _RecordingRpc([_ok({'rooms': <dynamic>[]})]);
       await GroupRoomsClient(rpc.call, profile: ' sol ').list(limit: 5);

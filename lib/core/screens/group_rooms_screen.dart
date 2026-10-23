@@ -10,17 +10,22 @@ import 'package:flutter/material.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
 
+import '../models/legacy_group_chat.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/group_rooms_client.dart';
 import '../theme/hermes_theme.dart';
 import 'group_room_screen.dart';
+import 'legacy_group_room_screen.dart';
 
 /// Reads one page of rooms. Injectable for tests and for a host that caches.
 typedef GroupRoomsLoader = Future<GroupRoomPage> Function();
 
 /// Reads the seating roster (`capabilities.seatable_profiles`).
 typedef GroupCapabilitiesLoader = Future<GroupCapabilities> Function();
+
+/// Reads Desktop's mirror of its local (legacy) group chats.
+typedef LegacyGroupsLoader = Future<List<LegacyGroupChat>> Function();
 
 /// Creates a room. The id is minted by the caller and reused on retry.
 typedef GroupRoomCreator =
@@ -54,6 +59,9 @@ class GroupRoomsScreen extends StatefulWidget {
   @visibleForTesting
   final GroupRoomCreator? testCreate;
 
+  @visibleForTesting
+  final LegacyGroupsLoader? testLegacy;
+
   const GroupRoomsScreen({
     super.key,
     required this.connection,
@@ -64,6 +72,7 @@ class GroupRoomsScreen extends StatefulWidget {
     this.testLoader,
     this.testCapabilities,
     this.testCreate,
+    this.testLegacy,
   }) : assert(
          rooms != null || client != null || testLoader != null,
          'GroupRoomsScreen needs a rooms client, a gateway client, or a test loader',
@@ -82,6 +91,9 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
 
   /// Null until a live discovery answers; a test loader leaves it unknown.
   bool? _driverAvailable;
+  List<LegacyGroupChat> _legacy = const [];
+  String? _legacyError;
+  bool _legacyLoaded = false;
   Timer? _poll;
 
   GroupRoomsClient? _roomsClient;
@@ -103,6 +115,29 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
     super.dispose();
   }
 
+  /// Desktop mirrors its local rooms into profile metadata; a phone can only
+  /// read them (no hosted room exists yet). A mirror failure never hides the
+  /// hosted rooms, so it keeps its own error line.
+  Future<void> _loadLegacy() async {
+    final injected = widget.testLegacy;
+    final client = _roomsClient;
+    if (injected == null && client == null) return;
+    try {
+      final rooms = injected != null
+          ? await injected()
+          : await client!.legacyGroups();
+      if (!mounted) return;
+      setState(() {
+        _legacy = rooms;
+        _legacyError = null;
+        _legacyLoaded = true;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _legacyError = error.toString());
+    }
+  }
+
   Future<GroupRoomPage> _readRooms() async {
     final injected = widget.testLoader;
     if (injected != null) return injected();
@@ -111,8 +146,13 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
     return GroupRoomPage(rooms: discovery.rooms);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool refreshLegacy = false}) async {
     if (!mounted) return;
+    // The mirror can be large and changes only while Desktop is used; poll the
+    // hosted rooms, but read legacy metadata once and on pull-to-refresh.
+    if (refreshLegacy || !_legacyLoaded) {
+      unawaited(_loadLegacy());
+    }
     try {
       final page = await _readRooms();
       if (!mounted) return;
@@ -255,7 +295,10 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
               text: context.l10n.group_driver_offline,
             ),
           Expanded(
-            child: RefreshIndicator(onRefresh: _load, child: _buildBody(context)),
+            child: RefreshIndicator(
+              onRefresh: () => _load(refreshLegacy: true),
+              child: _buildBody(context),
+            ),
           ),
         ],
       ),
@@ -264,10 +307,10 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
 
   Widget _buildBody(BuildContext context) {
     final theme = Theme.of(context);
-    if (_loading && _rooms.isEmpty) {
+    if (_loading && _rooms.isEmpty && _legacy.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_rooms.isEmpty && _error != null) {
+    if (_rooms.isEmpty && _legacy.isEmpty && _error != null) {
       return ListView(
         padding: const EdgeInsets.all(HermesSpacing.lg),
         children: [
@@ -298,7 +341,7 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
         ],
       );
     }
-    if (_rooms.isEmpty) {
+    if (_rooms.isEmpty && _legacy.isEmpty) {
       return ListView(
         padding: const EdgeInsets.all(HermesSpacing.lg),
         children: [
@@ -324,47 +367,122 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
         ],
       );
     }
-    return ListView.separated(
+    return ListView(
       padding: const EdgeInsets.only(bottom: 96),
-      itemCount: _rooms.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
-      itemBuilder: (context, index) {
-        final room = _rooms[index];
-        final members = room.members.map((member) => member.label).toList();
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundColor: room.isDisbanded
-                ? theme.colorScheme.surfaceContainerHighest
-                : theme.colorScheme.secondaryContainer,
-            child: Icon(
-              room.isDisbanded ? Icons.group_off_outlined : Icons.groups_outlined,
-              size: 20,
+      children: [
+        if (_legacy.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              HermesSpacing.md,
+              HermesSpacing.md,
+              HermesSpacing.md,
+              HermesSpacing.xs,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.computer_outlined,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: HermesSpacing.sm),
+                Expanded(
+                  child: Text(
+                    context.l10n.group_legacy_section,
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
-          title: Text(
-            room.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: room.isDisbanded
-                ? TextStyle(color: theme.colorScheme.onSurfaceVariant)
-                : null,
+          for (final legacy in _legacy) ...[
+            ListTile(
+              key: ValueKey('legacy-group-${legacy.key}'),
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.tertiaryContainer,
+                child: const Icon(Icons.history, size: 20),
+              ),
+              title: Text(
+                legacy.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              subtitle: Text(
+                '${legacy.messages.length} 条 · ${context.l10n.group_legacy_section}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: const Icon(Icons.lock_outline, size: 18),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => LegacyGroupRoomScreen(room: legacy),
+                ),
+              ),
+            ),
+            const Divider(height: 1),
+          ],
+        ],
+        if (_legacyError != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: HermesSpacing.md,
+              vertical: HermesSpacing.sm,
+            ),
+            child: Text(
+              context.l10n.failed(_legacyError!),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            ),
           ),
-          subtitle: Text(
-            members.isEmpty
-                ? context.l10n.group_members
-                : members.join(' · '),
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
+        for (final room in _rooms) ...[
+          Builder(
+            builder: (context) {
+              final members = room.members
+                  .map((member) => member.label)
+                  .toList();
+              return ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: room.isDisbanded
+                      ? theme.colorScheme.surfaceContainerHighest
+                      : theme.colorScheme.secondaryContainer,
+                  child: Icon(
+                    room.isDisbanded
+                        ? Icons.group_off_outlined
+                        : Icons.groups_outlined,
+                    size: 20,
+                  ),
+                ),
+                title: Text(
+                  room.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: room.isDisbanded
+                      ? TextStyle(color: theme.colorScheme.onSurfaceVariant)
+                      : null,
+                ),
+                subtitle: Text(
+                  members.isEmpty
+                      ? context.l10n.group_members
+                      : members.join(' · '),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: room.isDisbanded
+                    ? Text(
+                        context.l10n.group_disbanded,
+                        style: theme.textTheme.labelSmall,
+                      )
+                    : const Icon(Icons.chevron_right),
+                onTap: () => unawaited(_open(room)),
+              );
+            },
           ),
-          trailing: room.isDisbanded
-              ? Text(
-                  context.l10n.group_disbanded,
-                  style: theme.textTheme.labelSmall,
-                )
-              : const Icon(Icons.chevron_right),
-          onTap: () => unawaited(_open(room)),
-        );
-      },
+          const Divider(height: 1),
+        ],
+      ],
     );
   }
 }

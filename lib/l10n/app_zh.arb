@@ -706,5 +706,7 @@
   "live_turn_following": "运行中 · 自动同步中",
   "group_driver_offline": "群组驱动未运行，成员无法回复。",
   "group_you": "你",
-  "group_legacy_hint": "旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。"
+  "group_legacy_hint": "旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。",
+  "group_legacy_section": "桌面本地群组（只读）",
+  "group_legacy_banner": "这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。"
 }

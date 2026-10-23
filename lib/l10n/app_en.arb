@@ -765,5 +765,7 @@
   },
   "group_driver_offline": "Group driver is not running — members can't reply.",
   "group_you": "You",
-  "group_legacy_hint": "Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here."
+  "group_legacy_hint": "Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.",
+  "group_legacy_section": "Desktop-local groups (read-only)",
+  "group_legacy_banner": "Mirrored from Desktop's local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop."
 }

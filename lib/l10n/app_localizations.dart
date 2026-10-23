@@ -4376,6 +4376,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.'**
   String get group_legacy_hint;
+
+  /// No description provided for @group_legacy_section.
+  ///
+  /// In en, this message translates to:
+  /// **'Desktop-local groups (read-only)'**
+  String get group_legacy_section;
+
+  /// No description provided for @group_legacy_banner.
+  ///
+  /// In en, this message translates to:
+  /// **'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.'**
+  String get group_legacy_banner;
 }
 
 class _AppLocalizationsDelegate
