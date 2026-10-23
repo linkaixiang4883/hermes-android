@@ -3141,7 +3141,9 @@ void main() {
           expect(created.storedSessionId, 'stored-created');
           final request = await requestSeen.future;
           expect(request['method'], 'session.create');
-          expect(request['params'], {'cwd': '/srv/projects/hermes-android'});
+          expect(request['params'], {
+            'cwd': '/srv/projects/hermes-android',
+          });
           expect(request['params'], isNot(contains('session_id')));
         } finally {
           client.close();
@@ -3294,6 +3296,7 @@ void main() {
         );
         expect(createCalls[1]['params'], {
           'cwd': '/srv/projects/hermes-android',
+          'cwd_explicit': true,
         });
         expect(createCalls[1]['params'], isNot(contains('session_id')));
       });
@@ -3380,6 +3383,7 @@ void main() {
           expect(createCalls, hasLength(1));
           expect(createCalls.single['params'], {
             'cwd': '/srv/projects/hermes-android',
+            'cwd_explicit': true,
           });
           expect(resumeCalls, hasLength(2));
           expect(resumeCalls.first['params'], {
