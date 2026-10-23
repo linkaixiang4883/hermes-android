@@ -4370,6 +4370,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You'**
   String get group_you;
+
+  /// No description provided for @group_legacy_hint.
+  ///
+  /// In en, this message translates to:
+  /// **'Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.'**
+  String get group_legacy_hint;
 }
 
 class _AppLocalizationsDelegate

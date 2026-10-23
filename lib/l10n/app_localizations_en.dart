@@ -2569,4 +2569,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get group_you => 'You';
+
+  @override
+  String get group_legacy_hint =>
+      'Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.';
 }

@@ -313,6 +313,14 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
             textAlign: TextAlign.center,
             style: theme.textTheme.titleMedium,
           ),
+          const SizedBox(height: HermesSpacing.sm),
+          Text(
+            context.l10n.group_legacy_hint,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
         ],
       );
     }

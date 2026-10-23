@@ -2497,6 +2497,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get group_you => '你';
+
+  @override
+  String get group_legacy_hint =>
+      '旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -4992,4 +4996,8 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get group_you => '你';
+
+  @override
+  String get group_legacy_hint =>
+      '旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。';
 }

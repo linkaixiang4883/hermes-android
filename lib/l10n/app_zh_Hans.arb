@@ -705,5 +705,6 @@
   "could_not_save_chat_pin": "无法在此设备上保存聊天置顶",
   "live_turn_following": "运行中 · 自动同步中",
   "group_driver_offline": "群组驱动未运行，成员无法回复。",
-  "group_you": "你"
+  "group_you": "你",
+  "group_legacy_hint": "旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。"
 }
