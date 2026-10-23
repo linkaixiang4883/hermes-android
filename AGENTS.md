@@ -48,7 +48,7 @@
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1471**（2026-10-22 Bot Mode/审批通知/Activity/FGS 全部落地后；P3=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1472**（2026-10-23 项目 cwd 首次发送修复后；Bot Mode 全套=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
 
 ## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
@@ -107,6 +107,8 @@
 | 移动已有会话 / 快聊提升 / Spaces 迁移 | `session.workspace.move {session_key, cwd}` | 用会话的 **stored id**（来自服务端列表）；立刻改工作目录/终端/项目树 |
 | 移动到「Unassigned」 | **上游 2.1.7 起：拒绝**（返回诚实原因串，UI 提示无法回移） | 我们此前的「cwd=网关默认工作区」方案已按用户决议退役（随上游）；UI 仍列 Unassigned 目标，选中即提示 |
 | ~~`projects.assign_session`~~ | **已从 App 全链路删除**（`ProjectsGatewayClient.assignSession` 与仓库同名方法） | 上游 merge 时**不要把它带回来**；**上游 2.1.7 也独立删除了它**（a68e86e），方向已一致；相关测试与 mock 全部用 `session.workspace.move` |
+
+**2026-10-23 修复（首次发送才创建 → cwd 丢失）**：项目聊天若进页时的 `ensureSession` 被跳过/失败（draft + 旧传输 fallback 未就绪），首次发送会走 `submitPrompt → _callSessionScoped → _connect` **不带 cwd** 创建会话 → 落到项目外。现 `submitPrompt/attachFile` 均带 `workingDirectory`，且绑定网关时 `rememberWorkingDirectory()` 先记项目目录；回归 `test/desktop_gateway_cwd_binding_test.dart` +1（首次发送仍带 cwd）。
 
 **系统提示词换血时机（别承诺"移动后立刻带上下文"）**：move 只改 `session["cwd"]` + 终端 pin + DB 行 + 项目树；系统提示词每会话只构建一次并落库复用，**新项目的文档要等该会话下次「压缩上下文」或「运行时重建后重开」才加载**（`conversation_compression.py` 压缩边界重建；`_stored_prompt_matches_runtime` 按 cwd 漂移判定重建；活会话 resume 走 `_resume_reuse_live` 复用，不重建）。UI 文案 `projectMoveContextPending` 就是在说这件事。
 
