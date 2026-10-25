@@ -536,6 +536,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Object? _desktopLiveTurnToken;
   Object? _desktopReplayTruncatedToken;
 
+  /// The app-level prompt registry, watched so a prompt registered while this
+  /// screen was unmounted (or dropped by a reconnect) still opens its dialog.
+  Listenable? _pendingPromptsListenable;
+  VoidCallback? _pendingPromptsListener;
+
   /// Whether this screen built the gateway client it bound to, and is
   /// therefore the one that closes it.
   ///
@@ -814,6 +819,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _desktopAsyncEventToken = gateway.addAsyncEventListener(
           _handleDesktopAsyncEvent,
         );
+        _pendingPromptsListenable = gateway.pendingPrompts;
+        void onPendingPrompts() => _onPendingPromptsChanged();
+        _pendingPromptsListener = onPendingPrompts;
+        gateway.pendingPrompts.addListener(onPendingPrompts);
         _desktopConnectionListenerToken = gateway.addConnectionListener(
           _onDesktopConnectionChanged,
         );
@@ -982,6 +991,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         List<AttachmentDraft>.from(_attachmentDrafts),
       ),
     );
+    final pendingPromptsListenable = _pendingPromptsListenable;
+    final pendingPromptsListener = _pendingPromptsListener;
+    if (pendingPromptsListenable != null && pendingPromptsListener != null) {
+      pendingPromptsListenable.removeListener(pendingPromptsListener);
+    }
     final desktopAsyncEventToken = _desktopAsyncEventToken;
     if (desktopAsyncEventToken != null) {
       _desktopGateway?.removeAsyncEventListener(desktopAsyncEventToken);
@@ -1414,6 +1428,44 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // idempotent and covers the case where the snapshot predates this screen.
     final projection = gateway.liveTurnProjectionFor(widget.session.id);
     if (projection != null) _enterFollowMode(projection);
+    // Prompts raised while this chat was unmounted stay registered; replay them
+    // now that a listener exists (the registry is the app's source of truth,
+    // not the one-shot event dispatch that may have had no screen).
+    gateway.replayServerRequestsForSession(widget.session.id);
+    _onPendingPromptsChanged();
+  }
+
+  /// Opens a blocking prompt the registry still holds for this chat.
+  ///
+  /// This is the safety net for every path that does not deliver an event to a
+  /// mounted screen: an approval raised before the chat was opened, a prompt
+  /// replayed by the session watcher, or one whose dispatch lost the race with
+  /// a reconnect. Without it the prompt existed only as a notification while
+  /// the gateway waited for its timeout.
+  void _onPendingPromptsChanged() {
+    final gateway = _desktopGateway;
+    if (gateway == null || !mounted) return;
+    const interactive = {
+      'approval.request',
+      'clarify.request',
+      'sudo.request',
+      'secret.request',
+    };
+    for (final prompt in gateway.pendingPrompts.value) {
+      if (prompt.mobileSessionId != widget.session.id) continue;
+      final event = gateway.serverRequestEventFor(prompt.id);
+      if (event == null || !interactive.contains(event.type)) continue;
+      if (event.type == 'approval.request') {
+        _showGatewayApproval(
+          event.data,
+          _responseGeneration,
+          fromRegistry: true,
+        );
+      } else {
+        _handleDesktopGatewayEvent(event, _responseGeneration);
+      }
+      return;
+    }
   }
 
   Future<void> _toggleYolo() async {
@@ -4463,8 +4515,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _showGatewayApproval(
     Map<String, dynamic> eventData,
-    int responseGeneration,
-  ) {
+    int responseGeneration, {
+    bool fromRegistry = false,
+  }) {
     if (_approvalDialogOpen) return;
     final request = GatewayApprovalRequest.fromEventData(eventData);
     final rawServerRequestId = eventData['server_request_id']
@@ -4489,7 +4542,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _activeApprovalServerRequestId = null;
         return;
       }
-      if (serverRequestId != null && !_ownsGatewayApproval(serverRequestId)) {
+      if (!fromRegistry &&
+          serverRequestId != null &&
+          !_ownsGatewayApproval(serverRequestId)) {
         _approvalDialogOpen = false;
         _activeApprovalServerRequestId = null;
         return;

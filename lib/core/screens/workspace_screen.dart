@@ -577,6 +577,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return Listenable.merge([observed, prompts]);
   }
 
+  /// Answers a prompt from its Activity/Inbox row without opening the chat.
+  /// The registry owns the request, so this works for a session this screen
+  /// has never mounted.
+  Future<void> _respondToActivityPrompt(String requestId, String choice) async {
+    final client = widget.gatewayRegistry?.existingFor(widget.connection.id);
+    client?.respondToPendingPrompt(requestId, {'choice': choice});
+  }
+
   Future<void> _refreshTurnSignals() async {
     HomeTurnSignals signals;
     try {
@@ -920,6 +928,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           loadFeed: _loadActivity,
           liveUpdates: _activityLiveSignals,
           onOpenItem: _openActivityItem,
+          onRespondPrompt: _respondToActivityPrompt,
         );
       case HermesDestination.more:
         return MorePane(
@@ -1079,6 +1088,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           loadFeed: _loadActivity,
           liveUpdates: _activityLiveSignals,
           onOpenItem: _openActivityItem,
+          onRespondPrompt: _respondToActivityPrompt,
           actionableOnly: true,
         ),
       ),

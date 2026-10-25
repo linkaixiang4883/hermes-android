@@ -61,6 +61,7 @@ Future<void> _pump(
   ValueChanged<ActivityItem>? onOpenItem,
   bool actionableOnly = false,
   Listenable? liveUpdates,
+  Future<void> Function(String requestId, String choice)? onRespondPrompt,
   Size size = const Size(400, 900),
 }) async {
   tester.view.physicalSize = size;
@@ -77,6 +78,7 @@ Future<void> _pump(
           loadFeed: loadFeed,
           liveUpdates: liveUpdates,
           onOpenItem: onOpenItem,
+          onRespondPrompt: onRespondPrompt,
           actionableOnly: actionableOnly,
           clock: () => _now,
         ),
@@ -132,6 +134,40 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(loads, 2);
+  });
+
+  testWidgets('a blocking prompt answers from its row, without opening the chat',
+      (tester) async {
+    final answers = <(String, String)>[];
+    await _pump(
+      tester,
+      loadFeed: () async => _feed([
+        _group(ActivityGroupKind.needsYou, [
+          ActivityItem(
+            sessionId: 'session-a',
+            clientTurnId: 'prompt-1',
+            label: 'rm -rf build',
+            status: HermesStatus.blocked,
+            updatedAt: _now,
+            promptRequestId: 'srq-key-1',
+            promptMethod: 'approval',
+            promptChoices: const ['once', 'deny'],
+          ),
+        ]),
+      ]),
+      onRespondPrompt: (requestId, choice) async {
+        answers.add((requestId, choice));
+      },
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('activity-approve-srq-key-1')));
+    await tester.pump();
+    expect(answers, [('srq-key-1', 'once')]);
+
+    await tester.tap(find.byKey(const ValueKey('activity-deny-srq-key-1')));
+    await tester.pump();
+    expect(answers, [('srq-key-1', 'once'), ('srq-key-1', 'deny')]);
   });
 
   testWidgets('draws groups in the order the feed produced them', (

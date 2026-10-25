@@ -38,6 +38,10 @@ class PendingPrompt {
 
   final DateTime createdAt;
 
+  /// The gateway's wire id (`srq-…`). Kept alongside [id] because a
+  /// notification answered after a reconnect may only be able to match this.
+  final String wireRequestId;
+
   const PendingPrompt({
     required this.id,
     required this.method,
@@ -46,6 +50,7 @@ class PendingPrompt {
     required this.summary,
     required this.choices,
     required this.createdAt,
+    this.wireRequestId = '',
   });
 
   bool get isApproval => method == 'approval';

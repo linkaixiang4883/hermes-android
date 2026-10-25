@@ -127,6 +127,7 @@ class PromptNotifier {
             'sessionId': prompt.mobileSessionId ?? prompt.gatewaySessionId,
             'connectionId': connectionId,
             'requestId': prompt.id,
+            'wireRequestId': prompt.wireRequestId,
           }),
         ),
       );

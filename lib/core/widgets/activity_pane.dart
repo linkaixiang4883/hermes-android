@@ -54,11 +54,16 @@ class ActivityPane extends StatefulWidget {
 
   final ActivityClock? clock;
 
+  /// Answers a blocking prompt straight from its row (approval right now).
+  /// [requestId] is the prompt registry key carried by the item.
+  final Future<void> Function(String requestId, String choice)? onRespondPrompt;
+
   const ActivityPane({
     required this.loadFeed,
     this.liveUpdates,
     this.actionableOnly = false,
     this.onOpenItem,
+    this.onRespondPrompt,
     this.clock,
     super.key,
   });
@@ -242,6 +247,13 @@ class ActivityPaneState extends State<ActivityPane>
             onTap: widget.onOpenItem == null
                 ? null
                 : () => widget.onOpenItem!(item),
+            onRespond: item.promptRequestId == null ||
+                    item.promptMethod != 'approval' ||
+                    widget.onRespondPrompt == null
+                ? null
+                : (choice) => unawaited(
+                    widget.onRespondPrompt!(item.promptRequestId!, choice),
+                  ),
           ),
         ),
       if (group.overflow > 0) _OverflowNote(count: group.overflow),
@@ -312,8 +324,14 @@ class _ActivityItemCard extends StatelessWidget {
   final ActivityItem item;
   final DateTime now;
   final VoidCallback? onTap;
+  final ValueChanged<String>? onRespond;
 
-  const _ActivityItemCard({required this.item, required this.now, this.onTap});
+  const _ActivityItemCard({
+    required this.item,
+    required this.now,
+    this.onTap,
+    this.onRespond,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -369,6 +387,25 @@ class _ActivityItemCard extends StatelessWidget {
               ),
             ],
           ),
+          if (onRespond != null) ...[
+            const SizedBox(height: HermesSpacing.sm),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  key: ValueKey('activity-deny-${item.promptRequestId}'),
+                  onPressed: () => onRespond!('deny'),
+                  child: Text(context.l10n.deny),
+                ),
+                const SizedBox(width: HermesSpacing.sm),
+                FilledButton(
+                  key: ValueKey('activity-approve-${item.promptRequestId}'),
+                  onPressed: () => onRespond!('once'),
+                  child: Text(context.l10n.approve),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

@@ -661,6 +661,22 @@ class DesktopGatewayClient {
     if (resumedYolo is bool) {
       _sessionYolo[mobileSessionId] = resumedYolo;
     }
+    // A prompt that arrived while this chat had no mapping was registered with
+    // a null mobile id. Now that the binding names it, backfill the id so the
+    // registry (and the replay below) can route the prompt to this screen.
+    var adopted = false;
+    for (final entry in _serverRequestMobileSessionIds.entries) {
+      if (entry.value != null) continue;
+      final request = _serverRequests[entry.key];
+      if (request == null) continue;
+      final requestSession = request.params['session_id']?.toString();
+      if (requestSession == binding.runtimeSessionId ||
+          requestSession == binding.storedSessionId) {
+        _serverRequestMobileSessionIds[entry.key] = mobileSessionId;
+        adopted = true;
+      }
+    }
+    if (adopted) _publishPendingPrompts();
     if (bindingChanged) {
       _dispatchSessionBound(mobileSessionId, binding.storedSessionId);
     }
@@ -1565,6 +1581,14 @@ class DesktopGatewayClient {
     } else if (_gatewaySessionIds.length == 1) {
       return _gatewaySessionIds.keys.single;
     }
+    // A session the watcher attached but never opened has no runtime mapping;
+    // its stored key is what `session.activate` named, so it can still own a
+    // prompt (the notification path must be able to name it).
+    if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {
+      for (final entry in _storedSessionIds.entries) {
+        if (entry.value == gatewaySessionId) return entry.key;
+      }
+    }
     return null;
   }
 
@@ -1695,6 +1719,7 @@ class DesktopGatewayClient {
               ? [for (final choice in rawChoices) choice.toString()]
               : const [],
           createdAt: now,
+          wireRequestId: request.id,
         ),
       );
     }
@@ -1757,7 +1782,25 @@ class DesktopGatewayClient {
     if (scopedProfile != null && scopedProfile.isNotEmpty) {
       params['profile'] = scopedProfile;
     }
-    await client.send('session.activate', params);
+    final response = await client.send('session.activate', params);
+    if (response['error'] != null) return;
+    final payload = response['result'];
+    if (payload is! Map) return;
+    final runtimeId = payload['session_id']?.toString().trim() ?? '';
+    if (runtimeId.isEmpty) return;
+    // The watcher attaches sessions the user never opened; remembering the ids
+    // here is what lets an approval for that chat find its mobile identity, and
+    // `open_requests` is the server's replay of prompts raised while the phone
+    // was not attached (a missed approval is otherwise invisible until timeout).
+    _gatewaySessionIds[sessionId] = runtimeId;
+    _storedSessionIds[sessionId] =
+        payload['session_key']?.toString().trim().isNotEmpty == true
+        ? payload['session_key'].toString().trim()
+        : stored;
+    final open = payload['open_requests'];
+    if (open is List && open.isNotEmpty) {
+      client.deliverOpenRequests(open);
+    }
   }
 
   void _forgetServerRequestsFrom(WsClient client) {
@@ -1801,6 +1844,30 @@ class DesktopGatewayClient {
   /// answer them, and rejecting here used to withdraw the prompt for every
   /// other client on the session. Declining is only ever an explicit 4404.
   void rejectServerRequestsForSession(String mobileSessionId) {}
+
+  /// Answers a prompt by the gateway's own wire id (`srq-…`).
+  ///
+  /// Notification payloads carry both the registry key and the wire id: after a
+  /// reconnect the key can have been re-minted, while the gateway's id is the
+  /// identity that survives.
+  bool respondToPromptWireId(
+    String wireRequestId,
+    Map<String, dynamic> result,
+  ) {
+    if (wireRequestId.trim().isEmpty) return false;
+    for (final entry in _serverRequests.entries) {
+      if (entry.value.id != wireRequestId) continue;
+      entry.value.respond(result);
+      _forgetServerRequest(entry.key);
+      return true;
+    }
+    return false;
+  }
+
+  /// The event a registered prompt was delivered with, for a screen that
+  /// mounted after the prompt arrived (or that lost the original dispatch).
+  StreamEvent? serverRequestEventFor(String requestId) =>
+      _serverRequestEvents[requestId];
 
   /// Whether this client owns an unresolved peer-to-peer request.
   bool ownsServerRequest(String requestId, String method) =>

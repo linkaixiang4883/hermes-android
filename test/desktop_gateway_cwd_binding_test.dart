@@ -17,6 +17,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/connection.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
+import 'package:hermes_android/core/services/ws_client.dart' show StreamEvent;
 
 /// Writes a server frame only while the socket is still open.
 ///
@@ -47,6 +48,7 @@ class _FakeGateway {
   final List<Map<String, dynamic>> creates = [];
   final List<Map<String, dynamic>> resumes = [];
   final List<Map<String, dynamic>> controls = [];
+  WebSocket? _socket;
 
   /// Answers the first `session.create` with an error, then succeeds.
   bool failFirstCreate = false;
@@ -61,6 +63,30 @@ class _FakeGateway {
   String get baseUrl => 'http://127.0.0.1:${_server.port}';
 
   Future<void> close() => _server.close(force: true);
+
+  /// Pushes one approval server-request frame, as the gateway does when a tool
+  /// needs a human while a client is attached.
+  void pushApproval({
+    String id = 'srq-replay1',
+    String sessionId = 'runtime-1',
+    String command = 'rm -rf build',
+  }) {
+    final socket = _socket;
+    if (socket == null) throw StateError('no socket yet');
+    _safeAdd(
+      socket,
+      jsonEncode({
+        'jsonrpc': '2.0',
+        'id': id,
+        'method': 'approval',
+        'params': {
+          'session_id': sessionId,
+          'command': command,
+          'choices': ['once', 'session', 'deny'],
+        },
+      }),
+    );
+  }
 
   Future<void> _handle(HttpRequest request) async {
     switch (request.uri.path) {
@@ -79,6 +105,7 @@ class _FakeGateway {
         await request.response.close();
       case '/api/ws':
         final socket = await WebSocketTransformer.upgrade(request);
+        _socket = socket;
         socket.listen((raw) {
           _answer(socket, jsonDecode(raw as String) as Map<String, dynamic>);
         });
@@ -287,6 +314,41 @@ void main() {
     );
     expect(disabled, isFalse);
     expect(gateway.controls.last['value'], 'off');
+  });
+
+  test('a prompt raised with no mounted screen is replayed to the next one',
+      () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    await client.ensureSession('mob-replay');
+    gateway.pushApproval();
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
+    expect(client.pendingPrompts.value, hasLength(1));
+    final prompt = client.pendingPrompts.value.single;
+    expect(prompt.method, 'approval');
+    expect(prompt.wireRequestId, 'srq-replay1');
+
+    final seen = <StreamEvent>[];
+    client.addAsyncEventListener((mobileId, event) => seen.add(event));
+    client.replayServerRequestsForSession('mob-replay');
+
+    expect(seen.single.type, 'approval.request');
+    expect(seen.single.data['server_request_id'], prompt.id);
+    expect(
+      client.respondToPromptWireId('srq-replay1', {'choice': 'once'}),
+      isTrue,
+    );
+    expect(client.pendingPrompts.value, isEmpty);
   });
 
   test('a chat that already exists is never re-homed by the remembered '

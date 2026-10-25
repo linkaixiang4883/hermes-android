@@ -105,6 +105,16 @@ class ActivityItem {
   /// When the journal last heard about this turn.
   final DateTime updatedAt;
 
+  /// Registry key of the blocking prompt this row stands for, when it is one.
+  /// Activity can answer it without opening the chat.
+  final String? promptRequestId;
+
+  /// `approval` / `clarify` / `sudo` / `secret` for a prompt row.
+  final String? promptMethod;
+
+  /// Choices the gateway offered for an approval prompt.
+  final List<String> promptChoices;
+
   const ActivityItem({
     required this.sessionId,
     required this.clientTurnId,
@@ -113,6 +123,9 @@ class ActivityItem {
     required this.updatedAt,
     this.title,
     this.turnId,
+    this.promptRequestId,
+    this.promptMethod,
+    this.promptChoices = const [],
   });
 }
 
@@ -404,6 +417,9 @@ ActivityFeed buildObservedActivityFeed({
             : prompt.summary,
         status: HermesStatus.blocked,
         updatedAt: prompt.createdAt,
+        promptRequestId: prompt.id,
+        promptMethod: prompt.method,
+        promptChoices: prompt.choices,
       ),
     );
   }

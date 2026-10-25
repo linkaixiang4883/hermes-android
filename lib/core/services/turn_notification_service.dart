@@ -558,12 +558,14 @@ class NotificationRoute {
   final String? sessionId;
   final String? connectionId;
   final String? requestId;
+  final String? wireRequestId;
   final String? actionId;
 
   const NotificationRoute({
     this.sessionId,
     this.connectionId,
     this.requestId,
+    this.wireRequestId,
     this.actionId,
   });
 
@@ -571,6 +573,7 @@ class NotificationRoute {
     String? sessionId;
     String? connectionId;
     String? requestId;
+    String? wireRequestId;
     final raw = response.payload;
     if (raw != null && raw.isNotEmpty) {
       try {
@@ -579,6 +582,7 @@ class NotificationRoute {
           sessionId = decoded['sessionId']?.toString();
           connectionId = decoded['connectionId']?.toString();
           requestId = decoded['requestId']?.toString();
+          wireRequestId = decoded['wireRequestId']?.toString();
         }
       } catch (_) {
         // A plain-string payload (older turns) carries only the turn id.
@@ -588,6 +592,7 @@ class NotificationRoute {
       sessionId: sessionId,
       connectionId: connectionId,
       requestId: requestId,
+      wireRequestId: wireRequestId,
       actionId: response.actionId,
     );
   }

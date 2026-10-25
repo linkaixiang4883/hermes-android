@@ -299,34 +299,62 @@ class HermesAppState extends State<HermesApp> {
           requestId: requestId,
           choice: choice,
         );
-        try {
-          final session = _turnApplicationController.sessionFor(connection);
-          unawaited(
-            session
-                .tryRespondToApproval(
-                  sessionId: sessionId,
-                  choice: choice,
-                  requestId: requestId,
-                )
-                .then((answered) {
-                  // The request belongs to an open chat's route-local gateway:
-                  // leave it pending so that screen answers it normally.
-                  if (!answered) addPendingNotificationApproval(approval);
-                })
-                .catchError((_) {
-                  // A throw is unresolved, not answered: keep the tap pending
-                  // so the owning chat can still answer it.
-                  addPendingNotificationApproval(approval);
-                }),
-          );
-        } catch (_) {
-          // A closed controller cannot answer; the owning chat still can.
-          addPendingNotificationApproval(approval);
-        }
+        unawaited(
+          _answerApprovalFromNotification(
+            connection: connection,
+            sessionId: sessionId,
+            requestId: requestId,
+            wireRequestId: route.wireRequestId,
+            choice: choice,
+            approval: approval,
+          ),
+        );
       }
     }
 
     unawaited(_openNotificationSession(connection, sessionId));
+  }
+
+  /// Answers an approval action whose prompt the shared client no longer has
+  /// directly: try the route-local controller, then re-attach the session so
+  /// the gateway replays `open_requests`, and only then leave the tap pending
+  /// for a mounted chat.
+  Future<void> _answerApprovalFromNotification({
+    required SavedConnection connection,
+    required String sessionId,
+    required String requestId,
+    required String? wireRequestId,
+    required String choice,
+    required PendingNotificationApproval approval,
+  }) async {
+    try {
+      final session = _turnApplicationController.sessionFor(connection);
+      final answered = await session.tryRespondToApproval(
+        sessionId: sessionId,
+        choice: choice,
+        requestId: requestId,
+      );
+      if (answered) return;
+    } catch (_) {
+      // A closed controller cannot answer; the shared client still might.
+    }
+    final shared = _gatewayRegistry.existingFor(connection.id);
+    if (shared != null) {
+      try {
+        await shared.activateSession(sessionId);
+      } catch (_) {
+        // An unreachable gateway leaves the tap pending below.
+      }
+      if (shared.ownsServerRequest(requestId, 'approval')) {
+        shared.respondToPendingPrompt(requestId, {'choice': choice});
+        return;
+      }
+      final wire = wireRequestId?.trim() ?? '';
+      if (wire.isNotEmpty && shared.respondToPromptWireId(wire, {'choice': choice})) {
+        return;
+      }
+    }
+    addPendingNotificationApproval(approval);
   }
 
   /// The connection a payload names, or null when it no longer exists.
