@@ -247,6 +247,34 @@ void main() {
     expect(client.pendingPrompts.value.single.mobileSessionId, 'mob-1');
   });
 
+  test('a chat can read its prompt before the session is ever bound', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    // The socket is up, but resume AND create both fail, so this chat has no
+    // runtime mapping. The prompt names the chat by its own id.
+    gateway.failFirstCreate = true;
+    await expectLater(
+      client.ensureSession('mob-1'),
+      throwsA(anything),
+    );
+    gateway.pushApproval(sessionId: 'mob-1');
+    await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
+
+    expect(client.pendingPrompts.value.single.mobileSessionId, isNull);
+    final visible = client.pendingPromptEventsForSession('mob-1');
+    expect(visible, hasLength(1));
+    expect(visible.single.event.type, 'approval.request');
+  });
+
   test(
     'a failed preflight keeps the Project folder for the call that creates '
     'the session',

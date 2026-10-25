@@ -1472,20 +1472,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       'sudo.request',
       'secret.request',
     };
-    final runtimeId = gateway.gatewaySessionIdFor(widget.session.id);
-    for (final prompt in gateway.pendingPrompts.value) {
-      final event = gateway.serverRequestEventFor(prompt.id);
-      // A prompt registered while this chat had no binding carries a null
-      // mobile id; the event still names the runtime session, which is enough
-      // to prove it belongs here. Adopt it so notifications/Activity route
-      // back to this chat too.
-      final belongsHere =
-          prompt.mobileSessionId == widget.session.id ||
-          (prompt.mobileSessionId == null &&
-              (event?.sessionId == widget.session.id ||
-                  (runtimeId != null && event?.sessionId == runtimeId)));
-      if (!belongsHere) continue;
-      if (event == null || !interactive.contains(event.type)) continue;
+    // Read the session's events, not the routing map: identity is resolved in
+    // the client (local id, runtime id, stored key), so a prompt that was
+    // registered before this chat bound — or after a reconnect — still shows.
+    for (final pending in gateway.pendingPromptEventsForSession(
+      widget.session.id,
+    )) {
+      final prompt = pending.prompt;
+      final event = pending.event;
+      if (!interactive.contains(event.type)) continue;
       if (prompt.mobileSessionId != widget.session.id) {
         gateway.adoptServerRequest(prompt.id, widget.session.id);
       }

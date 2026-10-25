@@ -56,6 +56,18 @@ class SlashExecFailure implements Exception {
   String toString() => message;
 }
 
+/// An unresolved prompt together with the event a chat screen renders.
+///
+/// The pair is the chat-side read model: the prompt carries the identity used
+/// for matching, the event carries exactly what the gateway sent (and what the
+/// dialog/response path expects).
+class PendingPromptEvent {
+  const PendingPromptEvent(this.prompt, this.event);
+
+  final PendingPrompt prompt;
+  final StreamEvent event;
+}
+
 class DesktopGatewayClient {
   static int _nextServerRequestNamespace = 1;
 
@@ -1606,6 +1618,33 @@ class DesktopGatewayClient {
   /// The runtime id this chat is bound to, if it has been resumed.
   String? gatewaySessionIdFor(String mobileSessionId) =>
       _gatewaySessionIds[mobileSessionId];
+
+  /// Every unresolved prompt whose session identity names [mobileSessionId].
+  ///
+  /// This is the read model a chat screen should use: it matches the local id,
+  /// the runtime id and the stored key, and never depends on the prompt having
+  /// been routed through the local id at registration time. A prompt raised
+  /// after a reconnect (or before the chat first bound) is still visible.
+  List<PendingPromptEvent> pendingPromptEventsForSession(
+    String mobileSessionId,
+  ) {
+    final identities = <String>{
+      mobileSessionId,
+      ?_gatewaySessionIds[mobileSessionId],
+      ?_storedSessionIds[mobileSessionId],
+    };
+    final result = <PendingPromptEvent>[];
+    for (final prompt in pendingPrompts.value) {
+      final event = _serverRequestEvents[prompt.id];
+      if (event == null) continue;
+      final belongs =
+          prompt.mobileSessionId == mobileSessionId ||
+          identities.contains(prompt.gatewaySessionId) ||
+          identities.contains(event.sessionId);
+      if (belongs) result.add(PendingPromptEvent(prompt, event));
+    }
+    return result;
+  }
 
   /// Re-homes an unresolved prompt onto the chat that is now showing it.
   ///
