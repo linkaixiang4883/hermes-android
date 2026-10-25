@@ -311,6 +311,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   late final WorkspaceTurnSignalsLoader _loadTurnSignals =
       widget.turnSignalsLoader ?? _loadTurnSignalsFromJournal;
 
+  static const int _workspaceSessionPageSize = 100;
+
   ApiClient _sessionsClient() {
     final connection = widget.connection;
     return _sessionsApi ??= ApiClient(
@@ -323,74 +325,36 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   /// One request for the silent refresh: the newest page only.
   Future<List<Session>> _loadSessionsHead() async {
-    final page = await _sessionsClient().getSessionsPage(limit: 100);
+    final page = await _sessionsClient().getSessionsPage(
+      limit: _workspaceSessionPageSize,
+    );
     return page.sessions;
   }
 
   Future<List<Session>> _loadSessionsFromGateway() async {
     final api = _sessionsClient();
-    // Page through the whole visible list. The gateway serves newest-first
-    // in a capped window; a single first-page request truncated the
-    // Unassigned bucket (older unfiled chats never reached the device).
-    // Bounded at 20 pages x 100 so a chatty store can't fan out forever.
-    const pageSize = 100;
-    const maxPages = 20;
-    final all = <Session>[];
-    final seenIds = <String>{};
-    var offset = 0;
-    // Upper bound on the total pin set: stock repeats EVERY pin on EVERY
-    // page, so the max pinned count seen on any single page bounds them all.
-    var pinBound = 0;
-    // Consecutive pages that contributed zero unseen ids (see below).
-    var zeroNewPages = 0;
-    for (var page = 0; page < maxPages; page++) {
-      final result = await api.getSessionsPage(limit: pageSize, offset: offset);
-      // The stock gateway back-fills pinned sessions past `limit` and
-      // repeats them on later pages, so the returned row count is NOT
-      // the window size: advance by the requested pageSize or window
-      // rows between the window and the back-fill are skipped, and dedupe
-      // by id so a repeated pin never shows twice.
-      var newRows = 0;
-      for (final session in result.sessions) {
-        if (seenIds.add(session.id)) {
-          all.add(session);
-          newRows++;
-        }
-      }
-      final pinsOnPage = result.sessions
-          .where((session) => session.pinned)
-          .length;
-      if (pinsOnPage > pinBound) pinBound = pinsOnPage;
-      // Without a pin in this window `has_more` is the server's plain
-      // "windowed < limit" answer, so one page is the whole list. The old
-      // code always fetched a second, empty page to prove the end.
-      if (!result.hasMore && pinsOnPage == 0) break;
-      // `has_more` is NOT trusted for stopping: the server computes it
-      // from the non-pinned rows in the combined response
-      // (api_server.py: windowed >= limit), so a pin that already sits
-      // INSIDE the base window makes that count fall below `limit` and
-      // report has_more=false while rows still exist past the offset.
-      // End-of-list is decided client-side — but a SINGLE zero-new page
-      // is not proof either: a later base window made entirely of
-      // already-seen pins contributes nothing new while unseen rows
-      // remain further along. k consecutive zero-new windows must be
-      // k*pageSize disjoint all-pin windows, so once k*pageSize exceeds
-      // the pin bound the end is proven. With no pins, one zero-new page
-      // already proves it.
-      if (newRows == 0) {
-        zeroNewPages++;
-        final required = pinBound == 0 ? 1 : pinBound ~/ pageSize + 1;
-        if (zeroNewPages >= required) break;
-      } else {
-        zeroNewPages = 0;
-      }
-      offset += pageSize;
-    }
+    // One page, like Desktop: `listSessions(limit)` asks for offset=0 only.
+    // Paging the whole history made every Home/Chats refresh cost five requests
+    // on a 500-session store, and Project conversations never needed it — the
+    // Projects pane asks `projects.project_sessions` for exactly its own chats.
+    // Older chats in the Chats pane load lazily through the list's load-more.
+    final page = await api.getSessionsPage(limit: _workspaceSessionPageSize);
+    final all = <Session>[...page.sessions];
     final pins = await _pinStore?.load() ?? const <String>[];
     if (pins.isNotEmpty) {
       all.addAll(await loadUnlistedLocalPins(api, all, pins));
     }
     return all;
+  }
+
+  /// The next page of the global Chats list, requested only when the list is
+  /// scrolled near its end.
+  Future<List<Session>> _loadMoreWorkspaceSessions(int offset) async {
+    final page = await _sessionsClient().getSessionsPage(
+      limit: _workspaceSessionPageSize,
+      offset: offset,
+    );
+    return page.sessions;
   }
 
   /// Derives Home's signals from the durable turn recovery journal.
@@ -911,6 +875,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           refreshInterval: widget.sessionsRefreshInterval,
           load: _loadWorkspaceSessionsData,
           loadHead: _loadSessionsHead,
+          loadMore: _loadMoreWorkspaceSessions,
           onOpenSession: (session) => unawaited(
             _openSession(session, projectName: _chatProjectLabels[session.id]),
           ),
@@ -1409,6 +1374,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         refreshInterval: widget.sessionsRefreshInterval,
         load: _loadWorkspaceSessionsData,
         loadHead: _loadSessionsHead,
+        loadMore: _loadMoreWorkspaceSessions,
         onOpenSession: (session) => unawaited(_openSession(session)),
         onPromote: switch (view) {
           WorkspaceSessionView.archivedQuick => _promoteQuickChat,

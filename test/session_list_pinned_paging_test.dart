@@ -694,19 +694,13 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(WorkspaceSessionsScreen), findsOneWidget);
 
-      // Second page requested at the window offset (100), not 101 —
-      // advancing by the returned rows (100 window + 1 pin) would skip
-      // 'Window chat 100'. The loader legitimately runs more than once
-      // (Home refresh + Chats data), and a terminal no-progress probe at
-      // offset 200 confirms the end, so assert every offset is a clean
-      // window boundary and the real pages were read.
-      expect(fake.requestedOffsets, contains('100'));
+      // First paint is one page (Desktop parity). Older rows arrive only
+      // when the list is scrolled to its end, and then at the requested
+      // window offset (100), never at 101 or by the returned row count.
       expect(
-        fake.requestedOffsets.every((o) => int.parse(o) % 100 == 0),
-        isTrue,
-        reason:
-            'offsets must advance by the requested window, never by '
-            'the returned row count',
+        fake.requestedOffsets.toSet(),
+        {'0'},
+        reason: 'opening the list must not page the whole history',
       );
 
       final chatsScope = find.byType(WorkspaceSessionsScreen);
@@ -749,6 +743,16 @@ void main() {
       expect(
         find.descendant(of: chatsScope, matching: find.text('Window chat 100')),
         findsOneWidget,
+      );
+      expect(
+        fake.requestedOffsets,
+        contains('100'),
+        reason: 'scrolling to the end must request the next window',
+      );
+      expect(
+        fake.requestedOffsets.every((o) => int.parse(o) % 100 == 0),
+        isTrue,
+        reason: 'offsets must advance by the requested window',
       );
       await tester.scrollUntilVisible(
         find.descendant(of: chatsScope, matching: find.text('Window chat 119')),
@@ -827,10 +831,8 @@ void main() {
 
         expect(
           fake.requestedOffsets.toSet(),
-          contains('100'),
-          reason:
-              'has_more=false from a pinned-in-window row must not stop '
-              'the Home loader',
+          {'0'},
+          reason: 'the first paint is one page; later pages are lazy',
         );
 
         final chatsScope = find.byType(WorkspaceSessionsScreen);
@@ -857,6 +859,9 @@ void main() {
           ),
           findsOneWidget,
         );
+        // The lazy page still arrives even though the stock has_more said
+        // false on page 0 (a pinned-in-window row made its count short).
+        expect(fake.requestedOffsets, contains('100'));
       },
     );
   });

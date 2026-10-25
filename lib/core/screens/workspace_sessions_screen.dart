@@ -266,6 +266,10 @@ class WorkspaceSessionsScreen extends StatefulWidget {
   /// history every interval bought nothing. Null falls back to [load].
   final Future<List<Session>> Function()? loadHead;
 
+  /// Next page of the global list, requested when the visible list nears its
+  /// end. Without it the pane would only ever show the first 100 chats.
+  final Future<List<Session>> Function(int offset)? loadMore;
+
   final ValueChanged<Session> onOpenSession;
   final WorkspaceSessionPromoter? onPromote;
   final LocalChatPinStore? pinStore;
@@ -286,6 +290,7 @@ class WorkspaceSessionsScreen extends StatefulWidget {
     required this.load,
     this.loadHead,
     required this.onOpenSession,
+    this.loadMore,
     this.onPromote,
     this.pinStore,
     this.embedded = false,
@@ -318,6 +323,12 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   /// overlap the next tick (an older completion would win the setState).
   bool _loadInFlight = false;
 
+  static const int _pageSize = 100;
+  final ScrollController _scroll = ScrollController();
+  bool _loadingMore = false;
+  bool _canLoadMore = true;
+  int _nextOffset = _pageSize;
+
   /// The active chip filter in the embedded Chats browser.
   WorkspaceChatsFilter _filter = WorkspaceChatsFilter.all;
 
@@ -334,6 +345,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _scroll.addListener(_onScroll);
     unawaited(_load());
   }
 
@@ -389,7 +401,40 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _scroll.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    if (_scroll.position.extentAfter > 480) return;
+    if (widget.loadMore != null) unawaited(_loadMore());
+  }
+
+  Future<void> _loadMore() async {
+    final loadMore = widget.loadMore;
+    final data = _data;
+    if (loadMore == null || data == null || _loadingMore || !_canLoadMore) {
+      return;
+    }
+    setState(() => _loadingMore = true);
+    try {
+      final page = await loadMore(_nextOffset);
+      if (!mounted) return;
+      final existing = {for (final session in data.sessions) session.id};
+      final incoming = [
+        for (final session in page)
+          if (!existing.contains(session.id)) session,
+      ];
+      setState(() {
+        _data = data.copyWith(sessions: [...data.sessions, ...incoming]);
+        _loadingMore = false;
+        _canLoadMore = page.length >= _pageSize;
+        _nextOffset += _pageSize;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   Future<void> _load({bool headOnly = false}) async {
@@ -414,6 +459,8 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
       if (mounted) {
         setState(() {
           _data = data;
+          _nextOffset = _pageSize;
+          _canLoadMore = true;
           _pinnedIds = pins;
           _error = null;
         });
@@ -572,6 +619,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        controller: _scroll,
         padding: const EdgeInsets.fromLTRB(
           HermesSpacing.lg,
           HermesSpacing.md,
@@ -647,6 +695,16 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
                   ),
               ],
           ],
+          if (_loadingMore)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: HermesSpacing.md),
+              child: Center(
+                child: SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+            ),
         ],
       ),
     );
