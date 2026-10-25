@@ -409,7 +409,12 @@ class DesktopGatewayClient {
           ? DesktopConnectionState.connecting
           : DesktopConnectionState.reconnecting,
     );
-    _gatewaySessionIds.clear();
+    // Do NOT clear `_gatewaySessionIds` here. A runtime session id outlives
+    // the socket (the server keeps the session, and a reconnect resumes the
+    // same one). Clearing it made every prompt that arrived after a reconnect
+    // unroutable: `_mobileSessionIdFor` got the runtime id, both maps were
+    // empty, so the prompt was registered with a null mobile session — visible
+    // in notifications/Activity but never dispatched to the open chat.
     // A parked truncation names a numbering of the socket that is being
     // replaced; the new socket reports the holes it finds on its own round.
     _unmappedReplayTruncations.clear();
@@ -1597,6 +1602,23 @@ class DesktopGatewayClient {
   /// Reverse of the runtime binding: gateway session id -> local session id.
   String? mobileSessionIdForGateway(String gatewaySessionId) =>
       _mobileSessionIdFor(gatewaySessionId);
+
+  /// The runtime id this chat is bound to, if it has been resumed.
+  String? gatewaySessionIdFor(String mobileSessionId) =>
+      _gatewaySessionIds[mobileSessionId];
+
+  /// Re-homes an unresolved prompt onto the chat that is now showing it.
+  ///
+  /// Used when the prompt was registered before its session had a binding
+  /// (a reconnect, or a chat opened after the prompt arrived): answering works
+  /// by request id either way, but notifications and Activity need the mobile
+  /// id to route a tap back to this chat.
+  void adoptServerRequest(String requestId, String mobileSessionId) {
+    if (!_serverRequests.containsKey(requestId)) return;
+    if (_serverRequestMobileSessionIds[requestId] == mobileSessionId) return;
+    _serverRequestMobileSessionIds[requestId] = mobileSessionId;
+    _publishPendingPrompts();
+  }
 
   String? _mobileSessionIdFor(String? gatewaySessionId) {
     if (gatewaySessionId != null && gatewaySessionId.isNotEmpty) {

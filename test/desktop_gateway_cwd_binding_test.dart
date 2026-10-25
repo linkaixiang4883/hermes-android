@@ -60,9 +60,22 @@ class _FakeGateway {
   /// When set, `session.resume` succeeds for this id instead of 4007.
   String? liveSessionId;
 
+  /// What a successful resume reports: the runtime id and the stored key.
+  /// They differ in production, and keeping them distinct is what exposes a
+  /// routing map that was wiped by a reconnect.
+  String resumeRuntimeId = 'runtime-1';
+  String resumeStoredId = 'stored-1';
+
+  /// How many WebSocket connections this fixture has accepted.
+  int socketOpens = 0;
+
   String get baseUrl => 'http://127.0.0.1:${_server.port}';
 
   Future<void> close() => _server.close(force: true);
+
+  /// Drops the live socket without closing the fixture, as a network blip
+  /// would: the client must reconnect on its own.
+  void dropSocket() => _socket?.close();
 
   /// Pushes one approval server-request frame, as the gateway does when a tool
   /// needs a human while a client is attached.
@@ -106,6 +119,7 @@ class _FakeGateway {
       case '/api/ws':
         final socket = await WebSocketTransformer.upgrade(request);
         _socket = socket;
+        socketOpens++;
         socket.listen((raw) {
           _answer(socket, jsonDecode(raw as String) as Map<String, dynamic>);
         });
@@ -134,7 +148,10 @@ class _FakeGateway {
         resumes.add(params);
         final live = liveSessionId;
         if (live != null && params['session_id'] == live) {
-          reply({'session_id': live, 'stored_session_id': live});
+          reply({
+            'session_id': resumeRuntimeId,
+            'stored_session_id': resumeStoredId,
+          });
         } else {
           reply(null, error: {'code': 4007, 'message': 'session not found'});
         }
@@ -192,7 +209,44 @@ SavedConnection _connection(String baseUrl) => SavedConnection(
   dashboardPassword: 'secret',
 );
 
+Future<void> _waitFor(bool Function() condition, {int tries = 100}) async {
+  for (var i = 0; i < tries; i++) {
+    if (condition()) return;
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+  }
+  throw StateError('condition not met in time');
+}
+
 void main() {
+  test('a prompt arriving after a reconnect still routes to its chat', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    gateway.liveSessionId = 'mob-1';
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    await client.ensureSession('mob-1');
+    expect(client.pendingPrompts.value, isEmpty);
+
+    gateway.dropSocket();
+    await _waitFor(
+      () =>
+          gateway.socketOpens >= 2 &&
+          client.connectionState == DesktopConnectionState.connected,
+    );
+
+    gateway.pushApproval(sessionId: 'runtime-1');
+    await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
+
+    expect(client.pendingPrompts.value.single.mobileSessionId, 'mob-1');
+  });
+
   test(
     'a failed preflight keeps the Project folder for the call that creates '
     'the session',

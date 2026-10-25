@@ -557,6 +557,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       DesktopConnectionState.disconnected;
   bool _appInBackground = false;
 
+  /// Whether the socket has already reached `connected` once for this screen.
+  /// Only a transition back to connected (i.e. after a drop) re-binds the
+  /// session; the first connect is covered by the init-time ensure.
+  bool _desktopHasConnected = false;
+
   // Context usage display (Task 2): the WS breakdown snapshot and the
   // REST stream-tail fallback for the current turn. Never persisted;
   // [_usageSessionId] tracks which session they belong to.
@@ -832,6 +837,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // the connection first), so seed from what the client holds now;
         // without this the header claimed offline for the whole visit.
         _desktopConnectionState = gateway.connectionState;
+        _desktopHasConnected =
+            _desktopConnectionState == DesktopConnectionState.connected;
         _desktopSessionBoundToken = gateway.addSessionBoundListener(
           _onSessionBound,
         );
@@ -1365,7 +1372,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (state != DesktopConnectionState.connected) _pauseReattachRetry();
     setState(() => _desktopConnectionState = state);
     if (connectionChanged && state == DesktopConnectionState.connected) {
+      final reconnected = _desktopHasConnected;
+      _desktopHasConnected = true;
       unawaited(_refreshProjectName());
+      // Re-bind on a NEW socket only: the resume is what replays
+      // `open_requests` (prompts raised while the phone was detached) and
+      // refreshes the live turn snapshot. The first connect is already covered
+      // by the init-time ensure, and issuing a second one there doubled every
+      // resume in the reconnect tests.
+      if (reconnected && _desktopGateway != null) {
+        unawaited(_ensureDesktopSession(refresh: true));
+      }
       _requestImmediateReattachResync();
       // A notification tap that landed before this route-local gateway was
       // ready stays pending; retry it now that the connection is back.
@@ -1455,10 +1472,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       'sudo.request',
       'secret.request',
     };
+    final runtimeId = gateway.gatewaySessionIdFor(widget.session.id);
     for (final prompt in gateway.pendingPrompts.value) {
-      if (prompt.mobileSessionId != widget.session.id) continue;
       final event = gateway.serverRequestEventFor(prompt.id);
+      // A prompt registered while this chat had no binding carries a null
+      // mobile id; the event still names the runtime session, which is enough
+      // to prove it belongs here. Adopt it so notifications/Activity route
+      // back to this chat too.
+      final belongsHere =
+          prompt.mobileSessionId == widget.session.id ||
+          (prompt.mobileSessionId == null &&
+              (event?.sessionId == widget.session.id ||
+                  (runtimeId != null && event?.sessionId == runtimeId)));
+      if (!belongsHere) continue;
       if (event == null || !interactive.contains(event.type)) continue;
+      if (prompt.mobileSessionId != widget.session.id) {
+        gateway.adoptServerRequest(prompt.id, widget.session.id);
+      }
       if (event.type == 'approval.request') {
         _showGatewayApproval(
           event.data,
