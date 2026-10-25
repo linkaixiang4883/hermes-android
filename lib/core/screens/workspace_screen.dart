@@ -351,6 +351,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           .where((session) => session.pinned)
           .length;
       if (pinsOnPage > pinBound) pinBound = pinsOnPage;
+      // Without a pin in this window `has_more` is the server's plain
+      // "windowed < limit" answer, so one page is the whole list. The old
+      // code always fetched a second, empty page to prove the end.
+      if (!result.hasMore && pinsOnPage == 0) break;
       // `has_more` is NOT trusted for stopping: the server computes it
       // from the non-pinned rows in the combined response
       // (api_server.py: windowed >= limit), so a pin that already sits

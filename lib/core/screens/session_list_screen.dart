@@ -121,7 +121,10 @@ class _SessionListScreenState extends State<SessionListScreen> {
   /// Session-list paging state. The gateway serves the list newest-first in
   /// pages; [_sessions] accumulates loaded pages so the Unassigned bucket
   /// can reach sessions beyond the first page.
-  int get _sessionPageSize => widget.testSessionPageSize ?? 50;
+  /// One request per page. 100 is the sweet spot for a phone list: a single
+  /// request fills a long scroll, while the gateway cap is 200 so a larger
+  /// page buys little and costs a slower first paint.
+  int get _sessionPageSize => widget.testSessionPageSize ?? 100;
   int _sessionsOffset = 0;
   bool _hasMoreSessions = false;
   bool _loadingMoreSessions = false;

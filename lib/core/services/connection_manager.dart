@@ -761,7 +761,7 @@ class ApiClient {
   Future<Session?> getSessionById(String sessionId) async {
     var offset = 0;
     while (true) {
-      final result = await getSessionsPage(limit: 50, offset: offset);
+      final result = await getSessionsPage(limit: 100, offset: offset);
       for (final session in result.sessions) {
         if (session.id == sessionId) return session;
       }

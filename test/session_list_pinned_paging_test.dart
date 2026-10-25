@@ -260,6 +260,8 @@ void main() {
             connection: _connection('paging-1'),
             turnApplicationController: controller,
             testHttpClient: fake,
+            // This scenario is sized for 50-row windows.
+            testSessionPageSize: 50,
           ),
         ),
       );
@@ -350,6 +352,7 @@ void main() {
               connection: _connection('paging-inwin'),
               turnApplicationController: controller,
               testHttpClient: fake,
+              testSessionPageSize: 50,
             ),
           ),
         );

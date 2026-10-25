@@ -100,6 +100,24 @@ List<Session> orderLocalPinnedChats(
   ];
 }
 
+/// Resolved pinned rows, keyed by gateway origin + stored id.
+///
+/// Resolving one unlisted pin costs two requests (exact-id metadata, then a
+/// title-filtered rich row). A list screen refreshes often, and without this
+/// cache every refresh paid those requests again for the same old pins.
+/// Keyed by the [ApiClient] instance, so a new connection (or a new test
+/// client) starts empty without any global invalidation protocol.
+final Expando<Map<String, ({Session session, DateTime at})>> _resolvedPins =
+    Expando('resolved-pin-sessions');
+const Duration _resolvedPinTtl = Duration(minutes: 10);
+
+/// Test hook: forget resolved pins for one client.
+void clearResolvedPinSessionCache(ApiClient client) =>
+    _resolvedPins[client]?.clear();
+
+Map<String, ({Session session, DateTime at})> _pinCache(ApiClient client) =>
+    _resolvedPins[client] ??= <String, ({Session session, DateTime at})>{};
+
 /// Fetch old local pins beyond the first page (or Home's bounded scan). An
 /// exact-id row has neither the list's preview nor effective activity, and a
 /// compressed root is not the live tip. Resolve its title through the rich
@@ -113,37 +131,52 @@ Future<List<Session>> loadUnlistedLocalPins(
     for (final session in listed) session.id,
     for (final session in listed) ?session.lineageRootId,
   };
-  final missing = pinnedIds.where((id) => !listedIds.contains(id));
-  final resolved = await Future.wait(
-    missing.map((id) async {
+  final missing = pinnedIds.where((id) => !listedIds.contains(id)).toList();
+  if (missing.isEmpty) return const [];
+
+  final now = DateTime.now();
+  final cache = _pinCache(client);
+  final resolved = <String, Session>{};
+  final pending = <String>[];
+  for (final id in missing) {
+    final cached = cache[id];
+    if (cached != null && now.difference(cached.at) < _resolvedPinTtl) {
+      resolved[id] = cached.session;
+    } else {
+      pending.add(id);
+    }
+  }
+  await Future.wait(
+    pending.map((id) async {
       try {
         final metadata = await client.getSession(id);
         if (metadata['hidden'] == true ||
             metadata['archived'] == true ||
             metadata['is_internal_child'] == true) {
-          return null;
+          return;
         }
         final title = metadata['title'];
-        if (title is! String || title.trim().isEmpty) return null;
+        if (title is! String || title.trim().isEmpty) return;
         final rich = await client.getSessionsPage(limit: 200, title: title);
         for (final session in rich.sessions) {
           if (!session.archived &&
               (session.id == id || session.lineageRootId == id)) {
-            return session;
+            resolved[id] = session;
+            cache[id] = (session: session, at: DateTime.now());
+            return;
           }
         }
-        return null;
       } catch (_) {
         // Older gateways may not expose title-filtered rich rows. Do not
         // substitute a bare row: it could duplicate a compression tip and
         // would misrepresent the preview and recent activity.
-        return null;
       }
     }),
   );
   final seen = listed.map((session) => session.id).toSet();
   return [
-    for (final session in resolved.whereType<Session>())
-      if (seen.add(session.id)) session,
+    for (final id in pinnedIds)
+      if (resolved[id] case final session?)
+        if (seen.add(session.id)) session,
   ];
 }
