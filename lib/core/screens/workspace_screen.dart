@@ -311,14 +311,24 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   late final WorkspaceTurnSignalsLoader _loadTurnSignals =
       widget.turnSignalsLoader ?? _loadTurnSignalsFromJournal;
 
-  Future<List<Session>> _loadSessionsFromGateway() async {
+  ApiClient _sessionsClient() {
     final connection = widget.connection;
-    final api = _sessionsApi ??= ApiClient(
+    return _sessionsApi ??= ApiClient(
       baseUrl: connection.baseUrl,
       apiKey: connection.apiKey,
       pathPrefix: connection.gatewayPrefix ?? '',
       httpClient: widget.testSessionsHttpClient,
     );
+  }
+
+  /// One request for the silent refresh: the newest page only.
+  Future<List<Session>> _loadSessionsHead() async {
+    final page = await _sessionsClient().getSessionsPage(limit: 100);
+    return page.sessions;
+  }
+
+  Future<List<Session>> _loadSessionsFromGateway() async {
+    final api = _sessionsClient();
     // Page through the whole visible list. The gateway serves newest-first
     // in a capped window; a single first-page request truncated the
     // Unassigned bucket (older unfiled chats never reached the device).
@@ -900,6 +910,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           pinStore: _pinStore,
           refreshInterval: widget.sessionsRefreshInterval,
           load: _loadWorkspaceSessionsData,
+          loadHead: _loadSessionsHead,
           onOpenSession: (session) => unawaited(
             _openSession(session, projectName: _chatProjectLabels[session.id]),
           ),
@@ -1397,6 +1408,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         pinStore: _pinStore,
         refreshInterval: widget.sessionsRefreshInterval,
         load: _loadWorkspaceSessionsData,
+        loadHead: _loadSessionsHead,
         onOpenSession: (session) => unawaited(_openSession(session)),
         onPromote: switch (view) {
           WorkspaceSessionView.archivedQuick => _promoteQuickChat,

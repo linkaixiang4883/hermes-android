@@ -184,6 +184,17 @@ class WorkspaceSessionsData {
   /// say so instead of presenting the whole archive as unfiled noise.
   final bool projectsKnown;
 
+  WorkspaceSessionsData copyWith({List<Session>? sessions}) {
+    return WorkspaceSessionsData(
+      sessions: sessions ?? this.sessions,
+      claimedSessionIds: claimedSessionIds,
+      archivedQuickChatIds: archivedQuickChatIds,
+      archivedSessions: archivedSessions,
+      projectLabels: projectLabels,
+      projectsKnown: projectsKnown,
+    );
+  }
+
   const WorkspaceSessionsData({
     this.sessions = const [],
     this.claimedSessionIds = const {},
@@ -249,6 +260,12 @@ class WorkspaceSessionsScreen extends StatefulWidget {
   final String title;
   final WorkspaceSessionView view;
   final WorkspaceSessionsLoader load;
+
+  /// Cheap first-page refresh for the periodic tick. New/updated chats arrive
+  /// at the top of the gateway's newest-first window, so re-paging the whole
+  /// history every interval bought nothing. Null falls back to [load].
+  final Future<List<Session>> Function()? loadHead;
+
   final ValueChanged<Session> onOpenSession;
   final WorkspaceSessionPromoter? onPromote;
   final LocalChatPinStore? pinStore;
@@ -267,6 +284,7 @@ class WorkspaceSessionsScreen extends StatefulWidget {
     required this.title,
     required this.view,
     required this.load,
+    this.loadHead,
     required this.onOpenSession,
     this.onPromote,
     this.pinStore,
@@ -352,7 +370,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
     final interval = widget.refreshInterval;
     if (interval == null || !visible) return;
     _refreshTimer = Timer.periodic(interval, (_) {
-      if (_visible) unawaited(_load());
+      if (_visible) unawaited(_load(headOnly: true));
     });
   }
 
@@ -374,10 +392,23 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool headOnly = false}) async {
     if (_loadInFlight) return;
     _loadInFlight = true;
     try {
+      final current = _data;
+      final loadHead = widget.loadHead;
+      if (headOnly && loadHead != null && current != null) {
+        final head = await loadHead();
+        final headIds = {for (final session in head) session.id};
+        final merged = [
+          ...head,
+          for (final session in current.sessions)
+            if (!headIds.contains(session.id)) session,
+        ];
+        if (mounted) setState(() => _data = current.copyWith(sessions: merged));
+        return;
+      }
       final data = await widget.load();
       final pins = await widget.pinStore?.load() ?? const <String>[];
       if (mounted) {

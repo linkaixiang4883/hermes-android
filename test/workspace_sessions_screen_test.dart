@@ -239,6 +239,51 @@ void main() {
     },
   );
 
+  testWidgets('the silent tick refreshes only the head and merges it', (
+    tester,
+  ) async {
+    var fullLoads = 0;
+    var headLoads = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: hermesTheme(Brightness.dark),
+        home: WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          embedded: true,
+          refreshInterval: const Duration(seconds: 1),
+          load: () async {
+            fullLoads++;
+            return WorkspaceSessionsData(
+              sessions: [_session('old', 'Old chat')],
+            );
+          },
+          loadHead: () async {
+            headLoads++;
+            return [_session('new', 'New chat')];
+          },
+          onOpenSession: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(fullLoads, 1);
+    expect(find.text('Old chat'), findsOneWidget);
+
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pump();
+
+    expect(headLoads, 1);
+    expect(fullLoads, 1, reason: 'the tick must not re-page the whole list');
+    expect(find.text('New chat'), findsOneWidget);
+    expect(find.text('Old chat'), findsOneWidget);
+
+    // Dispose the periodic timer so the test ends with no pending timers.
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('embedded mode reuses the browser without a nested scaffold', (
     tester,
   ) async {
