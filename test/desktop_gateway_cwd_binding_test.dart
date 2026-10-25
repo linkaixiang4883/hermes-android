@@ -351,6 +351,29 @@ void main() {
     expect(client.pendingPrompts.value, isEmpty);
   });
 
+  test('a turn ending drops prompts that can no longer be answered', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    await client.ensureSession('mob-stale');
+    gateway.pushApproval(id: 'srq-stale', sessionId: 'runtime-1');
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+    expect(client.pendingPrompts.value, hasLength(1));
+
+    client.dismissPromptsForSession('mob-stale');
+
+    expect(client.pendingPrompts.value, isEmpty);
+    expect(client.ownsServerRequest('srq-stale', 'approval'), isFalse);
+  });
+
   test('a chat that already exists is never re-homed by the remembered '
       'folder', () async {
     final gateway = _FakeGateway(

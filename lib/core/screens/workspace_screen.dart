@@ -40,6 +40,7 @@ import '../services/turn_completion_notifier.dart';
 import '../services/turn_notification_service.dart';
 import '../services/shared_attachment_preparer.dart';
 import '../theme/hermes_theme.dart';
+import '../models/pending_prompt.dart';
 import '../utils/activity_feed.dart';
 import '../utils/home_turn_signals.dart';
 import '../utils/new_chat_options.dart';
@@ -515,16 +516,26 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       l10n: l10n,
       sessionTitles: sessionTitles,
     );
-    if (!journalFeed.isEmpty) return journalFeed;
+    final client = widget.gatewayRegistry?.existingFor(connection.id);
+    final prompts = client?.pendingPrompts.value ?? const <PendingPrompt>[];
+    if (!journalFeed.isEmpty) {
+      // Activity answers approvals, so the live registry rides on top of the
+      // journal instead of being replaced by it.
+      return withBlockingPrompts(
+        feed: journalFeed,
+        prompts: prompts,
+        l10n: l10n,
+        sessionTitles: sessionTitles,
+      );
+    }
     // Stock gateways have no turn-recovery journal. The observed store hears
     // every fan-out frame, and the prompt registry is the live "needs you"
     // half — together they keep Activity honest without one.
     final observed = _observedTurns;
     if (observed == null) return journalFeed;
-    final client = widget.gatewayRegistry?.existingFor(connection.id);
     return buildObservedActivityFeed(
       turns: observed.entries,
-      prompts: client?.pendingPrompts.value ?? const [],
+      prompts: prompts,
       l10n: l10n,
       now: DateTime.now(),
       sessionTitles: sessionTitles,
@@ -929,6 +940,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           liveUpdates: _activityLiveSignals,
           onOpenItem: _openActivityItem,
           onRespondPrompt: _respondToActivityPrompt,
+          blockedOnly: true,
         );
       case HermesDestination.more:
         return MorePane(
@@ -1113,8 +1125,16 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// The live session an Activity row points at, or `null` when the chat is
   /// no longer known.
   Session? _sessionForActivity(ActivityItem item) {
-    final title = _sessionTitles[item.sessionId];
-    if (title == null) return null;
+    if (item.sessionId.trim().isEmpty) return null;
+    // A prompt can name a chat whose title was never cached (the session was
+    // attached by the watcher, not opened). Opening it still shows the card —
+    // an untitled chat is better than a tap that does nothing.
+    final cachedTitle = _sessionTitles[item.sessionId];
+    // A journal row for a deleted chat must not open a phantom screen; a live
+    // prompt row may name a chat whose title was never cached, and opening it
+    // is how the user reaches the question card.
+    if (cachedTitle == null && item.promptRequestId == null) return null;
+    final title = cachedTitle ?? item.title ?? '';
     return Session(
       id: item.sessionId,
       title: title,

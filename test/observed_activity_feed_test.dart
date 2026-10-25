@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/pending_prompt.dart';
 import 'package:hermes_android/core/services/observed_turn_store.dart';
+import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/utils/activity_feed.dart';
 
 import 'support/l10n_test_utils.dart';
@@ -15,6 +16,55 @@ ObservedTurn _turn(String id, String state, {DateTime? at}) => ObservedTurn(
 );
 
 void main() {
+  test('prompts ride on top of a journal feed instead of replacing it', () async {
+    final l10n = await loadTestL10n();
+    final journalFeed = ActivityFeed(
+      groups: [
+        ActivityGroup(
+          kind: ActivityGroupKind.completed,
+          items: [
+            ActivityItem(
+              sessionId: 's-1',
+              clientTurnId: 't-1',
+              label: 'done',
+              status: HermesStatus.completed,
+              updatedAt: DateTime.utc(2026, 8, 28, 11),
+            ),
+          ],
+          totalCount: 1,
+        ),
+      ],
+      blockedCount: 0,
+      runningCount: 0,
+    );
+
+    final merged = withBlockingPrompts(
+      feed: journalFeed,
+      prompts: [
+        PendingPrompt(
+          id: 'srq-key',
+          method: 'approval',
+          mobileSessionId: 's-1',
+          gatewaySessionId: 'g-1',
+          summary: 'rm -rf build',
+          choices: const ['once', 'deny'],
+          createdAt: DateTime.utc(2026, 8, 28, 12),
+        ),
+      ],
+      l10n: l10n,
+      sessionTitles: const {'s-1': 'Chat one'},
+    );
+
+    expect(merged.groups.first.kind, ActivityGroupKind.needsYou);
+    expect(merged.groups.first.items.single.label, 'rm -rf build');
+    expect(merged.groups.first.items.single.promptRequestId, 'srq-key');
+    expect(merged.blockedCount, 1);
+    expect(
+      merged.groups.map((group) => group.kind),
+      [ActivityGroupKind.needsYou, ActivityGroupKind.completed],
+    );
+  });
+
   TestWidgetsFlutterBinding.ensureInitialized();
 
   test('prompts become the needs-you group and drive the badge', () async {

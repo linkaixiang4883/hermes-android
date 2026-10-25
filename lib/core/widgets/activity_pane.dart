@@ -45,8 +45,14 @@ class ActivityPane extends StatefulWidget {
   final Listenable? liveUpdates;
 
   /// When true, this pane becomes the action Inbox: only blocked and failed
-  /// work is shown. Running and completed work remain available in Activity.
+  /// work is shown. Running and completed work do not belong on a screen whose
+  /// only job is "what needs me now".
   final bool actionableOnly;
+
+  /// Stricter than [actionableOnly]: only `needsYou` rows (approvals and
+  /// questions). The Activity destination uses this so it never shows a stale
+  /// running/completed turn.
+  final bool blockedOnly;
 
   /// Called when the user taps a row. When null, rows are drawn inert rather
   /// than looking tappable and doing nothing.
@@ -62,6 +68,7 @@ class ActivityPane extends StatefulWidget {
     required this.loadFeed,
     this.liveUpdates,
     this.actionableOnly = false,
+    this.blockedOnly = false,
     this.onOpenItem,
     this.onRespondPrompt,
     this.clock,
@@ -186,7 +193,11 @@ class ActivityPaneState extends State<ActivityPane>
       );
     }
 
-    final groups = widget.actionableOnly
+    final groups = widget.blockedOnly
+        ? feed.groups
+              .where((group) => group.kind == ActivityGroupKind.needsYou)
+              .toList(growable: false)
+        : widget.actionableOnly
         ? feed.groups
               .where(
                 (group) =>
@@ -209,13 +220,13 @@ class ActivityPaneState extends State<ActivityPane>
                 top: MediaQuery.sizeOf(context).height * 0.12,
               ),
               child: EmptyState(
-                icon: widget.actionableOnly
+                icon: widget.actionableOnly || widget.blockedOnly
                     ? Icons.inbox_outlined
                     : Icons.bolt_outlined,
-                title: widget.actionableOnly
+                title: widget.actionableOnly || widget.blockedOnly
                     ? context.l10n.inbox_is_clear
                     : context.l10n.nothing_is_running,
-                message: widget.actionableOnly
+                message: widget.actionableOnly || widget.blockedOnly
                     ? context.l10n.no_turn_needs_your_input_or_has_failed
                     : context.l10n.no_turn_is_blocked_in_flight_or_recently_finished_work,
               ),

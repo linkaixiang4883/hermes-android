@@ -62,6 +62,7 @@ Future<void> _pump(
   bool actionableOnly = false,
   Listenable? liveUpdates,
   Future<void> Function(String requestId, String choice)? onRespondPrompt,
+  bool blockedOnly = false,
   Size size = const Size(400, 900),
 }) async {
   tester.view.physicalSize = size;
@@ -80,6 +81,7 @@ Future<void> _pump(
           onOpenItem: onOpenItem,
           onRespondPrompt: onRespondPrompt,
           actionableOnly: actionableOnly,
+          blockedOnly: blockedOnly,
           clock: () => _now,
         ),
       ),
@@ -134,6 +136,50 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(loads, 2);
+  });
+
+  testWidgets('the Activity tab shows only work that needs the user', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      blockedOnly: true,
+      loadFeed: () async => _feed([
+        _group(ActivityGroupKind.running, [_item(label: 'Running')]),
+        _group(ActivityGroupKind.completed, [
+          _item(
+            clientTurnId: 'turn-done',
+            label: 'Completed',
+            status: HermesStatus.completed,
+          ),
+        ]),
+        _group(ActivityGroupKind.failed, [
+          _item(
+            clientTurnId: 'turn-failed',
+            label: 'Failed',
+            status: HermesStatus.failed,
+          ),
+        ]),
+        _group(ActivityGroupKind.needsYou, [
+          ActivityItem(
+            sessionId: 'session-a',
+            clientTurnId: 'prompt-2',
+            label: 'rm -rf build',
+            status: HermesStatus.blocked,
+            updatedAt: _now,
+            promptRequestId: 'srq-key-2',
+            promptMethod: 'approval',
+            promptChoices: const ['once', 'deny'],
+          ),
+        ]),
+      ]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('rm -rf build'), findsOneWidget);
+    expect(find.text('Running'), findsNothing);
+    expect(find.text('Completed'), findsNothing);
+    expect(find.text('Failed'), findsNothing);
   });
 
   testWidgets('a blocking prompt answers from its row, without opening the chat',

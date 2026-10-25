@@ -611,8 +611,8 @@ void main() {
 
     expect(find.byType(ActivityPane), findsOneWidget);
     expect(find.textContaining('Coming'), findsNothing);
-    // The empty timeline is a designed calm state, not a placeholder.
-    expect(find.text('Nothing is running'), findsOneWidget);
+    // The empty action list is a designed calm state, not a placeholder.
+    expect(find.text(l10n.inbox_is_clear), findsOneWidget);
   });
 
   testWidgets('Home renders the attention digest instead of a placeholder', (
@@ -1795,7 +1795,6 @@ void main() {
               items: [
                 ActivityItem(
                   sessionId: 's1',
-                  title: 'Deploy ScriptHive',
                   clientTurnId: 'turn-1',
                   label: 'Running',
                   status: HermesStatus.running,
@@ -1804,8 +1803,24 @@ void main() {
               ],
               totalCount: 1,
             ),
+            ActivityGroup(
+              kind: ActivityGroupKind.needsYou,
+              items: [
+                ActivityItem(
+                  sessionId: 's1',
+                  title: 'Deploy ScriptHive',
+                  clientTurnId: 'srq-test',
+                  label: 'rm -rf build',
+                  status: HermesStatus.blocked,
+                  updatedAt: DateTime.now(),
+                  promptRequestId: 'srq-test',
+                  promptMethod: 'approval',
+                ),
+              ],
+              totalCount: 1,
+            ),
           ],
-          blockedCount: 0,
+          blockedCount: 1,
           runningCount: 1,
         ),
       );
@@ -1815,8 +1830,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.byType(ActivityPane), findsOneWidget);
-      expect(find.text(ActivityGroupKind.running.title(l10n)), findsOneWidget);
+      expect(find.text(ActivityGroupKind.needsYou.title(l10n)), findsWidgets);
       expect(find.text('Deploy ScriptHive'), findsOneWidget);
+      // Running work is deliberately absent from the action-only tab.
+      expect(find.text(ActivityGroupKind.running.title(l10n)), findsNothing);
       expect(find.textContaining('Coming next'), findsNothing);
     });
 
@@ -1928,9 +1945,10 @@ void main() {
 
       await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Untitled chat'));
-      await tester.pumpAndSettle();
 
+      // Running work is not part of the action-only tab, so a journal row for
+      // a deleted chat cannot even be tapped into a phantom screen.
+      expect(find.text('Untitled chat'), findsNothing);
       expect(opened, isEmpty);
       expect(tester.takeException(), isNull);
     });

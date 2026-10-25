@@ -1520,6 +1520,20 @@ class DesktopGatewayClient {
     client.onConnectionClosed = () => _forgetServerRequestsFrom(client);
     client.onStreamEvent = (event) {
       if (!shouldBridgeAsyncEvent(event.type)) return;
+      // A settled turn cannot still be waiting on a human. Clearing here (not
+      // only in a mounted ChatScreen) is what stops a prompt answered on
+      // another surface — which the gateway does not cancel cross-client — from
+      // lingering in the notification and Activity forever.
+      if (event.type == 'message.complete' ||
+          event.type == 'turn.end' ||
+          event.type == 'turn.error') {
+        final settledMobileId = _mobileSessionIdFor(
+          event.data['session_id']?.toString(),
+        );
+        if (settledMobileId != null) {
+          dismissPromptsForSession(settledMobileId);
+        }
+      }
       var deliveredEvent = event;
       if (event.type == 'request.cancel') {
         final wireRequestId = event.data['id']?.toString() ?? '';
@@ -1844,6 +1858,30 @@ class DesktopGatewayClient {
   /// answer them, and rejecting here used to withdraw the prompt for every
   /// other client on the session. Declining is only ever an explicit 4404.
   void rejectServerRequestsForSession(String mobileSessionId) {}
+
+  /// Drops every still-registered prompt for [mobileSessionId].
+  ///
+  /// A turn that ended can no longer consume an answer: the server withdrew the
+  /// request (timeout, interrupt, another surface resolved it) or stopped
+  /// broadcasting the cancel to this client. Keeping the entry would leave a
+  /// notification and an Activity row forever, and replaying it on the next
+  /// chat mount would show a dead card that blocks the composer.
+  void dismissPromptsForSession(String mobileSessionId) {
+    final requestIds = <String>[
+      for (final entry in _serverRequestMobileSessionIds.entries)
+        if (entry.value == mobileSessionId) entry.key,
+    ];
+    if (requestIds.isEmpty) return;
+    for (final requestId in requestIds) {
+      _serverRequests.remove(requestId);
+      _serverRequestClients.remove(requestId);
+      _serverRequestMobileSessionIds.remove(requestId);
+      _serverRequestEvents.remove(requestId);
+      _serverClarifyRemaining.remove(requestId);
+    }
+    _serverApprovalByMobileSession.remove(mobileSessionId);
+    _publishPendingPrompts();
+  }
 
   /// Answers a prompt by the gateway's own wire id (`srq-…`).
   ///

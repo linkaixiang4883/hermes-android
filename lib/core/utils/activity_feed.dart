@@ -391,6 +391,55 @@ Future<ActivityFeed> readActivityFeed({
 /// there, so [buildActivityFeed] returns nothing and the screen used to sit
 /// empty. Observed turns are coarser (one row per chat, not per turn) but they
 /// are real, and the prompt rows are exactly the work that needs the user.
+/// Adds the live prompt registry to a feed built from the journal.
+///
+/// The two data sources are complementary: the journal knows work, the registry
+/// knows what is blocking it right now. An Activity screen that answers
+/// approvals must show the registry rows even when the journal has data.
+ActivityFeed withBlockingPrompts({
+  required ActivityFeed feed,
+  required Iterable<PendingPrompt> prompts,
+  required AppLocalizations l10n,
+  Map<String, String> sessionTitles = const {},
+  int groupLimit = kActivityGroupLimit,
+}) {
+  if (prompts.isEmpty) return feed;
+  final needsYou = <ActivityItem>[
+    for (final prompt in prompts)
+      if ((prompt.mobileSessionId ?? prompt.gatewaySessionId).isNotEmpty)
+        ActivityItem(
+          sessionId: prompt.mobileSessionId ?? prompt.gatewaySessionId,
+          title: sessionTitles[prompt.mobileSessionId ?? prompt.gatewaySessionId],
+          clientTurnId: prompt.id,
+          label: prompt.summary.isEmpty
+              ? l10n.waiting_for_your_input
+              : prompt.summary,
+          status: HermesStatus.blocked,
+          updatedAt: prompt.createdAt,
+          promptRequestId: prompt.id,
+          promptMethod: prompt.method,
+          promptChoices: prompt.choices,
+        ),
+  ];
+  if (needsYou.isEmpty) return feed;
+  needsYou.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  final others = feed.groups
+      .where((group) => group.kind != ActivityGroupKind.needsYou)
+      .toList(growable: false);
+  return ActivityFeed(
+    groups: [
+      ActivityGroup(
+        kind: ActivityGroupKind.needsYou,
+        items: needsYou.take(groupLimit).toList(growable: false),
+        totalCount: needsYou.length,
+      ),
+      ...others,
+    ],
+    blockedCount: needsYou.length,
+    runningCount: feed.runningCount,
+  );
+}
+
 ActivityFeed buildObservedActivityFeed({
   required Iterable<ObservedTurn> turns,
   required Iterable<PendingPrompt> prompts,

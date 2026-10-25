@@ -4739,6 +4739,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// expiry. Mirrors the desktop's `message.complete` prompt clear; a live
   /// clarify is deliberately left alone, exactly as it is there.
   void _clearTurnEndBlockingPrompts() {
+    // The turn is over: nothing it asked for can still be answered. Dropping
+    // the registry entries here is what keeps a card answered on another
+    // surface (no cross-client cancel) from reappearing on the next chat mount
+    // and blocking the composer forever.
+    _desktopGateway?.dismissPromptsForSession(widget.session.id);
     if (_approvalDialogOpen || _approvalRouteOpen) {
       _approvalTurnEndDismissed = true;
       final approvalId = _activeApprovalServerRequestId;
