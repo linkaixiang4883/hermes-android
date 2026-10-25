@@ -566,6 +566,17 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     return feed;
   }
 
+  /// Live inputs for the Activity feed: observed frames + the prompt registry.
+  /// Both are process-scoped; a listener therefore survives tab switches and
+  /// makes the destination update silently, without pull-to-refresh.
+  Listenable? get _activityLiveSignals {
+    final observed = _observedTurns;
+    final client = widget.gatewayRegistry?.existingFor(widget.connection.id);
+    final prompts = client?.pendingPrompts;
+    if (observed == null && prompts == null) return null;
+    return Listenable.merge([observed, prompts]);
+  }
+
   Future<void> _refreshTurnSignals() async {
     HomeTurnSignals signals;
     try {
@@ -792,6 +803,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     // http.Client pools that leak otherwise.
     _sessionsApi?.close();
     _archivedSessionsClient?.close();
+    _observedTurns?.dispose();
     super.dispose();
   }
 
@@ -906,6 +918,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         return ActivityPane(
           key: _activityKey,
           loadFeed: _loadActivity,
+          liveUpdates: _activityLiveSignals,
           onOpenItem: _openActivityItem,
         );
       case HermesDestination.more:
@@ -1064,6 +1077,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         body: ActivityPane(
           key: _inboxKey,
           loadFeed: _loadActivity,
+          liveUpdates: _activityLiveSignals,
           onOpenItem: _openActivityItem,
           actionableOnly: true,
         ),

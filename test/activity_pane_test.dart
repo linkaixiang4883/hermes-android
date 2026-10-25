@@ -60,6 +60,7 @@ Future<void> _pump(
   required ActivityFeedLoader loadFeed,
   ValueChanged<ActivityItem>? onOpenItem,
   bool actionableOnly = false,
+  Listenable? liveUpdates,
   Size size = const Size(400, 900),
 }) async {
   tester.view.physicalSize = size;
@@ -74,6 +75,7 @@ Future<void> _pump(
       home: Scaffold(
         body: ActivityPane(
           loadFeed: loadFeed,
+          liveUpdates: liveUpdates,
           onOpenItem: onOpenItem,
           actionableOnly: actionableOnly,
           clock: () => _now,
@@ -106,6 +108,30 @@ void main() {
 
     expect(find.byType(LoadingSkeleton), findsNothing);
     expect(find.text('Deploy ScriptHive'), findsOneWidget);
+  });
+
+  testWidgets('live signals re-read the feed without a pull', (tester) async {
+    final signal = ValueNotifier(0);
+    addTearDown(signal.dispose);
+    var loads = 0;
+    await _pump(
+      tester,
+      loadFeed: () async {
+        loads++;
+        return _feed([
+          _group(ActivityGroupKind.running, [_item()]),
+        ]);
+      },
+      liveUpdates: signal,
+    );
+    await tester.pumpAndSettle();
+    expect(loads, 1);
+
+    signal.value++;
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+
+    expect(loads, 2);
   });
 
   testWidgets('draws groups in the order the feed produced them', (

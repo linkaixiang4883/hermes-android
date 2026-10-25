@@ -39,6 +39,11 @@ typedef ActivityClock = DateTime Function();
 class ActivityPane extends StatefulWidget {
   final ActivityFeedLoader loadFeed;
 
+  /// Live signals (observed turns, pending prompts). Any change re-reads the
+  /// feed after a short debounce, so Activity is never a snapshot the user has
+  /// to pull to refresh.
+  final Listenable? liveUpdates;
+
   /// When true, this pane becomes the action Inbox: only blocked and failed
   /// work is shown. Running and completed work remain available in Activity.
   final bool actionableOnly;
@@ -51,6 +56,7 @@ class ActivityPane extends StatefulWidget {
 
   const ActivityPane({
     required this.loadFeed,
+    this.liveUpdates,
     this.actionableOnly = false,
     this.onOpenItem,
     this.clock,
@@ -61,10 +67,17 @@ class ActivityPane extends StatefulWidget {
   State<ActivityPane> createState() => ActivityPaneState();
 }
 
-class ActivityPaneState extends State<ActivityPane> {
+class ActivityPaneState extends State<ActivityPane>
+    with WidgetsBindingObserver {
   /// The last successful read. `null` until one lands, which is exactly the
   /// condition for showing the skeleton.
   ActivityFeed? _feed;
+
+  /// Coalesces a burst of turn frames into one read.
+  Timer? _liveDebounce;
+
+  /// A live change that arrived mid-read; re-read once the current one lands.
+  bool _reloadQueued = false;
 
   /// Set when the most recent read failed. Combined with [_feed] it tells
   /// stale-but-usable apart from nothing-to-show.
@@ -75,7 +88,41 @@ class ActivityPaneState extends State<ActivityPane> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    widget.liveUpdates?.addListener(_onLiveUpdate);
     unawaited(_load());
+  }
+
+  @override
+  void didUpdateWidget(ActivityPane oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.liveUpdates == widget.liveUpdates) return;
+    oldWidget.liveUpdates?.removeListener(_onLiveUpdate);
+    widget.liveUpdates?.addListener(_onLiveUpdate);
+  }
+
+  @override
+  void dispose() {
+    _liveDebounce?.cancel();
+    widget.liveUpdates?.removeListener(_onLiveUpdate);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Frames that arrived while the app was frozen may never reach the pane's
+    // listeners; a resume is a cheap point to re-read the feed.
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_load());
+    }
+  }
+
+  void _onLiveUpdate() {
+    _liveDebounce?.cancel();
+    _liveDebounce = Timer(const Duration(milliseconds: 300), () {
+      if (mounted) unawaited(_load());
+    });
   }
 
   /// Re-reads the timeline.
@@ -86,7 +133,10 @@ class ActivityPaneState extends State<ActivityPane> {
   Future<void> refresh() => _load();
 
   Future<void> _load() async {
-    if (_loading) return;
+    if (_loading) {
+      _reloadQueued = true;
+      return;
+    }
     setState(() => _loading = true);
     try {
       final feed = await widget.loadFeed();
@@ -102,6 +152,11 @@ class ActivityPaneState extends State<ActivityPane> {
         _error = error;
         _loading = false;
       });
+    } finally {
+      if (_reloadQueued && mounted) {
+        _reloadQueued = false;
+        unawaited(_load());
+      }
     }
   }
 

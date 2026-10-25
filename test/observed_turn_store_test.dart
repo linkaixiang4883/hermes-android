@@ -26,6 +26,21 @@ void main() {
     expect(store.forSession('g-a')?.summary, 'done!');
   });
 
+  test('notifies only when a row-visible field changes', () {
+    final store = ObservedTurnStore();
+    var notifications = 0;
+    store.addListener(() => notifications++);
+
+    store.observe(_event('message.delta', session: 'g-live'), 'm-live', title: 'Live');
+    expect(notifications, 1, reason: 'a new running row is visible');
+
+    store.observe(_event('message.delta', session: 'g-live'), 'm-live', title: 'Live');
+    expect(notifications, 1, reason: 'more tokens do not change the row');
+
+    store.observe(_event('message.complete', session: 'g-live', text: 'done'), 'm-live');
+    expect(notifications, 2, reason: 'settling the row is visible');
+  });
+
   test('one row per chat, newest first', () {
     final store = ObservedTurnStore();
     store.observe(_event('message.delta', session: 'g-a'), 'm-a');

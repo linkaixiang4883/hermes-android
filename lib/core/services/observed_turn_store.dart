@@ -61,7 +61,7 @@ class ObservedTurn {
 /// This store listens to the frames every gateway sends (`message.delta`,
 /// terminal frames) and keeps one row per chat, so Activity can be honest with
 /// or without the journal.
-class ObservedTurnStore {
+class ObservedTurnStore extends ChangeNotifier {
   ObservedTurnStore({this.maxEntries = 100, SharedPreferences? prefs})
     // ignore: prefer_initializing_formals — public param, private field.
     : _prefs = prefs;
@@ -84,10 +84,14 @@ class ObservedTurnStore {
     if (raw == null || raw.isEmpty) return;
     try {
       final list = jsonDecode(raw) as List;
+      var restored = 0;
       for (final item in list.whereType<Map>()) {
         final turn = ObservedTurn.fromJson(Map<String, dynamic>.from(item));
-        if (turn != null) _upsert(turn, persist: false);
+        if (turn == null) continue;
+        _upsert(turn, persist: false);
+        restored++;
       }
+      if (restored > 0) notifyListeners();
     } catch (_) {
       // A corrupt cache degrades to an empty timeline; it must not break the
       // screen that asked for it.
@@ -133,6 +137,7 @@ class ObservedTurnStore {
   }
 
   void _upsert(ObservedTurn turn, {required bool persist}) {
+    final before = _entries[turn.gatewaySessionId];
     _entries[turn.gatewaySessionId] = turn;
     _ordered.removeWhere(
       (item) => item.gatewaySessionId == turn.gatewaySessionId,
@@ -143,6 +148,15 @@ class ObservedTurnStore {
       _entries.remove(dropped.gatewaySessionId);
     }
     if (persist) unawaited(_persist());
+    // Streaming deltas only bump `updatedAt`; Activity must not rebuild on
+    // every token. Notify when a field a row actually shows changed.
+    final changed =
+        before == null ||
+        before.state != turn.state ||
+        before.summary != turn.summary ||
+        before.title != turn.title ||
+        before.mobileSessionId != turn.mobileSessionId;
+    if (changed) notifyListeners();
   }
 
   Future<void> _persist() async {
