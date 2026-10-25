@@ -374,6 +374,36 @@ void main() {
     expect(client.ownsServerRequest('srq-stale', 'approval'), isFalse);
   });
 
+  test('a stale registry key is never sent to the gateway as a wire id', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    await expectLater(
+      client.respondToClarify(
+        requestId: '1.1:srq-dead',
+        answer: 'x',
+        questionId: 'q',
+      ),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      client.respondToSudo(requestId: '1.1:srq-dead', password: 'x'),
+      throwsA(isA<StateError>()),
+    );
+    await expectLater(
+      client.respondToSecret(requestId: '1.1:srq-dead', value: 'x'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
   test('a chat that already exists is never re-homed by the remembered '
       'folder', () async {
     final gateway = _FakeGateway(

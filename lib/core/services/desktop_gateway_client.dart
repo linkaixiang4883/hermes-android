@@ -1983,6 +1983,17 @@ class DesktopGatewayClient {
     await client.respondToApproval(sessionId: gatewaySessionId, choice: choice);
   }
 
+  /// True for a registry key (`"<namespace>.<ordinal>:srq-…"`), which must
+  /// never be sent to the gateway as if it were the wire request id.
+  bool _isServerRequestKey(String id) {
+    final colon = id.indexOf(':');
+    if (colon <= 0) return false;
+    final parts = id.substring(0, colon).split('.');
+    return parts.length == 2 &&
+        int.tryParse(parts[0]) != null &&
+        int.tryParse(parts[1]) != null;
+  }
+
   Future<void> respondToSudo({
     required String requestId,
     required String password,
@@ -1994,6 +2005,9 @@ class DesktopGatewayClient {
       }
       _forgetServerRequest(requestId);
       return;
+    }
+    if (_isServerRequestKey(requestId)) {
+      throw StateError('The sudo prompt is no longer active');
     }
     final client = _connectedClient();
     await client.respondToSudo(requestId: requestId, password: password);
@@ -2011,6 +2025,9 @@ class DesktopGatewayClient {
       _forgetServerRequest(requestId);
       return;
     }
+    if (_isServerRequestKey(requestId)) {
+      throw StateError('The secret prompt is no longer active');
+    }
     final client = _connectedClient();
     await client.respondToSecret(requestId: requestId, value: value);
   }
@@ -2021,6 +2038,9 @@ class DesktopGatewayClient {
     String? questionId,
   }) async {
     final serverRequest = _serverRequests[requestId];
+    if (serverRequest == null && _isServerRequestKey(requestId)) {
+      throw StateError('The clarify prompt is no longer active');
+    }
     final client = serverRequest?.method == 'clarify'
         ? _serverRequestClients[requestId]
         : _ws;
