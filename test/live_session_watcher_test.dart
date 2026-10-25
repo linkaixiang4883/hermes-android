@@ -39,6 +39,30 @@ void main() {
     expect(activated, ['s-working', 's-waiting', 's-working']);
   });
 
+  test('activates by the stored key, not the runtime id', () async {
+    final activated = <String>[];
+    final watcher = LiveSessionWatcher(
+      activeSessionLoader: () async => [
+        {
+          'id': 'runtime-1',
+          'session_key': '20260101_000000_abcdef',
+          'title': 'Stored chat',
+          'status': 'working',
+        },
+      ],
+      sessionActivator: (id) async => activated.add(id),
+    );
+
+    await watcher.tick();
+
+    // The watcher must hand the app's identity to activateSession: that is
+    // what the registry stores, what a notification tap resolves, and what
+    // Activity opens. The runtime id is only the server-side instance name.
+    expect(activated, ['20260101_000000_abcdef']);
+    expect(watcher.titleFor('20260101_000000_abcdef'), 'Stored chat');
+    expect(watcher.titleFor('runtime-1'), 'Stored chat');
+  });
+
   test('one refused attach does not stop the rest', () async {
     final activated = <String>[];
     final watcher = LiveSessionWatcher(

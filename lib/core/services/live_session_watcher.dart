@@ -77,22 +77,34 @@ class LiveSessionWatcher {
       final rows = await (activeSessionLoader ?? client!.listActiveSessions)();
       var titlesChanged = false;
       for (final row in rows) {
-        final id = row['id']?.toString() ?? '';
-        if (id.isEmpty) continue;
+        final runtimeId = row['id']?.toString() ?? '';
+        if (runtimeId.isEmpty) continue;
+        // `id` in this list is the RUNTIME id; the stored key is what the app,
+        // the notification tap and Activity use. Activate by the stored key so
+        // the registry records `stored -> runtime` (the direction every other
+        // surface needs), and keep the title under BOTH ids because the prompt
+        // notifier looks it up by the runtime id while a tapped row names the
+        // stored one.
+        final storedKey = (row['session_key'] ?? '').toString().trim();
+        final activationId = storedKey.isNotEmpty ? storedKey : runtimeId;
         final title = (row['title'] ?? '').toString();
-        if (title.isNotEmpty && _titles[id] != title) {
-          _titles[id] = title;
-          titlesChanged = true;
+        if (title.isNotEmpty) {
+          for (final key in {runtimeId, if (storedKey.isNotEmpty) storedKey}) {
+            if (_titles[key] != title) {
+              _titles[key] = title;
+              titlesChanged = true;
+            }
+          }
         }
         if ((row['status'] ?? '').toString() == 'idle') {
           // No turn is running; nothing to receive and no approval can exist.
-          _attached.remove(id);
+          _attached.remove(activationId);
           continue;
         }
-        if (_attached.contains(id)) continue;
+        if (_attached.contains(activationId)) continue;
         try {
-          await (sessionActivator ?? client!.activateSession)(id);
-          _attached.add(id);
+          await (sessionActivator ?? client!.activateSession)(activationId);
+          _attached.add(activationId);
         } catch (_) {
           // A finalized/compute-host session refuses the attach; it cannot be
           // watched from this client. Never let one row kill the whole tick.
