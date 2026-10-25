@@ -49,7 +49,7 @@
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1491**（2026-10-25 Activity 待办化 + 提示生命周期后；审批可见性=1488；会话内 YOLO=1486；Activity 静默更新=1483；桌面本地群组镜像=1481；群组发现/帖子式 UI=1476；项目 cwd 修复=1473、Bot Mode 全套=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1492**（2026-10-25 会话列表分页/静默刷新优化后；Activity 待办化=1491；审批可见性=1488；会话内 YOLO=1486；Activity 静默更新=1483；桌面本地群组镜像=1481；群组发现/帖子式 UI=1476；项目 cwd 修复=1473、Bot Mode 全套=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
 
 ## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
@@ -105,6 +105,7 @@
 
 - **服务端**：`GET /api/sessions` 的 `limit` 上限 **200**（缺省 50），返回 newest-first 窗口；**pinned 会话每页重复回填**（返回行数 ≠ 窗口大小），`has_more` 用非 pin 行计算——窗口里只要有 pin 就可能少算。
 - **App 现状**：会话列表页 `_sessionPageSize = 100`（滚动追加）；Home/Workspace 全量 loader 也用 100/页，且**无 pin 的窗口直接信 `has_more=false` 收尾**（此前总会多打一次空页）；有 pin 时仍按客户端穷举规则（连续 zero-new 页数 × pageSize 超过 pin 上限才判结束），**不要**改成信 `has_more`。
+- **静默刷新只拉头部**：`WorkspaceSessionsScreen` 的 10s tick 走 `loadHead`（第一页 100 条）并与已加载列表合并；完整的逐页扫描只在进页/下拉刷新时跑（`load`）。此前每 10s 全量翻页 + 逐 pin 解析，是最主要的“好几次请求”来源。
 - **旧 pin 解析**：列表外的本地 pin 需要 `GET /api/sessions/{id}` + 按 title 的 rich 页（**每个 pin 2 个请求**）；`loadUnlistedLocalPins` 现按 `ApiClient` 实例做 10 分钟缓存（Expando），列表反复刷新不再重复请求。
 - 改分页前先看 `session_list_pinned_paging_test.dart`（50 窗口夹具显式 `testSessionPageSize: 50`）与 `local_chat_pins_ui_test.dart`。
 
