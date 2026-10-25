@@ -2621,4 +2621,7 @@ class AppLocalizationsFr extends AppLocalizations {
   @override
   String get yolo_banner =>
       'YOLO mode: tool approvals are skipped in this chat';
+
+  @override
+  String get approval_no_longer_active => 'This approval is no longer active.';
 }

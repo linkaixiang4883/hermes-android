@@ -329,6 +329,11 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   bool _canLoadMore = true;
   int _nextOffset = _pageSize;
 
+  /// Bumped by every full/head refresh. A load-more that started before a
+  /// refresh must not write its stale page over the newer list (and vice
+  /// versa); this is the same generation guard `SessionListScreen` uses.
+  int _generation = 0;
+
   /// The active chip filter in the embedded Chats browser.
   WorkspaceChatsFilter _filter = WorkspaceChatsFilter.all;
 
@@ -405,6 +410,26 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
     super.dispose();
   }
 
+  /// Search filters locally, so it must see the whole list. Typing a query
+  /// eagerly drains the remaining pages (bounded) instead of reporting
+  /// "no matches" while older chats simply were not fetched yet.
+  void _onSearchChanged(String value) {
+    setState(() => _query = value);
+    if (value.trim().isEmpty || widget.loadMore == null) return;
+    unawaited(_loadAllForSearch());
+  }
+
+  Future<void> _loadAllForSearch() async {
+    var guard = 0;
+    while (mounted && _canLoadMore && widget.loadMore != null && guard < 20) {
+      guard++;
+      final before = _data?.sessions.length ?? 0;
+      await _loadMore();
+      final after = _data?.sessions.length ?? 0;
+      if (after == before) break;
+    }
+  }
+
   void _onScroll() {
     if (!_scroll.hasClients) return;
     if (_scroll.position.extentAfter > 480) return;
@@ -419,15 +444,22 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
     }
     setState(() => _loadingMore = true);
     try {
+      final generation = _generation;
       final page = await loadMore(_nextOffset);
       if (!mounted) return;
-      final existing = {for (final session in data.sessions) session.id};
+      if (generation != _generation) {
+        // A refresh replaced the accumulator while this page was in flight.
+        setState(() => _loadingMore = false);
+        return;
+      }
+      final latest = _data ?? data;
+      final existing = {for (final session in latest.sessions) session.id};
       final incoming = [
         for (final session in page)
           if (!existing.contains(session.id)) session,
       ];
       setState(() {
-        _data = data.copyWith(sessions: [...data.sessions, ...incoming]);
+        _data = latest.copyWith(sessions: [...latest.sessions, ...incoming]);
         _loadingMore = false;
         _canLoadMore = page.length >= _pageSize;
         _nextOffset += _pageSize;
@@ -440,22 +472,30 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   Future<void> _load({bool headOnly = false}) async {
     if (_loadInFlight) return;
     _loadInFlight = true;
+    _generation++;
+    final generation = _generation;
     try {
       final current = _data;
       final loadHead = widget.loadHead;
       if (headOnly && loadHead != null && current != null) {
         final head = await loadHead();
+        if (!mounted || generation != _generation) return;
+        // Merge onto the LATEST list: a load-more may have appended since the
+        // snapshot above was taken, and overwriting it would drop those rows.
+        final latest = _data ?? current;
         final headIds = {for (final session in head) session.id};
         final merged = [
           ...head,
-          for (final session in current.sessions)
+          for (final session in latest.sessions)
             if (!headIds.contains(session.id)) session,
         ];
-        if (mounted) setState(() => _data = current.copyWith(sessions: merged));
+        setState(() => _data = latest.copyWith(sessions: merged));
         return;
       }
       final data = await widget.load();
+      if (!mounted || generation != _generation) return;
       final pins = await widget.pinStore?.load() ?? const <String>[];
+      if (!mounted || generation != _generation) return;
       if (mounted) {
         setState(() {
           _data = data;
@@ -641,7 +681,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
                       icon: const Icon(Icons.clear),
                     ),
             ),
-            onChanged: (value) => setState(() => _query = value),
+            onChanged: _onSearchChanged,
           ),
           if (widget.embedded) ...[
             const SizedBox(height: HermesSpacing.md),

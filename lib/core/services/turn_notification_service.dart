@@ -616,11 +616,17 @@ class PendingNotificationApproval {
   final String requestId;
   final String choice;
 
+  /// When the action was tapped. An approval lives for its timeout (60s by
+  /// default); a pending tap older than that cannot be answered and must not
+  /// be retried forever on every chat open.
+  final DateTime? createdAt;
+
   const PendingNotificationApproval({
     required this.connectionId,
     required this.sessionId,
     required this.requestId,
     required this.choice,
+    this.createdAt,
   });
 }
 

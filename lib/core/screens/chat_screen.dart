@@ -1104,7 +1104,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.resumed) {
       _appInBackground = false;
-      unawaited(_turnNotifications.cancelAll());
+      // Do NOT cancel every notification here: this used to wipe pending
+      // approval/input notifications that belong to another session (the
+      // PromptNotifier de-duplicates by id and never reposts them). Completed
+      // turn notifications may linger; a blocking prompt may not disappear.
       if (_pendingReattachResync) {
         // The transport's autonomous loop is normally enough, but an app
         // resume is also an explicit recovery signal. Force the session path
@@ -1413,6 +1416,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // this screen to a ghost turn, so the failure path stays inert and waits
       // for the next listener-published projection: a successful resume, or
       // the gateway reporting the turn's end.
+      //
+      // Prompts do NOT depend on that resume: replay the registry before this
+      // early return, or an approval raised while the chat was closed would be
+      // visible only as a notification until it timed out.
+      gateway.replayServerRequestsForSession(widget.session.id);
+      _onPendingPromptsChanged();
       return;
     }
     unawaited(_refreshProjectName());
@@ -1428,11 +1437,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // idempotent and covers the case where the snapshot predates this screen.
     final projection = gateway.liveTurnProjectionFor(widget.session.id);
     if (projection != null) _enterFollowMode(projection);
-    // Prompts raised while this chat was unmounted stay registered; replay them
-    // now that a listener exists (the registry is the app's source of truth,
-    // not the one-shot event dispatch that may have had no screen).
-    gateway.replayServerRequestsForSession(widget.session.id);
-    _onPendingPromptsChanged();
   }
 
   /// Opens a blocking prompt the registry still holds for this chat.
@@ -4406,6 +4410,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           approval,
     ];
     for (final approval in mine) {
+      final age = approval.createdAt == null
+          ? Duration.zero
+          : DateTime.now().difference(approval.createdAt!);
+      if (age > const Duration(minutes: 5)) {
+        // The gateway already withdrew it; retrying on every chat open would
+        // only throw and leave a ghost entry in memory.
+        removePendingNotificationApproval(approval);
+        continue;
+      }
       unawaited(_answerPendingNotificationApproval(approval));
     }
   }
@@ -4577,6 +4590,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _activeApprovalServerRequestId = null;
       _drainClarifyPromptQueue();
       _drainSensitivePromptQueue();
+      // A second approval for this session is queued in the registry while the
+      // first dialog is open; the client dispatches it the moment the first is
+      // answered, but `_approvalDialogOpen` (still true at that instant) drops
+      // that event. Re-check the registry now that the guard is clear.
+      _onPendingPromptsChanged();
 
       // System Back is treated as a denial. This prevents a dismissed mobile
       // dialog from leaving the gateway turn blocked indefinitely. A gateway
@@ -4744,6 +4762,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // surface (no cross-client cancel) from reappearing on the next chat mount
     // and blocking the composer forever.
     _desktopGateway?.dismissPromptsForSession(widget.session.id);
+    // Clarify is a dialog like approval: keeping it after its registry entry
+    // vanished would let the user answer into an id the server has forgotten.
+    final clarify = _activeClarifyPrompt;
+    if (clarify != null) {
+      _cancelledInteractiveRequestIds.add(clarify.request.requestId);
+      _clarifyPromptQueue.clear();
+      if (_clarifyPromptRouteOpen) {
+        Navigator.of(context, rootNavigator: true).pop(false);
+      }
+    }
     if (_approvalDialogOpen || _approvalRouteOpen) {
       _approvalTurnEndDismissed = true;
       final approvalId = _activeApprovalServerRequestId;

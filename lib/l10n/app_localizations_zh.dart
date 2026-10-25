@@ -2527,6 +2527,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get yolo_banner => 'YOLO 模式：本会话的工具审批已跳过';
+
+  @override
+  String get approval_no_longer_active => '该审批已失效。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5052,4 +5055,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get yolo_banner => 'YOLO 模式：本会话的工具审批已跳过';
+
+  @override
+  String get approval_no_longer_active => '该审批已失效。';
 }

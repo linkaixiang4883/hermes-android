@@ -24,6 +24,7 @@ class PromptNotifier {
     required this.formatTitle,
     required this.approveLabel,
     required this.denyLabel,
+    this.isSessionVisible,
   });
 
   final TurnNotificationService notifications;
@@ -37,6 +38,11 @@ class PromptNotifier {
 
   final String Function() approveLabel;
   final String Function() denyLabel;
+
+  /// True when that chat is on screen. A prompt already visible as a dialog
+  /// must not also ring the notification shade (the completion notifier
+  /// already suppresses the visible session this way).
+  final bool Function(String? mobileSessionId)? isSessionVisible;
 
   ValueListenable<List<PendingPrompt>>? _prompts;
   String? _connectionId;
@@ -94,6 +100,10 @@ class PromptNotifier {
 
     for (final prompt in current.values) {
       if (_shown.containsKey(prompt.id)) continue;
+      if (isSessionVisible?.call(prompt.mobileSessionId) ?? false) {
+        _shown[prompt.id] = prompt;
+        continue;
+      }
       _shown[prompt.id] = prompt;
       final sessionTitle = titleFor(prompt.gatewaySessionId);
       final body = prompt.summary.isEmpty

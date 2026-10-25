@@ -239,6 +239,42 @@ void main() {
     },
   );
 
+  testWidgets('searching drains older pages instead of missing old chats', (
+    tester,
+  ) async {
+    var loadMoreCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: hermesTheme(Brightness.dark),
+        home: WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          embedded: true,
+          load: () async => WorkspaceSessionsData(
+            sessions: [_session('recent', 'Recent chat')],
+          ),
+          loadMore: (offset) async {
+            loadMoreCalls++;
+            return [_session('older', 'Matching old chat')];
+          },
+          onOpenSession: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.byKey(kWorkspaceSessionSearchKey),
+      'Matching',
+    );
+    await tester.pumpAndSettle();
+
+    expect(loadMoreCalls, greaterThan(0));
+    expect(find.text('Matching old chat'), findsOneWidget);
+  });
+
   testWidgets('the silent tick refreshes only the head and merges it', (
     tester,
   ) async {

@@ -422,7 +422,24 @@ ActivityFeed withBlockingPrompts({
         ),
   ];
   if (needsYou.isEmpty) return feed;
-  needsYou.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
+  // Never drop a journal needsYou row just because the registry has one:
+  // a blocked turn the phone cannot present (unsupported prompt kind, or a
+  // registry that was already cleared) must still be visible.
+  final fromJournal = feed.groups
+      .where((group) => group.kind == ActivityGroupKind.needsYou)
+      .expand((group) => group.items)
+      .toList();
+  final seen = <String>{
+    for (final item in fromJournal)
+      '${item.sessionId}|${item.promptRequestId ?? item.clientTurnId}',
+  };
+  final mergedNeeds = <ActivityItem>[
+    ...fromJournal,
+    for (final item in needsYou)
+      if (seen.add('${item.sessionId}|${item.promptRequestId ?? item.clientTurnId}'))
+        item,
+  ];
+  mergedNeeds.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
   final others = feed.groups
       .where((group) => group.kind != ActivityGroupKind.needsYou)
       .toList(growable: false);
@@ -430,12 +447,12 @@ ActivityFeed withBlockingPrompts({
     groups: [
       ActivityGroup(
         kind: ActivityGroupKind.needsYou,
-        items: needsYou.take(groupLimit).toList(growable: false),
-        totalCount: needsYou.length,
+        items: mergedNeeds.take(groupLimit).toList(growable: false),
+        totalCount: mergedNeeds.length,
       ),
       ...others,
     ],
-    blockedCount: needsYou.length,
+    blockedCount: mergedNeeds.length,
     runningCount: feed.runningCount,
   );
 }

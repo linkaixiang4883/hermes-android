@@ -288,9 +288,13 @@ class HermesAppState extends State<HermesApp> {
       // here means a notification works even when no chat screen is mounted
       // (the app-wide registry is exactly what makes that possible).
       final shared = _gatewayRegistry.existingFor(connection.id);
+      var answered = false;
       if (shared != null && shared.ownsServerRequest(requestId, 'approval')) {
-        shared.respondToPendingPrompt(requestId, {'choice': choice});
-      } else {
+        // A refused frame (dead socket) must NOT count as answered: keep the
+        // tap pending instead of deleting the prompt while the gateway waits.
+        answered = shared.respondToPendingPrompt(requestId, {'choice': choice});
+      }
+      if (!answered) {
         final approval = PendingNotificationApproval(
           // Saved connection ids remain distinct even when two profiles point
           // at the same endpoint with different credentials or gateway profiles.
@@ -298,6 +302,7 @@ class HermesAppState extends State<HermesApp> {
           sessionId: sessionId,
           requestId: requestId,
           choice: choice,
+          createdAt: DateTime.now(),
         );
         unawaited(
           _answerApprovalFromNotification(
@@ -346,8 +351,9 @@ class HermesAppState extends State<HermesApp> {
         // An unreachable gateway leaves the tap pending below.
       }
       if (shared.ownsServerRequest(requestId, 'approval')) {
-        shared.respondToPendingPrompt(requestId, {'choice': choice});
-        return;
+        if (shared.respondToPendingPrompt(requestId, {'choice': choice})) {
+          return;
+        }
       }
       final wire = wireRequestId?.trim() ?? '';
       if (wire.isNotEmpty && shared.respondToPromptWireId(wire, {'choice': choice})) {

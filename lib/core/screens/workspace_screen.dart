@@ -265,6 +265,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   PromptNotifier? _promptNotifier;
   TurnCompletionNotifier? _completionNotifier;
   ObservedTurnStore? _observedTurns;
+  ValueNotifier<List<PendingPrompt>>? _promptBadgeSource;
+  VoidCallback? _promptBadgeListener;
   Object? _observedTurnsToken;
   bool _notificationsAttached = false;
 
@@ -571,7 +573,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// has never mounted.
   Future<void> _respondToActivityPrompt(String requestId, String choice) async {
     final client = widget.gatewayRegistry?.existingFor(widget.connection.id);
-    client?.respondToPendingPrompt(requestId, {'choice': choice});
+    final answered =
+        client?.respondToPendingPrompt(requestId, {'choice': choice}) ?? false;
+    if (answered || !mounted) return;
+    // The prompt expired (timeout / answered elsewhere) between the feed read
+    // and the tap. Say so instead of looking like a dead button.
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.approval_no_longer_active)),
+    );
   }
 
   Future<void> _refreshTurnSignals() async {
@@ -610,6 +619,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     _promptNotifier = PromptNotifier(
       notifications: TurnNotificationService.shared,
       titleFor: watcher.titleFor,
+      isSessionVisible: (mobileId) =>
+          mobileId != null && ChatVisibility.visible.shows(mobileId),
       formatTitle: ({required approval, sessionTitle}) {
         final base = approval ? l10n.approval_needed : l10n.input_needed;
         return sessionTitle == null || sessionTitle.isEmpty
@@ -619,6 +630,18 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       approveLabel: () => l10n.approve,
       denyLabel: () => l10n.deny,
     )..attach(client.pendingPrompts, connectionId: widget.connection.id);
+    // The Activity badge must react to a prompt arriving while the user sits
+    // on Projects/More, not only when the Activity pane loads.
+    void onPromptsChanged() {
+      if (!mounted) return;
+      final pending = client.pendingPrompts.value.length;
+      if (pending != _activityBlockedCount) {
+        setState(() => _activityBlockedCount = pending);
+      }
+    }
+    _promptBadgeSource = client.pendingPrompts;
+    _promptBadgeListener = onPromptsChanged;
+    client.pendingPrompts.addListener(onPromptsChanged);
     final observed = ObservedTurnStore();
     _observedTurns = observed;
     unawaited(observed.load());
@@ -780,6 +803,11 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   @override
   void dispose() {
+    final badgeSource = _promptBadgeSource;
+    final badgeListener = _promptBadgeListener;
+    if (badgeSource != null && badgeListener != null) {
+      badgeSource.removeListener(badgeListener);
+    }
     _sessionWatcher?.stop();
     _promptNotifier?.detach();
     _completionNotifier?.detach();

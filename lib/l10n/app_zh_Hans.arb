@@ -714,5 +714,6 @@
   "yolo_confirm_message": "本会话将跳过所有工具审批——命令与文件写入直接执行，不再询问。请只在完全信任的会话里开启。",
   "yolo_enabled": "YOLO 模式已开启——不再询问审批",
   "yolo_disabled": "YOLO 模式已关闭——恢复审批",
-  "yolo_banner": "YOLO 模式：本会话的工具审批已跳过"
+  "yolo_banner": "YOLO 模式：本会话的工具审批已跳过",
+  "approval_no_longer_active": "该审批已失效。"
 }

@@ -773,5 +773,6 @@
   "yolo_confirm_message": "This chat will skip every tool approval — commands and file writes run without asking. Only enable it in a chat you fully trust.",
   "yolo_enabled": "YOLO mode on — approvals are skipped",
   "yolo_disabled": "YOLO mode off — approvals are back",
-  "yolo_banner": "YOLO mode: tool approvals are skipped in this chat"
+  "yolo_banner": "YOLO mode: tool approvals are skipped in this chat",
+  "approval_no_longer_active": "This approval is no longer active."
 }

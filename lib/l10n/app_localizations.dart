@@ -4424,6 +4424,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'YOLO mode: tool approvals are skipped in this chat'**
   String get yolo_banner;
+
+  /// No description provided for @approval_no_longer_active.
+  ///
+  /// In en, this message translates to:
+  /// **'This approval is no longer active.'**
+  String get approval_no_longer_active;
 }
 
 class _AppLocalizationsDelegate

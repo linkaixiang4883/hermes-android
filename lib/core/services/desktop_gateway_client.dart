@@ -89,6 +89,11 @@ class DesktopGatewayClient {
   final Map<String, String?> _sessionProfiles = {};
   final Map<String, GatewayServerRequest> _serverRequests = {};
 
+  /// When each prompt was FIRST registered. `_publishPendingPrompts` used to
+  /// stamp every row with "now", so a long-pending approval always read "just
+  /// now" and the Activity ordering reset on every unrelated prompt change.
+  final Map<String, DateTime> _serverRequestRegisteredAt = {};
+
   /// Every supported blocking prompt this client accepted, in arrival order.
   ///
   /// A prompt is registered here whether or not a ChatScreen is mounted; the
@@ -409,11 +414,16 @@ class DesktopGatewayClient {
     // replaced; the new socket reports the holes it finds on its own round.
     _unmappedReplayTruncations.clear();
     _serverRequests.clear();
+    _serverRequestRegisteredAt.clear();
     _serverRequestClients.clear();
     _serverRequestMobileSessionIds.clear();
     _serverRequestEvents.clear();
     _serverClarifyRemaining.clear();
     _serverApprovalByMobileSession.clear();
+    // The registry is empty now; publish so notifications/Activity drop
+    // prompts this socket can no longer answer instead of showing them until
+    // the next unrelated registry change.
+    _publishPendingPrompts();
     // A fresh socket means a possibly-replaced server: forget old
     // -32601 verdicts so an upgraded gateway's methods are re-discovered
     // instead of staying short-circuited until app restart. gateway.ready
@@ -1526,7 +1536,8 @@ class DesktopGatewayClient {
       // lingering in the notification and Activity forever.
       if (event.type == 'message.complete' ||
           event.type == 'turn.end' ||
-          event.type == 'turn.error') {
+          event.type == 'turn.error' ||
+          event.type == 'error') {
         final settledMobileId = _mobileSessionIdFor(
           event.data['session_id']?.toString(),
         );
@@ -1615,6 +1626,7 @@ class DesktopGatewayClient {
 
     final requestId = _serverRequestKey(client, request.id);
     _serverRequests[requestId] = request;
+    _serverRequestRegisteredAt.putIfAbsent(requestId, DateTime.now);
     _serverRequestClients[requestId] = client;
     _serverRequestMobileSessionIds[requestId] = mobileSessionId;
     final data = Map<String, dynamic>.from(request.params);
@@ -1696,6 +1708,7 @@ class DesktopGatewayClient {
   void _forgetServerRequest(String requestId) {
     final mobileSessionId = _serverRequestMobileSessionIds[requestId];
     _serverRequests.remove(requestId);
+    _serverRequestRegisteredAt.remove(requestId);
     _serverRequestClients.remove(requestId);
     _serverRequestMobileSessionIds.remove(requestId);
     _serverRequestEvents.remove(requestId);
@@ -1732,7 +1745,7 @@ class DesktopGatewayClient {
           choices: rawChoices is List
               ? [for (final choice in rawChoices) choice.toString()]
               : const [],
-          createdAt: now,
+          createdAt: _serverRequestRegisteredAt[entry.key] ?? now,
           wireRequestId: request.id,
         ),
       );
@@ -1770,11 +1783,16 @@ class DesktopGatewayClient {
   }
 
   /// Answers any registered prompt by request id — no chat screen required.
-  void respondToPendingPrompt(String requestId, Map<String, dynamic> result) {
+  /// Answers a registered prompt. Returns false when the request is gone or
+  /// the socket refused the frame — in both cases the entry is KEPT, because
+  /// deleting it would tell every surface "answered" while the gateway still
+  /// waits (and eventually resolves the default, usually deny).
+  bool respondToPendingPrompt(String requestId, Map<String, dynamic> result) {
     final request = _serverRequests[requestId];
-    if (request == null) return;
-    request.respond(result);
+    if (request == null) return false;
+    if (!request.respond(result)) return false;
     _forgetServerRequest(requestId);
+    return true;
   }
 
   /// Attaches this client to a live session without opening it.
@@ -1874,6 +1892,7 @@ class DesktopGatewayClient {
     if (requestIds.isEmpty) return;
     for (final requestId in requestIds) {
       _serverRequests.remove(requestId);
+      _serverRequestRegisteredAt.remove(requestId);
       _serverRequestClients.remove(requestId);
       _serverRequestMobileSessionIds.remove(requestId);
       _serverRequestEvents.remove(requestId);
@@ -1895,7 +1914,7 @@ class DesktopGatewayClient {
     if (wireRequestId.trim().isEmpty) return false;
     for (final entry in _serverRequests.entries) {
       if (entry.value.id != wireRequestId) continue;
-      entry.value.respond(result);
+      if (!entry.value.respond(result)) return false;
       _forgetServerRequest(entry.key);
       return true;
     }
