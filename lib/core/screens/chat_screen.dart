@@ -438,6 +438,15 @@ class ChatScreen extends StatefulWidget {
   final RemoteFilesDataSource Function(String storedSessionId)?
   testMediaFilesClient;
 
+  /// Initial YOLO state for widget tests (no gateway round-trip needed).
+  @visibleForTesting
+  final bool? testYoloEnabled;
+
+  /// Toggle hook for widget tests; receives the desired state and returns the
+  /// gateway's effective answer (the server ORs the flag with global config).
+  @visibleForTesting
+  final Future<bool> Function(bool enabled)? testYoloToggle;
+
   const ChatScreen({
     required this.connection,
     required this.session,
@@ -469,6 +478,8 @@ class ChatScreen extends StatefulWidget {
     this.testContextUsageFetcher,
     this.testSlashExec,
     this.testMediaFilesClient,
+    this.testYoloEnabled,
+    this.testYoloToggle,
     super.key,
   });
 
@@ -499,6 +510,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   bool _loading = true;
   String? _error;
+
+  /// Effective YOLO state of this chat (approvals skipped). Null until the
+  /// gateway's attach payload reports it; the app-bar button stays hidden then.
+  bool _yoloEnabled = false;
+  bool _yoloKnown = false;
+  bool _yoloBusy = false;
   late final ApiClient _client;
   late final GatewayChatClient _gateway;
   late final AttachmentDraftService _attachmentDraftService;
@@ -701,6 +718,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _projectName = _normalisedProjectName(widget.projectName);
+    if (widget.testYoloEnabled case final yolo?) {
+      _yoloEnabled = yolo;
+      _yoloKnown = true;
+    }
     _textController.addListener(_onComposerChanged);
     if (widget.initialComposerText case final shared?) {
       _textController.text = shared;
@@ -1381,11 +1402,76 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     unawaited(_refreshProjectName());
-    // The resume above may well have reported a running turn. The listener
+    final yolo = gateway.sessionYoloFor(widget.session.id);
+    if (yolo != null && mounted) {
+      setState(() {
+        _yoloEnabled = yolo;
+        _yoloKnown = true;
+      });
+    }
+    // The resume above may well have reported a running turn.
     // usually delivered it already; reading the stored projection here is
     // idempotent and covers the case where the snapshot predates this screen.
     final projection = gateway.liveTurnProjectionFor(widget.session.id);
     if (projection != null) _enterFollowMode(projection);
+  }
+
+  Future<void> _toggleYolo() async {
+    if (_yoloBusy) return;
+    final next = !_yoloEnabled;
+    if (next) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          key: const ValueKey('yolo-confirm'),
+          title: Text(context.l10n.yolo_confirm_title),
+          content: Text(context.l10n.yolo_confirm_message),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(context.l10n.cancel),
+            ),
+            FilledButton(
+              key: const ValueKey('yolo-confirm-enable'),
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(context.l10n.yolo_mode),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    final gateway = _desktopGateway;
+    final testToggle = widget.testYoloToggle;
+    if (gateway == null && testToggle == null) return;
+    setState(() => _yoloBusy = true);
+    try {
+      final effective = testToggle != null
+          ? await testToggle(next)
+          : await gateway!.setSessionYolo(
+              sessionId: widget.session.id,
+              enabled: next,
+            );
+      if (!mounted) return;
+      setState(() {
+        _yoloEnabled = effective;
+        _yoloKnown = true;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            effective ? context.l10n.yolo_enabled : context.l10n.yolo_disabled,
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.l10n.failed(error.toString()))),
+      );
+    } finally {
+      if (mounted) setState(() => _yoloBusy = false);
+    }
   }
 
   /// A live-turn update from the shared connection: the projection of this
@@ -5046,6 +5132,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         ),
         actions: [
+          if ((_desktopGateway != null || widget.testYoloToggle != null) &&
+              _yoloKnown)
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: IconButton(
+                key: const ValueKey('chat-yolo-button'),
+                tooltip: context.l10n.yolo_mode,
+                onPressed: _yoloBusy ? null : () => unawaited(_toggleYolo()),
+                icon: Icon(
+                  _yoloEnabled ? Icons.bolt : Icons.bolt_outlined,
+                  color: _yoloEnabled
+                      ? Theme.of(context).colorScheme.tertiary
+                      : null,
+                ),
+              ),
+            ),
           if (_streaming)
             Padding(
               padding: EdgeInsets.only(right: 8),
@@ -5099,6 +5201,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             children: [
               for (final notification in _gatewayNotifications.values)
                 _buildGatewayNotification(notification),
+              if (_yoloEnabled)
+                Material(
+                  key: const ValueKey('yolo-banner'),
+                  color: Theme.of(context).colorScheme.tertiaryContainer,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.bolt,
+                          size: 14,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onTertiaryContainer,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            context.l10n.yolo_banner,
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onTertiaryContainer,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (_legacyTransportFallback)
                 Container(
                   key: const ValueKey('legacy-transport-notice'),

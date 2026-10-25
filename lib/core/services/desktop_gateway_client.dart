@@ -77,6 +77,10 @@ class DesktopGatewayClient {
   final Map<String, String> _storedSessionIds = {};
   final Map<String, String> _workingDirectories = {};
 
+  /// Last `info.yolo` each mobile session reported (attach payload). Null until
+  /// a resume has answered for that session.
+  final Map<String, bool> _sessionYolo = {};
+
   /// Profile scope per mobile session id (Bot Mode: a bot's chat lives in
   /// another profile). Absent/null = the connection's own default profile.
   ///
@@ -629,6 +633,21 @@ class DesktopGatewayClient {
     }
   }
 
+  Future<bool> setSessionYolo({
+    required String sessionId,
+    required bool enabled,
+  }) async {
+    final effective = await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.setSessionYolo(
+        sessionId: gateway.sessionId,
+        enabled: enabled,
+      ),
+    );
+    _sessionYolo[sessionId] = effective;
+    return effective;
+  }
+
   void _rememberBinding(
     String mobileSessionId,
     _DesktopGatewayBinding binding,
@@ -638,6 +657,10 @@ class DesktopGatewayClient {
         _storedSessionIds[mobileSessionId] != binding.storedSessionId;
     _gatewaySessionIds[mobileSessionId] = binding.runtimeSessionId;
     _storedSessionIds[mobileSessionId] = binding.storedSessionId;
+    final resumedYolo = binding.resumed?.info['yolo'];
+    if (resumedYolo is bool) {
+      _sessionYolo[mobileSessionId] = resumedYolo;
+    }
     if (bindingChanged) {
       _dispatchSessionBound(mobileSessionId, binding.storedSessionId);
     }
@@ -1464,6 +1487,10 @@ class DesktopGatewayClient {
     if (path.isEmpty) return;
     _workingDirectories[sessionId] = path;
   }
+
+  /// The gateway's last reported YOLO state for [mobileSessionId], or null
+  /// when no attach payload has carried `info.yolo` yet.
+  bool? sessionYoloFor(String mobileSessionId) => _sessionYolo[mobileSessionId];
 
   void _installAsyncEventBridge(WsClient client) {
     // Every socket greets us with gateway.ready; that greeting is where the

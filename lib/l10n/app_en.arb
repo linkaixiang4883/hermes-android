@@ -767,5 +767,11 @@
   "group_you": "You",
   "group_legacy_hint": "Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.",
   "group_legacy_section": "Desktop-local groups (read-only)",
-  "group_legacy_banner": "Mirrored from Desktop's local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop."
+  "group_legacy_banner": "Mirrored from Desktop's local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.",
+  "yolo_mode": "YOLO mode",
+  "yolo_confirm_title": "Enable YOLO mode?",
+  "yolo_confirm_message": "This chat will skip every tool approval — commands and file writes run without asking. Only enable it in a chat you fully trust.",
+  "yolo_enabled": "YOLO mode on — approvals are skipped",
+  "yolo_disabled": "YOLO mode off — approvals are back",
+  "yolo_banner": "YOLO mode: tool approvals are skipped in this chat"
 }

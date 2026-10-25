@@ -46,6 +46,7 @@ class _FakeGateway {
   final HttpServer _server;
   final List<Map<String, dynamic>> creates = [];
   final List<Map<String, dynamic>> resumes = [];
+  final List<Map<String, dynamic>> controls = [];
 
   /// Answers the first `session.create` with an error, then succeeds.
   bool failFirstCreate = false;
@@ -125,6 +126,13 @@ class _FakeGateway {
         } else {
           reply({'session_id': 'runtime-1', 'stored_session_id': 'stored-1'});
         }
+      case 'config.set':
+        controls.add(params);
+        reply({
+          'key': params['key'],
+          'value': params['value'] == 'on' ? '1' : '0',
+          'scope': 'session',
+        });
       case 'file.attach':
         reply({
           'attached': true,
@@ -245,6 +253,40 @@ void main() {
     expect(gateway.creates, hasLength(2));
     expect(gateway.creates.first, {'cwd': '/srv/p3', 'cwd_explicit': true});
     expect(gateway.creates.last, {'cwd': '/srv/p3'});
+  });
+
+  test('session YOLO toggles through config.set and is remembered', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    final enabled = await client.setSessionYolo(
+      sessionId: 'mob-yolo',
+      enabled: true,
+    );
+
+    expect(enabled, isTrue);
+    expect(gateway.controls.single, {
+      'session_id': 'runtime-1',
+      'key': 'yolo',
+      'value': 'on',
+      'scope': 'session',
+    });
+    expect(client.sessionYoloFor('mob-yolo'), isTrue);
+
+    final disabled = await client.setSessionYolo(
+      sessionId: 'mob-yolo',
+      enabled: false,
+    );
+    expect(disabled, isFalse);
+    expect(gateway.controls.last['value'], 'off');
   });
 
   test('a chat that already exists is never re-homed by the remembered '

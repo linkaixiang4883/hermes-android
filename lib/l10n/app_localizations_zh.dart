@@ -2508,6 +2508,25 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get group_legacy_banner =>
       '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
+
+  @override
+  String get yolo_mode => 'YOLO 模式';
+
+  @override
+  String get yolo_confirm_title => '开启 YOLO 模式？';
+
+  @override
+  String get yolo_confirm_message =>
+      '本会话将跳过所有工具审批——命令与文件写入直接执行，不再询问。请只在完全信任的会话里开启。';
+
+  @override
+  String get yolo_enabled => 'YOLO 模式已开启——不再询问审批';
+
+  @override
+  String get yolo_disabled => 'YOLO 模式已关闭——恢复审批';
+
+  @override
+  String get yolo_banner => 'YOLO 模式：本会话的工具审批已跳过';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5014,4 +5033,23 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get group_legacy_banner =>
       '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
+
+  @override
+  String get yolo_mode => 'YOLO 模式';
+
+  @override
+  String get yolo_confirm_title => '开启 YOLO 模式？';
+
+  @override
+  String get yolo_confirm_message =>
+      '本会话将跳过所有工具审批——命令与文件写入直接执行，不再询问。请只在完全信任的会话里开启。';
+
+  @override
+  String get yolo_enabled => 'YOLO 模式已开启——不再询问审批';
+
+  @override
+  String get yolo_disabled => 'YOLO 模式已关闭——恢复审批';
+
+  @override
+  String get yolo_banner => 'YOLO 模式：本会话的工具审批已跳过';
 }

@@ -171,12 +171,18 @@ class ResumedGatewaySession {
   final Map<String, dynamic>? inflight;
   final List<dynamic> openRequests;
 
+  /// `info` from the attach payload (`SessionLiveInfo`): model, yolo,
+  /// approval_mode, cwd… Exposed so a screen can show session controls the
+  /// gateway already answered instead of issuing another RPC.
+  final Map<String, dynamic> info;
+
   const ResumedGatewaySession({
     required this.runtimeSessionId,
     this.running,
     this.status,
     this.inflight,
     this.openRequests = const [],
+    this.info = const {},
   });
 }
 
@@ -1526,6 +1532,9 @@ class WsClient {
       openRequests: payload['open_requests'] is List
           ? List<dynamic>.from(payload['open_requests'] as List)
           : const [],
+      info: payload['info'] is Map
+          ? Map<String, dynamic>.from(payload['info'] as Map)
+          : const {},
     );
   }
 
@@ -1741,6 +1750,37 @@ class WsClient {
             'This model needs confirmation before it can be selected.',
       );
     }
+  }
+
+  /// Toggles this session's YOLO flag (`config.set key=yolo scope=session`).
+  ///
+  /// The returned value is the gateway's own answer: `true` means approvals are
+  /// skipped for this session (either the flag, `approvals.mode=off`, or the
+  /// process env — the server ORs all three).
+  Future<bool> setSessionYolo({
+    required String sessionId,
+    required bool enabled,
+  }) async {
+    final result = await send('config.set', {
+      'session_id': sessionId,
+      'key': 'yolo',
+      'value': enabled ? 'on' : 'off',
+      'scope': 'session',
+    });
+    if (result['error'] != null) {
+      throw _gatewayResponseError(
+        'config.set',
+        result['error'],
+        fallbackMessage: 'Could not change YOLO mode',
+      );
+    }
+    final payload = result['result'];
+    if (payload is Map) {
+      final value = payload['value'];
+      if (value == '1' || value == 1 || value == true) return true;
+      if (value == '0' || value == 0 || value == false) return false;
+    }
+    return enabled;
   }
 
   /// Returns the effective reasoning effort for one live gateway session.

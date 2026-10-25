@@ -2597,6 +2597,26 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get group_legacy_banner =>
       'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.';
+
+  @override
+  String get yolo_mode => 'YOLO mode';
+
+  @override
+  String get yolo_confirm_title => 'Enable YOLO mode?';
+
+  @override
+  String get yolo_confirm_message =>
+      'This chat will skip every tool approval — commands and file writes run without asking. Only enable it in a chat you fully trust.';
+
+  @override
+  String get yolo_enabled => 'YOLO mode on — approvals are skipped';
+
+  @override
+  String get yolo_disabled => 'YOLO mode off — approvals are back';
+
+  @override
+  String get yolo_banner =>
+      'YOLO mode: tool approvals are skipped in this chat';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).

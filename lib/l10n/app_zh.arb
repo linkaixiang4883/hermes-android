@@ -708,5 +708,11 @@
   "group_you": "你",
   "group_legacy_hint": "旧版桌面群组只保存在那台电脑上。在桌面打开该群组并点「Start gateway group」后，这里才能看到它。",
   "group_legacy_section": "桌面本地群组（只读）",
-  "group_legacy_banner": "这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。"
+  "group_legacy_banner": "这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。",
+  "yolo_mode": "YOLO 模式",
+  "yolo_confirm_title": "开启 YOLO 模式？",
+  "yolo_confirm_message": "本会话将跳过所有工具审批——命令与文件写入直接执行，不再询问。请只在完全信任的会话里开启。",
+  "yolo_enabled": "YOLO 模式已开启——不再询问审批",
+  "yolo_disabled": "YOLO 模式已关闭——恢复审批",
+  "yolo_banner": "YOLO 模式：本会话的工具审批已跳过"
 }

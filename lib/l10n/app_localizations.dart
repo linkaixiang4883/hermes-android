@@ -4388,6 +4388,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.'**
   String get group_legacy_banner;
+
+  /// No description provided for @yolo_mode.
+  ///
+  /// In en, this message translates to:
+  /// **'YOLO mode'**
+  String get yolo_mode;
+
+  /// No description provided for @yolo_confirm_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable YOLO mode?'**
+  String get yolo_confirm_title;
+
+  /// No description provided for @yolo_confirm_message.
+  ///
+  /// In en, this message translates to:
+  /// **'This chat will skip every tool approval — commands and file writes run without asking. Only enable it in a chat you fully trust.'**
+  String get yolo_confirm_message;
+
+  /// No description provided for @yolo_enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'YOLO mode on — approvals are skipped'**
+  String get yolo_enabled;
+
+  /// No description provided for @yolo_disabled.
+  ///
+  /// In en, this message translates to:
+  /// **'YOLO mode off — approvals are back'**
+  String get yolo_disabled;
+
+  /// No description provided for @yolo_banner.
+  ///
+  /// In en, this message translates to:
+  /// **'YOLO mode: tool approvals are skipped in this chat'**
+  String get yolo_banner;
 }
 
 class _AppLocalizationsDelegate
