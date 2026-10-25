@@ -101,6 +101,13 @@
 
 
 
+## 会话列表取数（App 侧，2026-10-25）
+
+- **服务端**：`GET /api/sessions` 的 `limit` 上限 **200**（缺省 50），返回 newest-first 窗口；**pinned 会话每页重复回填**（返回行数 ≠ 窗口大小），`has_more` 用非 pin 行计算——窗口里只要有 pin 就可能少算。
+- **App 现状**：会话列表页 `_sessionPageSize = 100`（滚动追加）；Home/Workspace 全量 loader 也用 100/页，且**无 pin 的窗口直接信 `has_more=false` 收尾**（此前总会多打一次空页）；有 pin 时仍按客户端穷举规则（连续 zero-new 页数 × pageSize 超过 pin 上限才判结束），**不要**改成信 `has_more`。
+- **旧 pin 解析**：列表外的本地 pin 需要 `GET /api/sessions/{id}` + 按 title 的 rich 页（**每个 pin 2 个请求**）；`loadUnlistedLocalPins` 现按 `ApiClient` 实例做 10 分钟缓存（Expando），列表反复刷新不再重复请求。
+- 改分页前先看 `session_list_pinned_paging_test.dart`（50 窗口夹具显式 `testSessionPageSize: 50`）与 `local_chat_pins_ui_test.dart`。
+
 ## 项目归组 & 思考块修复（2026-09-14，commit `2d189c4` + `8b81a7d`）
 
 **背景**：上游 App 的项目归组调 `projects.assign_session`——官方 Hermes **从未实现**该 RPC（`projects.*` 全集里没有它；全仓 33752 commit pickaxe 零命中），所以「新建聊天」在项目里必失败；移动会话/快聊提升/Spaces 迁移同一条死路。官方语义是：**会话属于哪个项目，由它的工作目录推导**（`project_for_path`）。
