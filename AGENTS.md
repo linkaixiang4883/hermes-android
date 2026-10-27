@@ -49,7 +49,24 @@
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1497**（2026-10-25 watcher 按 stored key 激活修复后；重连路由修复=1495；审批审核=1494；会话列表单页首绘=1492；Activity 待办化=1491；审批可见性=1488；会话内 YOLO=1486；Activity 静默更新=1483；桌面本地群组镜像=1481；群组发现/帖子式 UI=1476；项目 cwd 修复=1473、Bot Mode 全套=1471、P2=1421、P1=1414、P0=1410，此前 1404）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1505**（2026-10-27 REST 入口按连接类型分流后；此前 1497=watcher stored-key 修复）。
+
+## REST 入口按连接类型分流（2026-10-27，`b73671e`）
+
+**目标**：desktop-gateway 连接只依赖 9119（`/api/ws` + dashboard REST）；8642 api_server 只保留给 legacy API-key 连接。
+
+| 连接类型 | REST 客户端 | 入口 |
+|---|---|---|
+| desktop（`desktopGatewayUrl` / dashboard 用户名密码 / `dashboardProxied`） | `DashboardRestClient` → `DashboardClient`（cookie/token） | 9119 |
+| legacy（仅 host+port+API key） | `ApiClient`（Bearer） | 8642，行为不变 |
+
+- 新增接口/工厂：`hermes_rest_client.dart`、`dashboard_rest_client.dart`、`connection_rest_client.dart`；`ApiClient implements HermesRestClient`。
+- **9119 响应信封与 8642 不同**：`/api/sessions` 是 `{sessions,total,limit,offset,storage}`（必须 `order=recent`、`limit<=100`、`profile`），详情是裸对象，messages 是 `{messages,pagination}`（过滤 `display_kind=hidden`、`display_content` 作显示正文）；`storage` 非空抛 typed error，不能渲染空列表。
+- 接入：Workspace/SessionList/Chat 历史/通知深链/pin 回填全部走工厂；`ChatScreen` 拆 `_restClient`（历史/模型）与 `_legacyClient`（只喂 `GatewayChatClient`），desktop 连接 `allowLegacyFallback=false`；通知深链先 `/latest-descendant`。
+- 模型：目录走 9119 `/api/model/info|options`；切换仍走 WS `config.set key=model`（`--session`）；`/v1/models` 在 App 内无调用方。
+- AI 搜索改写：desktop 连接强制 `server` 模式并隐藏 AI 菜单（`/v1/search/rewrite` 当前服务端无实现，不能让它打 8642）。
+- 测试：`test/dashboard_rest_client_test.dart`（信封/order/profile、hidden/display、detail、lineage、delete 404）、`test/connection_rest_client_test.dart`（9119 vs 8642）；门禁 **1505**。
+- 已知未尽：新建连接保存时仍用 8642 校验 API key（Q1，纯 9119 新连接未开）；屏幕级 8642=0 专测、`latest-descendant`/`is_internal_child` 专测尚未补；`SessionListScreen._ensureSearchClient` 已复用同一 dashboard。
 
 ## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
