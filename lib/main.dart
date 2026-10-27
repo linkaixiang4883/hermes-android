@@ -9,6 +9,7 @@ import 'core/services/config_backup.dart';
 import 'core/services/config_backup_io.dart';
 import 'core/services/config_backup_service.dart';
 import 'core/services/connection_manager.dart';
+import 'core/services/connection_rest_client.dart';
 import 'core/services/keep_alive_controller.dart';
 import 'core/services/gateway_client_registry.dart';
 import 'core/services/gateway_turn_application_controller.dart';
@@ -380,14 +381,15 @@ class HermesAppState extends State<HermesApp> {
   ) async {
     Session? session;
     if (sessionId != null && sessionId.isNotEmpty) {
-      ApiClient? client;
+      HermesRestClient? client;
       try {
-        client = ApiClient(
-          baseUrl: connection.baseUrl,
-          apiKey: connection.apiKey,
-          pathPrefix: connection.gatewayPrefix ?? '',
+        client = buildConnectionRestClient(
+          connection,
+          dashboard: _gatewayRegistry.existingFor(connection.id)?.dashboard,
         );
-        session = await client.getSessionById(sessionId);
+        final latest =
+            await client.resolveLatestDescendant(sessionId) ?? sessionId;
+        session = await client.getSessionById(latest);
       } catch (_) {
         session = null;
       } finally {
@@ -1095,7 +1097,12 @@ class HomeScreenState extends State<HomeScreen> {
                         password: pass.isEmpty ? null : pass,
                       );
                       try {
-                        await client.getModelInfo();
+                        // /api/model/info is public on some dashboards; the
+                        // session list requires the actual dashboard auth.
+                        await client.apiGet(
+                          'sessions',
+                          queryParameters: {'limit': '1'},
+                        );
                         client.close();
                         if (!ctx.mounted) return;
                         await widget.connManager.updateDashboardAuth(
@@ -1483,7 +1490,10 @@ class _AddDialogState extends State<_AddDialog> {
           password: dashPass.isEmpty ? null : dashPass,
         );
         try {
-          await dashClient.getModelInfo();
+          await dashClient.apiGet(
+            'sessions',
+            queryParameters: {'limit': '1'},
+          );
         } catch (_) {
           dashClient.close();
           if (!mounted) return;

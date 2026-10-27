@@ -16,6 +16,7 @@ import 'package:share_plus/share_plus.dart';
 import '../controllers/voice_composer_controller.dart';
 import '../services/chat_visibility.dart';
 import '../services/connection_manager.dart';
+import '../services/connection_rest_client.dart';
 import '../services/attachment_draft_service.dart';
 import '../services/composer_draft_store.dart';
 import '../services/chat_model_override_store.dart';
@@ -347,6 +348,12 @@ class ChatScreen extends StatefulWidget {
   @visibleForTesting
   final ApiClient? testApiClient;
 
+  /// Test seam for the dashboard-backed REST client. Tests that keep a
+  /// desktop-gateway fixture must inject this, or the history/model reads would
+  /// try a real dashboard origin.
+  @visibleForTesting
+  final HermesRestClient? testRestClient;
+
   @visibleForTesting
   final AttachmentDraftService? testAttachmentDraftService;
 
@@ -458,6 +465,7 @@ class ChatScreen extends StatefulWidget {
     this.gatewayRegistry,
     this.testTurnApplicationSession,
     this.testApiClient,
+    this.testRestClient,
     this.testAttachmentDraftService,
     this.testRemotePromptSubmit,
     this.testServerFilePicker,
@@ -517,6 +525,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _yoloKnown = false;
   bool _yoloBusy = false;
   late final ApiClient _client;
+  late final HermesRestClient _restClient;
   late final GatewayChatClient _gateway;
   late final AttachmentDraftService _attachmentDraftService;
   late final AttachmentDraftSendCoordinator _attachmentSendCoordinator;
@@ -784,6 +793,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           apiKey: widget.connection.apiKey,
           pathPrefix: widget.connection.gatewayPrefix ?? '',
         );
+    _restClient =
+        widget.testRestClient ??
+        widget.testApiClient ??
+        buildConnectionRestClient(
+          widget.connection,
+          dashboard: usesDashboardRest(widget.connection)
+              ? widget.gatewayRegistry?.clientFor(widget.connection).dashboard
+              : null,
+        );
     _gateway = GatewayChatClient(_client);
     _attachmentDraftService =
         widget.testAttachmentDraftService ?? AttachmentDraftService();
@@ -993,6 +1011,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       timer.cancel();
     }
     _releaseClientAfterStreamSettles();
+    if (!identical(_restClient, _client)) _restClient.close();
     unawaited(
       _attachmentDraftService.removeAll(
         List<AttachmentDraft>.from(_attachmentDrafts),
@@ -1139,7 +1158,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     await _fetchMessages();
     if (!mounted) return;
     unawaited(_refreshContextUsage());
-    await _recoverPendingTurn(allowLegacyFallback: true);
+    // A dashboard connection has no legacy REST chat transport: recovery
+    // failure must surface as an error, never fall through to 8642.
+    await _recoverPendingTurn(
+      allowLegacyFallback: !usesDashboardRest(widget.connection),
+    );
   }
 
   /// Pulls the WS breakdown snapshot into [_contextUsage].
@@ -2178,7 +2201,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<List<Map<String, dynamic>>> _getRecentMessages(String sessionId) =>
-      _client.getMessages(
+      _restClient.getMessages(
         sessionId,
         limit: _historyPageSize,
         latest: true,
@@ -3072,11 +3095,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // would be a guaranteed 404. The API model inventory contains the
         // profile default needed to initialise the picker.
         sessionOrModelInfo = const {};
-        modelOptions = await _client.getModelOptions();
+        modelOptions = await _restClient.getModelOptions();
       } else {
         final results = await Future.wait([
-          _client.getSession(widget.session.id),
-          _client.getModelOptions(),
+          _restClient.getSession(widget.session.id),
+          _restClient.getModelOptions(),
         ]);
         sessionOrModelInfo = results[0];
         modelOptions = results[1];

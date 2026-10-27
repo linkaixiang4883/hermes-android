@@ -8,6 +8,7 @@ import '../services/ai_search_query_rewriter.dart';
 import '../services/chat_space_store.dart';
 import '../services/composer_draft_store.dart';
 import '../services/connection_manager.dart';
+import '../services/connection_rest_client.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
@@ -101,7 +102,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
   /// search filters in-memory on every keystroke; server search must not.
   static const _searchDebounce = Duration(milliseconds: 350);
 
-  late final ApiClient _client;
+  late final HermesRestClient _client;
   DesktopGatewayClient? _desktopGateway;
   final _searchController = TextEditingController();
   List<SavedConnection> _profiles = const [];
@@ -199,10 +200,11 @@ class _SessionListScreenState extends State<SessionListScreen> {
   @override
   void initState() {
     super.initState();
-    _client = ApiClient(
-      baseUrl: widget.connection.baseUrl,
-      apiKey: widget.connection.apiKey,
-      pathPrefix: widget.connection.gatewayPrefix ?? '',
+    _client = buildConnectionRestClient(
+      widget.connection,
+      dashboard: usesDashboardRest(widget.connection)
+          ? widget.gatewayRegistry?.clientFor(widget.connection).dashboard
+          : null,
       httpClient: widget.testHttpClient,
     );
     if (widget.connection.desktopGatewayUrl?.trim().isNotEmpty == true) {
@@ -228,11 +230,17 @@ class _SessionListScreenState extends State<SessionListScreen> {
     try {
       final preferences = await SessionSearchPreferences.open();
       if (!mounted) return;
+      final restored = preferences.readMode(
+        connectionIdentity: _searchConnectionIdentity,
+      );
+      // The AI mode rewrites through the legacy API server; a dashboard
+      // connection must never fire that request. Force the plain server mode
+      // instead of letting a saved preference leak traffic to 8642.
+      _searchMode = usesDashboardRest(widget.connection)
+          ? SessionSearchMode.server
+          : restored;
       setState(() {
         _searchPreferences = preferences;
-        _searchMode = preferences.readMode(
-          connectionIdentity: _searchConnectionIdentity,
-        );
         _aiSearchModel = preferences.readAiModel(
           connectionIdentity: _searchConnectionIdentity,
         );
@@ -257,15 +265,9 @@ class _SessionListScreenState extends State<SessionListScreen> {
     final existing = _searchClient;
     if (existing != null) return existing;
 
-    final dashboard = DashboardClient(
-      host: widget.connection.host,
-      port: widget.connection.dashboardPort,
-      pathPrefix: widget.connection.dashboardPrefix ?? '',
-      proxied: widget.connection.dashboardProxied,
-      useHttps: widget.connection.useHttps,
-      username: widget.connection.dashboardUsername,
-      password: widget.connection.dashboardPassword,
-    );
+    final dashboard =
+        widget.gatewayRegistry?.existingFor(widget.connection.id)?.dashboard ??
+        buildConnectionDashboard(widget.connection);
     final created = SessionSearchClient(
       baseUrl: dashboard.baseUrl,
       headers: dashboard.authHeaders,
@@ -277,6 +279,9 @@ class _SessionListScreenState extends State<SessionListScreen> {
 
   Future<void> _setSearchMode(SessionSearchMode mode) async {
     if (mode == _searchMode) return;
+    if (mode == SessionSearchMode.ai && usesDashboardRest(widget.connection)) {
+      return;
+    }
     if (mode == SessionSearchMode.ai && _aiSearchModel == null) {
       final selected = await _showAiModelSelector();
       if (selected == null) return;
@@ -1442,7 +1447,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
                                 ),
                               ),
                             ),
-                            CheckedPopupMenuItem(
+                            if (!usesDashboardRest(widget.connection))
+                              CheckedPopupMenuItem(
                               value: SessionSearchMode.ai,
                               enabled: _serverSearchAvailable,
                               checked: aiMode,

@@ -10,10 +10,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/connection.dart';
 import '../models/session.dart';
+import 'hermes_rest_client.dart';
 
 // Re-export for convenience
 export '../models/connection.dart';
 export '../models/session.dart';
+export 'hermes_rest_client.dart' show SessionListPage, HermesRestClient;
 
 /// Injectable secret storage boundary used by [ConnectionManager].
 ///
@@ -665,18 +667,10 @@ class ApiHealthCheckResult {
   }
 }
 
-/// One page of the gateway's session list with its paging signal.
-class SessionListPage {
-  final List<Session> sessions;
-  final bool hasMore;
-
-  const SessionListPage({required this.sessions, required this.hasMore});
-}
-
 /// HTTP client for the Hermes Gateway API Server (port 8642).
 ///
 /// Uses Bearer token auth. Same pattern as hermes-desktop.
-class ApiClient {
+class ApiClient implements HermesRestClient {
   final http.Client _http;
   final String baseUrl;
   final String _apiKey;
@@ -723,10 +717,12 @@ class ApiClient {
   /// its recency window, so a client that never pages only ever sees the
   /// most recent page — which silently truncated the Unassigned bucket
   /// (sessions outside the first page never reached the device).
+  @override
   Future<SessionListPage> getSessionsPage({
     int limit = 50,
     int offset = 0,
     String? title,
+    String? profile,
     Duration timeout = requestTimeout,
   }) async {
     final uri = Uri.parse('$baseUrl/api/sessions').replace(
@@ -758,10 +754,15 @@ class ApiClient {
 
   /// Fetches one session by exact id, paging through the list until it is
   /// found: a notification may name a session older than the first page.
-  Future<Session?> getSessionById(String sessionId) async {
+  @override
+  Future<Session?> getSessionById(String sessionId, {String? profile}) async {
     var offset = 0;
     while (true) {
-      final result = await getSessionsPage(limit: 100, offset: offset);
+      final result = await getSessionsPage(
+        limit: 100,
+        offset: offset,
+        profile: profile,
+      );
       for (final session in result.sessions) {
         if (session.id == sessionId) return session;
       }
@@ -771,7 +772,11 @@ class ApiClient {
   }
 
   /// Fetches the server-authoritative metadata for one stored session.
-  Future<Map<String, dynamic>> getSession(String sessionId) async {
+  @override
+  Future<Map<String, dynamic>> getSession(
+    String sessionId, {
+    String? profile,
+  }) async {
     final encodedId = Uri.encodeComponent(sessionId);
     final data = await apiGet('api/sessions/$encodedId');
     final session = data['session'];
@@ -781,8 +786,15 @@ class ApiClient {
     return Map<String, dynamic>.from(session);
   }
 
+  @override
+  Future<String?> resolveLatestDescendant(
+    String sessionId, {
+    String? profile,
+  }) async => sessionId;
+
   // ── Messages ─────────────────────────────────────────────────────────
 
+  @override
   Future<List<Map<String, dynamic>>> getMessages(
     String sessionId, {
     int? limit,
@@ -817,7 +829,8 @@ class ApiClient {
     return list.whereType<Map<String, dynamic>>().toList();
   }
 
-  Future<void> deleteSession(String sessionId) async {
+  @override
+  Future<void> deleteSession(String sessionId, {String? profile}) async {
     final encodedId = Uri.encodeComponent(sessionId);
     final res = await _http
         .delete(
@@ -886,6 +899,7 @@ class ApiClient {
     }
   }
 
+  @override
   Future<bool> healthCheck() async => (await checkHealth()).isHealthy;
 
   // ── Generic HTTP helpers (for Dashboard API compatibility) ────────────
@@ -935,12 +949,16 @@ class ApiClient {
   // ── Model selection ───────────────────────────────────────────────────
 
   /// Legacy Dashboard-only profile metadata endpoint.
+  @override
   Future<Map<String, dynamic>> getModelInfo() => apiGet('api/model/info');
 
   /// Model inventory exposed by both the Dashboard and API Server.
-  Future<Map<String, dynamic>> getModelOptions() => apiGet('api/model/options');
+  @override
+  Future<Map<String, dynamic>> getModelOptions() =>
+      apiGet('api/model/options');
 
   /// Persists a model lock for one API Server session.
+  @override
   Future<Map<String, dynamic>> setSessionModel({
     required String sessionId,
     required String provider,
@@ -993,6 +1011,7 @@ class ApiClient {
     body: {'scope': scope, 'provider': provider, 'model': model},
   );
 
+  @override
   void close() => _http.close();
 }
 
@@ -1852,7 +1871,7 @@ class DashboardClient {
       );
     }
     if (res.statusCode < 200 || res.statusCode >= 300) {
-      throw Exception('HTTP ${res.statusCode}');
+      throw DashboardHttpException(res.statusCode);
     }
   }
 

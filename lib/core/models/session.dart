@@ -127,6 +127,10 @@ class Session {
       lineageRootId: json['_lineage_root_id'] is String
           ? json['_lineage_root_id'] as String
           : null,
+      profile: json['profile'] is String &&
+              (json['profile'] as String).trim().isNotEmpty
+          ? (json['profile'] as String).trim()
+          : null,
       archived: json['archived'] == true,
       isLocalDraft: false,
     );

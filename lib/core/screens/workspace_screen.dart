@@ -23,6 +23,7 @@ import '../services/attachment_draft_service.dart';
 import '../services/chat_space_store.dart';
 import '../services/chat_visibility.dart';
 import '../services/connection_manager.dart';
+import '../services/connection_rest_client.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
@@ -244,7 +245,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   ChatSpaceStore? _spaceStore;
   LocalChatPinStore? _pinStore;
   QuickChatStore? _quickChats;
-  ApiClient? _sessionsApi;
+  HermesRestClient? _sessionsApi;
   DashboardClient? _archivedSessionsClient;
   bool _ownsRepository = false;
   bool _initialized = false;
@@ -315,12 +316,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   static const int _workspaceSessionPageSize = 100;
 
-  ApiClient _sessionsClient() {
+  HermesRestClient _sessionsClient() {
     final connection = widget.connection;
-    return _sessionsApi ??= ApiClient(
-      baseUrl: connection.baseUrl,
-      apiKey: connection.apiKey,
-      pathPrefix: connection.gatewayPrefix ?? '',
+    return _sessionsApi ??= buildConnectionRestClient(
+      connection,
+      dashboard: usesDashboardRest(connection)
+          ? widget.gatewayRegistry?.clientFor(connection).dashboard
+          : null,
       httpClient: widget.testSessionsHttpClient,
     );
   }

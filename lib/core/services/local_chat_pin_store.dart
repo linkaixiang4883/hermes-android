@@ -112,10 +112,10 @@ final Expando<Map<String, ({Session session, DateTime at})>> _resolvedPins =
 const Duration _resolvedPinTtl = Duration(minutes: 10);
 
 /// Test hook: forget resolved pins for one client.
-void clearResolvedPinSessionCache(ApiClient client) =>
+void clearResolvedPinSessionCache(Object client) =>
     _resolvedPins[client]?.clear();
 
-Map<String, ({Session session, DateTime at})> _pinCache(ApiClient client) =>
+Map<String, ({Session session, DateTime at})> _pinCache(Object client) =>
     _resolvedPins[client] ??= <String, ({Session session, DateTime at})>{};
 
 /// Fetch old local pins beyond the first page (or Home's bounded scan). An
@@ -123,7 +123,7 @@ Map<String, ({Session session, DateTime at})> _pinCache(ApiClient client) =>
 /// compressed root is not the live tip. Resolve its title through the rich
 /// list route, which projects both fields and the continuation lineage.
 Future<List<Session>> loadUnlistedLocalPins(
-  ApiClient client,
+  HermesRestClient client,
   Iterable<Session> listed,
   List<String> pinnedIds,
 ) async {
