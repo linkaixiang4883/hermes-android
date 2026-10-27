@@ -127,6 +127,34 @@ void main() {
     expect(page.sessions.single.lineageRootId, 'root-id');
   });
 
+  test('resolves the compressed session tip', () async {
+    final client = _client(
+      MockClient((request) async {
+        expect(request.url.path, '/api/sessions/root/latest-descendant');
+        return http.Response(jsonEncode({'session_id': 'tip'}), 200);
+      }),
+    );
+
+    expect(await client.resolveLatestDescendant('root'), 'tip');
+  });
+
+  test('derives is_internal_child from model_config on detail', () async {
+    final client = _client(
+      MockClient((_) async => http.Response(
+        jsonEncode({
+          'id': 'child',
+          'title': 'Delegate child',
+          'model_config': jsonEncode({'_delegate_from': 'parent'}),
+        }),
+        200,
+      )),
+    );
+
+    final row = await client.getSession('child');
+
+    expect(row['is_internal_child'], isTrue);
+  });
+
   test('treats a dashboard 404 delete as already removed', () async {
     final client = _client(
       MockClient((_) async => http.Response('{"detail":"not found"}', 404)),
