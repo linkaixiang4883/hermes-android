@@ -126,7 +126,7 @@
 - **Desktop 参照**：`apps/desktop/src/api/sessions.ts::listSessions` 只取 `limit`（默认 **40**）+ `offset=0` 的一页，**从不全量扫描**；更多行靠统一分页口；项目会话来自 `projects.tree` / `projects.project_sessions`，与全局列表无关。
 - **App 现状**：会话列表页 `_sessionPageSize = 100`；Chats 面板/Home **首次只取一页 100**，Chats 滚动到底通过 `loadMore` 追加下一页（`WorkspaceSessionsScreen.loadMore`，偏移按 100 递增），不再每次全量翻页；10s 静默 tick 只拉头部第一页并合并。
 - **项目会话不受影响**：项目详情走 `ProjectsRepository.projectSessions(projectId)` → `projects.project_sessions`（服务端按项目/cwd 精准返回），不依赖全局会话扫描。改全局列表取数前先确认这一点。
-- **旧 pin 解析**：列表外的本地 pin 需要 `GET /api/sessions/{id}` + 按 title 的 rich 页（每 pin 2 请求）；`loadUnlistedLocalPins` 按 `ApiClient` 实例缓存 10 分钟（Expando）。
+- **旧 pin 解析**：列表外的本地 pin 需要 `GET /api/sessions/{id}` + 按 title 的 rich 页（每 pin 2 请求）；`loadUnlistedLocalPins` 按 `HermesRestClient` 实例缓存 10 分钟（Expando；desktop 连接走 `DashboardRestClient`，legacy 走 `ApiClient`）。
 - 测试：`session_list_pinned_paging_test.dart`、`workspace_sessions_screen_test.dart`（首绘一页 + 滚动补页 + tick 只拉头部）。
 
 ## 项目归组 & 思考块修复（2026-09-14，commit `2d189c4` + `8b81a7d`）
