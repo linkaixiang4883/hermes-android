@@ -66,7 +66,7 @@
 - 模型：目录走 9119 `/api/model/info|options`；切换仍走 WS `config.set key=model`（`--session`）；`/v1/models` 在 App 内无调用方。
 - AI 搜索改写：desktop 连接强制 `server` 模式并隐藏 AI 菜单（`/v1/search/rewrite` 当前服务端无实现，不能让它打 8642）。
 - 测试：`test/dashboard_rest_client_test.dart`（信封/order/profile、hidden/display、detail、lineage、latest-descendant、internal child、delete 404）、`test/connection_rest_client_test.dart`（9119 vs 8642）；门禁 **1507**。
-- 已知未尽：新建连接保存时仍用 8642 校验 API key（Q1，纯 9119 新连接未开）；屏幕级 8642=0 专测、`latest-descendant`/`is_internal_child` 专测尚未补；`SessionListScreen._ensureSearchClient` 已复用同一 dashboard。
+- 已知未尽：新建连接保存时仍用 8642 校验 API key（Q1，纯 9119 新连接未开）；屏幕级 8642=0 专测尚未补（适配层已覆盖 latest-descendant / is_internal_child）；`SessionListScreen._ensureSearchClient` 已复用同一 dashboard。
 
 ## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
