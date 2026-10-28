@@ -3436,6 +3436,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       return;
     }
+    if (usesDashboardRest(widget.connection)) {
+      // A desktop connection has no legacy REST chat transport. Never fall
+      // through to 8642 just because the gateway client failed to initialise.
+      _showAttachmentError(
+        context.l10n.desktop_gateway_is_not_configured_for_this_connection,
+      );
+      return;
+    }
 
     try {
       _attachmentDraftService.validateRestDrafts(attachments);

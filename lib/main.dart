@@ -1421,6 +1421,97 @@ class _AddDialogState extends State<_AddDialog> {
 
     try {
       final normalized = SavedConnection.normalizeHostAndPort(host, port);
+      final dashboardPortText = _dashPort.text.trim();
+      final dashboardUser = _dashUser.text.trim();
+      final dashboardPassword = _dashPass.text.trim();
+      final dashboardGatewayUrl = _desktopGatewayUrl.text.trim();
+      final dashboardProfile = _gatewayProfile.text.trim();
+      final hasDashboardDetails =
+          dashboardPortText.isNotEmpty ||
+          dashboardUser.isNotEmpty ||
+          dashboardPassword.isNotEmpty ||
+          dashboardPrefix.isNotEmpty ||
+          _dashboardProxied ||
+          dashboardGatewayUrl.isNotEmpty;
+
+      // Dashboard-only connections: 8642 must not be a prerequisite. Validate
+      // the dashboard directly and save; a blank API key is valid here.
+      if (hasDashboardDetails) {
+        if (dashboardProfile.contains('/') ||
+            dashboardProfile.contains(RegExp(r'\s'))) {
+          setState(() {
+            _error =
+                context
+                    .l10n
+                    .hermes_profile_must_be_a_plain_profile_name_such_as;
+            _validating = false;
+            _showDashboard = true;
+          });
+          return;
+        }
+        final dashboardPort = dashboardPortText.isEmpty
+            ? null
+            : int.tryParse(dashboardPortText);
+        final candidate = SavedConnection(
+          id: '',
+          label: label,
+          host: normalized.host,
+          port: normalized.port,
+          apiKey: apiKey,
+          useHttps: normalized.useHttps,
+          gatewayPrefix: gatewayPrefix,
+          dashboardPrefix: dashboardPrefix.isEmpty ? null : dashboardPrefix,
+          dashboardProxied: _dashboardProxied,
+          desktopGatewayUrl: dashboardGatewayUrl.isEmpty
+              ? null
+              : dashboardGatewayUrl,
+          dashboardPortOverride: dashboardPort,
+          dashboardUsername: dashboardUser.isEmpty ? null : dashboardUser,
+          dashboardPassword: dashboardPassword.isEmpty
+              ? null
+              : dashboardPassword,
+          gatewayProfile: dashboardProfile.isEmpty ? null : dashboardProfile,
+        );
+        final dashboardClient = buildConnectionDashboard(candidate);
+        try {
+          await dashboardClient.apiGet(
+            'sessions',
+            queryParameters: {'limit': '1'},
+          );
+        } catch (_) {
+          dashboardClient.close();
+          if (!mounted) return;
+          setState(() {
+            _error = context
+                .l10n
+                .gateway_connected_but_the_dashboard_could_not_be_reached_or;
+            _validating = false;
+            _showDashboard = true;
+          });
+          return;
+        }
+        dashboardClient.close();
+        if (!mounted) return;
+        await widget.onSave(
+          label,
+          host,
+          port,
+          apiKey,
+          gatewayPrefix: gatewayPrefix,
+          dashboardPrefix: dashboardPrefix,
+          dashboardProxied: _dashboardProxied,
+          desktopGatewayUrl: dashboardGatewayUrl,
+          dashboardPort: dashboardPort,
+          dashboardUsername: dashboardUser.isEmpty ? null : dashboardUser,
+          dashboardPassword: dashboardPassword.isEmpty
+              ? null
+              : dashboardPassword,
+          gatewayProfile: dashboardProfile.isEmpty ? null : dashboardProfile,
+        );
+        if (mounted) Navigator.pop(context);
+        return;
+      }
+
       final baseUrl = SavedConnection(
         id: '',
         label: '',
@@ -1429,6 +1520,16 @@ class _AddDialogState extends State<_AddDialog> {
         apiKey: '',
         useHttps: normalized.useHttps,
       ).baseUrl;
+      if (apiKey.isEmpty) {
+        setState(() {
+          _error =
+              context.l10n
+                  .needs_a_reachable_hermes_dashboard_check_the_host_port_and;
+          _validating = false;
+          _showDashboard = true;
+        });
+        return;
+      }
       final client = ApiClient(
         baseUrl: baseUrl,
         apiKey: apiKey,
