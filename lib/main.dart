@@ -1447,15 +1447,6 @@ class _AddDialogState extends State<_AddDialog> {
               keyboardType: TextInputType.number,
             ),
             const SizedBox(height: 12),
-            TextField(
-              controller: _apiKey,
-              decoration: InputDecoration(
-                labelText: context.l10n.api_key,
-                hintText: context.l10n.api_server_key_from_hermes_env,
-              ),
-              obscureText: true,
-            ),
-            const SizedBox(height: 4),
             InkWell(
               onTap: _validating
                   ? null
