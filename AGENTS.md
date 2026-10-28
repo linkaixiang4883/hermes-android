@@ -49,7 +49,7 @@
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
 
 **已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1507**（2026-10-27 REST 入口按连接类型分流后；此前 1497=watcher stored-key 修复）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1508**（2026-10-28 Q1 仪表盘直连校验后；此前 1507=REST 分流）。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
 
@@ -65,8 +65,8 @@
 - 接入：Workspace/SessionList/Chat 历史/通知深链/pin 回填全部走工厂；`ChatScreen` 拆 `_restClient`（历史/模型）与 `_legacyClient`（只喂 `GatewayChatClient`），desktop 连接 `allowLegacyFallback=false`；通知深链先 `/latest-descendant`。
 - 模型：目录走 9119 `/api/model/info|options`；切换仍走 WS `config.set key=model`（`--session`）；`/v1/models` 在 App 内无调用方。
 - AI 搜索改写：desktop 连接强制 `server` 模式并隐藏 AI 菜单（`/v1/search/rewrite` 当前服务端无实现，不能让它打 8642）。
-- 测试：`test/dashboard_rest_client_test.dart`（信封/order/profile、hidden/display、detail、lineage、latest-descendant、internal child、delete 404）、`test/connection_rest_client_test.dart`（9119 vs 8642）；门禁 **1507**。
-- 已知未尽：新建连接保存时仍用 8642 校验 API key（Q1，纯 9119 新连接未开）；屏幕级 8642=0 专测尚未补（适配层已覆盖 latest-descendant / is_internal_child）；`SessionListScreen._ensureSearchClient` 已复用同一 dashboard。
+- 测试：`test/dashboard_rest_client_test.dart`（信封/order/profile、hidden/display、detail、lineage、latest-descendant、internal child、delete 404）、`test/connection_rest_client_test.dart`（9119 vs 8642，含无 API key 的 dashboard 直连）；门禁 **1508**。
+- 已知未尽：Q1 已实现（2026-10-28）：新建连接只要填了 dashboard 详情（URL/端口/凭据/代理）就直接用 9119 `/api/sessions?limit=1` 校验，API key 可留空；desktop 发送增加 8642 硬门禁。legacy 分支仍在（无 dashboard 详情且填 API key 的连接）；屏幕级 8642=0 专测尚未补（适配层已覆盖 latest-descendant / is_internal_child）；`SessionListScreen._ensureSearchClient` 已复用同一 dashboard。
 
 ## Bot Mode / 群组 / 审批通知 / Activity（2026-10-22 完成）
 
