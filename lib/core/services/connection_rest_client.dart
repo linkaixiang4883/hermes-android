@@ -6,10 +6,10 @@ import 'desktop_gateway_client.dart';
 
 /// Whether this connection's REST traffic belongs on the dashboard origin.
 ///
-/// This mirrors the predicate the chat screen uses to enable the desktop
-/// gateway: a saved dashboard URL, dashboard credentials, or a proxied
-/// dashboard all imply the 9119 transport. A bare API-key connection keeps the
-/// legacy 8642 REST path.
+/// New connections are dashboard-only, but existing legacy connections keep
+/// their API-key transport until they are migrated. This predicate selects the
+/// dashboard branch only when the connection actually carries dashboard
+/// details; a bare API-key connection still uses the isolated legacy adapter.
 bool usesDashboardRest(SavedConnection connection) {
   return connection.desktopGatewayUrl?.trim().isNotEmpty == true ||
       connection.dashboardProxied ||
@@ -59,8 +59,8 @@ HermesRestClient buildConnectionRestClient(
     );
   }
 
-  final client = dashboard ??
-      buildConnectionDashboard(connection, httpClient: httpClient);
+  final client =
+      dashboard ?? buildConnectionDashboard(connection, httpClient: httpClient);
   return DashboardRestClient(
     client,
     gatewayProfile: connection.gatewayProfile,

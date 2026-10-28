@@ -3353,6 +3353,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           sessionId: widget.session.id,
           effort: selection.reasoningEffort,
         );
+      } else if (usesDashboardRest(widget.connection)) {
+        _showAttachmentError(
+          context.l10n.desktop_gateway_is_not_configured_for_this_connection,
+        );
+        return;
       } else {
         // The API Server owns this session, so persist the same per-session
         // lock over :8642 instead of activating the Dashboard transport.

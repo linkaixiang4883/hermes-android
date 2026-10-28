@@ -779,137 +779,6 @@ class HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showApiKeyDialog(SavedConnection conn) {
-    final ctrl = TextEditingController(text: conn.apiKey);
-    bool validating = false;
-    String? error;
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: Text(context.l10n.update_api_key),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (error != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: Colors.red.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: Colors.red,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          error!,
-                          style: const TextStyle(
-                            color: Colors.red,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              TextField(
-                controller: ctrl,
-                decoration: InputDecoration(
-                  labelText: context.l10n.api_key,
-                  hintText: context.l10n.api_server_key_from_hermes_env,
-                ),
-                obscureText: true,
-                enabled: !validating,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: validating ? null : () => Navigator.pop(ctx),
-              child: Text(context.l10n.cancel),
-            ),
-            FilledButton(
-              onPressed: validating
-                  ? null
-                  : () async {
-                      final key = ctrl.text.trim();
-                      if (key.isEmpty) return;
-
-                      setDialogState(() {
-                        validating = true;
-                        error = null;
-                      });
-
-                      try {
-                        final baseUrl = conn.baseUrl;
-                        final client = ApiClient(
-                          baseUrl: baseUrl,
-                          apiKey: key,
-                          pathPrefix: conn.gatewayPrefix ?? '',
-                        );
-                        final result = await client.checkHealth();
-                        client.close();
-
-                        if (!ctx.mounted) return;
-
-                        if (result.isHealthy) {
-                          await widget.connManager.updateApiKey(conn.id, key);
-                          if (!ctx.mounted) return;
-                          await _closeDialogAndRefresh(ctx);
-                        } else {
-                          setDialogState(() {
-                            error = result.userMessage(apiKeyProvided: true);
-                            validating = false;
-                          });
-                        }
-                      } on CredentialStorageException {
-                        if (!ctx.mounted) return;
-                        setDialogState(() {
-                          error = context
-                              .l10n
-                              .the_api_key_could_not_be_stored_securely;
-                          validating = false;
-                        });
-                      } catch (_) {
-                        if (!ctx.mounted) return;
-                        setDialogState(() {
-                          error = context.l10n.cannot_reach(
-                            conn.host,
-                            conn.port,
-                          );
-                          validating = false;
-                        });
-                      }
-                    },
-              child: validating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : Text(context.l10n.save),
-            ),
-          ],
-        ),
-      ),
-    ).whenComplete(ctrl.dispose);
-  }
-
   void _showDashboardAuthDialog(SavedConnection conn) {
     final gatewayPrefixCtrl = TextEditingController(
       text: conn.gatewayPrefix ?? '',
@@ -1067,26 +936,6 @@ class HomeScreenState extends State<HomeScreen> {
                         error = null;
                       });
 
-                      if (gatewayPrefix != (conn.gatewayPrefix ?? '')) {
-                        final apiClient = ApiClient(
-                          baseUrl: conn.baseUrl,
-                          apiKey: conn.apiKey,
-                          pathPrefix: gatewayPrefix,
-                        );
-                        final result = await apiClient.checkHealth();
-                        apiClient.close();
-                        if (!ctx.mounted) return;
-                        if (!result.isHealthy) {
-                          setDialogState(() {
-                            error = result.userMessage(
-                              apiKeyProvided: conn.apiKey.isNotEmpty,
-                            );
-                            validating = false;
-                          });
-                          return;
-                        }
-                      }
-
                       final client = DashboardClient(
                         host: conn.host,
                         port: port ?? conn.dashboardPort,
@@ -1199,8 +1048,6 @@ class HomeScreenState extends State<HomeScreen> {
               }
             } else if (v == 'edit') {
               _showEditConnectionDialog(conn);
-            } else if (v == 'apikey') {
-              _showApiKeyDialog(conn);
             } else if (v == 'dashboard') {
               _showDashboardAuthDialog(conn);
             }
@@ -1209,10 +1056,6 @@ class HomeScreenState extends State<HomeScreen> {
             PopupMenuItem(
               value: 'edit',
               child: Text(context.l10n.edit_connection),
-            ),
-            PopupMenuItem(
-              value: 'apikey',
-              child: Text(context.l10n.update_api_key),
             ),
             PopupMenuItem(
               value: 'dashboard',
@@ -1512,120 +1355,14 @@ class _AddDialogState extends State<_AddDialog> {
         return;
       }
 
-      final baseUrl = SavedConnection(
-        id: '',
-        label: '',
-        host: normalized.host,
-        port: normalized.port,
-        apiKey: '',
-        useHttps: normalized.useHttps,
-      ).baseUrl;
-      if (apiKey.isEmpty) {
-        setState(() {
-          _error =
-              context.l10n
-                  .needs_a_reachable_hermes_dashboard_check_the_host_port_and;
-          _validating = false;
-          _showDashboard = true;
-        });
-        return;
-      }
-      final client = ApiClient(
-        baseUrl: baseUrl,
-        apiKey: apiKey,
-        pathPrefix: gatewayPrefix,
-      );
-      final result = await client.checkHealth();
-      client.close();
-
-      if (!mounted) return;
-
-      if (!result.isHealthy) {
-        setState(() {
-          _error = result.userMessage(apiKeyProvided: apiKey.isNotEmpty);
-          _validating = false;
-        });
-        return;
-      }
-
-      final dashPortText = _dashPort.text.trim();
-      final dashUser = _dashUser.text.trim();
-      final dashPass = _dashPass.text.trim();
-      final desktopGatewayUrl = _desktopGatewayUrl.text.trim();
-      final gatewayProfile = _gatewayProfile.text.trim();
-      if (gatewayProfile.contains('/') ||
-          gatewayProfile.contains(RegExp(r'\s'))) {
-        setState(() {
-          _error =
-              context.l10n.hermes_profile_must_be_a_plain_profile_name_such_as;
-          _validating = false;
-          _showDashboard = true;
-        });
-        return;
-      }
-      final dashPort = dashPortText.isEmpty ? null : int.tryParse(dashPortText);
-
-      // If the user supplied any dashboard details, validate them before saving
-      // (parity with the Dashboard Login dialog). The gateway is already known
-      // good at this point.
-      if (dashPortText.isNotEmpty ||
-          dashUser.isNotEmpty ||
-          dashPass.isNotEmpty ||
-          dashboardPrefix.isNotEmpty ||
-          _dashboardProxied) {
-        final dashClient = DashboardClient(
-          host: normalized.host,
-          port: SavedConnection(
-            id: '',
-            label: '',
-            host: normalized.host,
-            port: normalized.port,
-            apiKey: '',
-            useHttps: normalized.useHttps,
-            dashboardPortOverride: dashPort,
-          ).dashboardPort,
-          useHttps: normalized.useHttps,
-          pathPrefix: dashboardPrefix,
-          proxied: _dashboardProxied,
-          username: dashUser.isEmpty ? null : dashUser,
-          password: dashPass.isEmpty ? null : dashPass,
-        );
-        try {
-          await dashClient.apiGet(
-            'sessions',
-            queryParameters: {'limit': '1'},
-          );
-        } catch (_) {
-          dashClient.close();
-          if (!mounted) return;
-          setState(() {
-            _error = context
-                .l10n
-                .gateway_connected_but_the_dashboard_could_not_be_reached_or;
-            _validating = false;
-            _showDashboard = true;
-          });
-          return;
-        }
-        dashClient.close();
-        if (!mounted) return;
-      }
-
-      await widget.onSave(
-        label,
-        host,
-        port,
-        apiKey,
-        gatewayPrefix: gatewayPrefix,
-        dashboardPrefix: dashboardPrefix,
-        dashboardProxied: _dashboardProxied,
-        desktopGatewayUrl: desktopGatewayUrl,
-        dashboardPort: dashPort,
-        dashboardUsername: dashUser.isEmpty ? null : dashUser,
-        dashboardPassword: dashPass.isEmpty ? null : dashPass,
-        gatewayProfile: gatewayProfile.isEmpty ? null : gatewayProfile,
-      );
-      if (mounted) Navigator.pop(context);
+      setState(() {
+        _error =
+            context.l10n
+                .needs_a_reachable_hermes_dashboard_check_the_host_port_and;
+        _validating = false;
+        _showDashboard = true;
+      });
+      return;
     } on CredentialStorageException {
       if (!mounted) return;
       setState(() {

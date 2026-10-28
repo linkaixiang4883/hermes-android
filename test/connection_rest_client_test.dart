@@ -80,16 +80,14 @@ void main() {
     expect(seen.path, '/api/sessions');
   });
 
-  test('a legacy connection keeps the 8642 bearer path', () async {
+  test('a connection without a desktop URL still uses the dashboard origin', () async {
     late Uri seen;
-    late String? authorization;
     final client = buildConnectionRestClient(
-      _connection(),
+      _connection(apiKey: '', proxied: true),
       httpClient: MockClient((request) async {
         seen = request.url;
-        authorization = request.headers['Authorization'];
         return http.Response(
-          jsonEncode({'data': [], 'has_more': false}),
+          jsonEncode({'sessions': [], 'total': 0, 'storage': {}}),
           200,
         );
       }),
@@ -97,7 +95,7 @@ void main() {
 
     await client.getSessionsPage();
 
-    expect(seen.port, 8642);
-    expect(authorization, 'Bearer api-key');
+    expect(seen.port, 9119);
+    expect(seen.path, '/api/sessions');
   });
 }
