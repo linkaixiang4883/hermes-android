@@ -108,6 +108,16 @@ class MainActivity : FlutterActivity() {
                             val name = filename.substringAfterLast('/')
                             Thread {
                                 val saved = saveToDownloads(name, mimeType, bytes)
+                                    ?: if (installAfterSave &&
+                                        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                                    ) {
+                                        // API < 29 has no MediaStore.Downloads. For an
+                                        // APK the installer can still read the cache copy;
+                                        // do not silently fall through to the share sheet.
+                                        SavedDownload(name, "")
+                                    } else {
+                                        null
+                                    }
                                 Log.i(TAG, "saveToDownloads filename=$name saved=${saved?.filename} mime=$mimeType")
                                 var installIntent: Intent? = null
                                 var installStatus = "none"
