@@ -1,0 +1,31 @@
+# 换行符统一（消除跨平台 CRLF/LF 差异造成的无意义改动）
+# 规则：仓库内文本一律 LF；索引已全为 LF，本文件把规则显式化，
+# 使 clone / checkout / 跨平台 IDE 写入都不再产生换行符噪音。
+* text=auto eol=lf
+
+# Windows 侧脚本：cmd.exe 对 LF 的标签/goto 解析不可靠，强制 CRLF（当前仓库无此类文件，留作约束）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 二进制：禁止换行转换与文本 diff
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.ttf binary
+*.otf binary
+*.woff binary
+*.woff2 binary
+*.jar binary
+*.jks binary
+*.keystore binary
+*.so binary
+*.aar binary
+*.zip binary
+*.apk binary
+
+# gen-l10n 生成物：非人工编辑，避免 review 噪音
+lib/l10n/app_localizations*.dart linguist-generated=true

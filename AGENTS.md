@@ -229,6 +229,29 @@
 - **处置**：**升级服务端**（`hermes update` + 重启；需 ≥ 含 `88039d73b3` 的构建 = 2026-09-27 之后）。客户端侧**不要**为旧服务端裁剪 resume 参数（服务端是唯一演进方，裁剪 = 永久分叉）
 - **通用教训**：严格契约（§2）下"新客户端 + 旧服务端"会硬失败；`Extra inputs are not permitted` + "out of sync" 提示 = **升级服务端**的标准信号
 
+## 分支工作流（main 镜像 → V2-dev 开发 → squash 进 V2）· 红线
+
+三条线各司其职，**没有"在 main 上开发"这回事**：
+
+| 分支 | 角色 | 推送 | 写入规则 |
+|---|---|---|---|
+| `main` | **上游镜像**（= rusty4444/main） | fork/main 仅作镜像 | **只允许快进**：`git switch main && git merge --ff-only upstream/main`；禁止手改、禁止在其上开发 |
+| `V2` | **我们的稳定版**（2.x overlay 全部在此线） | **推 `fork/V2`（备份）** | 只接受 `V2-dev` 的 squash，历史线性；**未经用户许可不得提交/合并/推送** |
+| `V2-dev` | **2.x 开发分支** | **永不推远端** | 日常提交，WIP 不限；每功能一条提交，便于单包回滚 |
+
+**一次功能的标准动作**
+
+1. `git switch V2-dev` → 改代码 → `flutter gen-l10n`（改 ARB 时）→ `flutter analyze --no-pub --fatal-infos`（0）→ `flutter test --no-pub`（全绿且计数 ≥ 基线）
+2. 报告用户，**取得许可**
+3. `git switch V2` → `git merge --squash V2-dev` → 一条功能级 commit → `git push fork V2`
+4. `git switch V2-dev && git reset --hard V2` 回到同一基点（第 3 步前先验 `git diff V2 V2-dev` 为空）
+
+**版本号**：只以 tag 标记，且**只在合入 `V2` 之后**打（`git tag v2.x.y` → `git push fork V2 --tags`）；开发过程不打 tag。`pre-*` 这类本地检查点 tag 不算版本标记，不推送。
+
+**换行符**：根 `.gitattributes` 统一（`* text=auto eol=lf`；二进制 `binary`；`*.bat/*.cmd/*.ps1` 强制 CRLF）。改换行策略前先 `git ls-files --eol` 看索引侧 `i/` 列，禁止制造跨平台无意义 diff。
+
+**上游跟进纪律**：v2.1.20+ 起**不整条 merge 上游**。`main` 只做对照镜像。若决定跟进 v3.x（UI 基线迁移），另开 `V3-dev` **以 upstream 为基重建 overlay**，`V2` 保留为可回退的稳定线——三条线之外不新增分支名。
+
 ## 拉取上游 / Merge 流程
 
 ```bash
@@ -247,7 +270,7 @@ git merge upstream/main
 
 - l10n 目录（`l10n.yaml`、`lib/l10n/*.arb`、生成文件、`test/support/l10n_test_utils.dart`）自 v2.1.12 起**必然冲突**（两侧同路径）——统一 **take-upstream 为基**，再把 keep-list 文案以**新增 key** 并入 en/zh/zh_Hans（带参必须 @metadata）
 - 冲突集中在屏幕/组件文件的"英文串 vs l10n 调用"区域；上游大改版时按 **§4 的 take-upstream + 重打 overlay 打法**（含括号配平扫描、ARB 字典回填、新串扫描）
-- merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
+- merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照；**本地检查点、不推送、不是版本 tag**）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
 - CI 另有 versionCode 门禁（当前要求 base=**2152**，`pubspec.yaml` 的 `2.1.12+2152` 别动；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）
