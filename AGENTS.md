@@ -52,7 +52,7 @@
 
 **已知未尽**：overlay 新增 key（原有 8 条 + 本次更新/密度 18 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1575**（2026-11-07 更新检查 + 紧凑密度移植后；此前 1508）。
-**真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk` SHA-256 `cbb667ab028f05597e0930eca6378670ce4114cf4812f7fb431da210c8ad8729`。
+**真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `eb7a9a52799eccd9746eadf1cdaee14d5a61128e83392010ceb18431e4e991db`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
 
