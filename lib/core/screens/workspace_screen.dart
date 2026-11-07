@@ -19,6 +19,7 @@ import '../models/attachment_draft.dart';
 import '../models/hermes_project.dart';
 import '../models/projects_tree_overview.dart';
 import '../services/android_share_intent_service.dart';
+import '../services/app_update_service.dart';
 import '../services/attachment_draft_service.dart';
 import '../services/chat_space_store.dart';
 import '../services/chat_visibility.dart';
@@ -40,6 +41,7 @@ import '../services/remote_files_client.dart';
 import '../services/turn_completion_notifier.dart';
 import '../services/turn_notification_service.dart';
 import '../services/shared_attachment_preparer.dart';
+import '../widgets/update_available_dialog.dart';
 import '../theme/hermes_theme.dart';
 import '../models/pending_prompt.dart';
 import '../utils/activity_feed.dart';
@@ -205,6 +207,11 @@ class WorkspaceScreen extends StatefulWidget {
   /// shortcut. The value is consumed by the caller before this screen opens.
   final bool initialQuickChat;
 
+  /// Test seams for the launch-time update prompt. Production leaves both
+  /// null and uses the real service/package info.
+  final AppUpdateService? updateService;
+  final Future<String?> Function()? installedVersionLoader;
+
   /// Converts native-cached shared files into validated composer drafts.
   final SharedAttachmentPreparer? sharedAttachmentPreparer;
 
@@ -229,6 +236,8 @@ class WorkspaceScreen extends StatefulWidget {
     this.initialSharedText,
     this.initialSharedPayload,
     this.initialQuickChat = false,
+    this.updateService,
+    this.installedVersionLoader,
     this.sharedAttachmentPreparer,
     this.onOpenDashboard,
     this.sessionsRefreshInterval,
@@ -689,6 +698,31 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) unawaited(_startQuickChat());
       });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_promptForUpdateOnLaunch());
+      });
+    }
+  }
+
+  /// Advisory only: a launch must never be delayed or blocked by this check.
+  Future<void> _promptForUpdateOnLaunch() async {
+    try {
+      final service = widget.updateService ?? AppUpdateService();
+      final current =
+          await (widget.installedVersionLoader ?? installedAppVersion)();
+      if (current == null || !mounted) return;
+      final release = await service.launchPromptRelease(
+        currentVersion: current,
+      );
+      if (release == null || !mounted) return;
+      if (ModalRoute.of(context)?.isCurrent != true) return;
+      final action = await showUpdateAvailableDialog(context, release: release);
+      if (action == UpdatePromptAction.skipVersion) {
+        await service.skipVersion(release.version);
+      }
+    } catch (_) {
+      // Offline, malformed feed, no browser: the launch stays untouched.
     }
   }
 

@@ -58,3 +58,7 @@ key.properties
 graphify-out/cache/
 graphify-out/.graphify_root
 mutation-test-report/
+
+# Hermes agent local artifacts (plans, review evidence, session scratch)
+.hermes/
+review-evidence/

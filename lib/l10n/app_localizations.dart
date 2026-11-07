@@ -4430,6 +4430,115 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This approval is no longer active.'**
   String get approval_no_longer_active;
+
+  /// No description provided for @update_available.
+  ///
+  /// In en, this message translates to:
+  /// **'Update available'**
+  String get update_available;
+
+  /// No description provided for @a_newer_hermes_android_build_is_available_on_github.
+  ///
+  /// In en, this message translates to:
+  /// **'A newer Hermes Android build is available on GitHub.'**
+  String get a_newer_hermes_android_build_is_available_on_github;
+
+  /// No description provided for @release_notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Release notes'**
+  String get release_notes;
+
+  /// No description provided for @view_release.
+  ///
+  /// In en, this message translates to:
+  /// **'View release'**
+  String get view_release;
+
+  /// No description provided for @skip_this_version.
+  ///
+  /// In en, this message translates to:
+  /// **'Skip this version'**
+  String get skip_this_version;
+
+  /// No description provided for @later.
+  ///
+  /// In en, this message translates to:
+  /// **'Later'**
+  String get later;
+
+  /// No description provided for @check_for_updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates'**
+  String get check_for_updates;
+
+  /// No description provided for @check_for_updates_on_launch.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates on launch'**
+  String get check_for_updates_on_launch;
+
+  /// No description provided for @you_re_on_the_latest_version.
+  ///
+  /// In en, this message translates to:
+  /// **'You’re on the latest version.'**
+  String get you_re_on_the_latest_version;
+
+  /// No description provided for @couldn_t_check_for_updates.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn’t check for updates.'**
+  String get couldn_t_check_for_updates;
+
+  /// No description provided for @chat_density.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat density'**
+  String get chat_density;
+
+  /// No description provided for @chat_density_2.
+  ///
+  /// In en, this message translates to:
+  /// **'Chat density: {label}'**
+  String chat_density_2(String label);
+
+  /// No description provided for @chat_density_comfortable.
+  ///
+  /// In en, this message translates to:
+  /// **'Comfortable'**
+  String get chat_density_comfortable;
+
+  /// No description provided for @chat_density_compact.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get chat_density_compact;
+
+  /// No description provided for @chat_density_comfortable_description.
+  ///
+  /// In en, this message translates to:
+  /// **'Roomier bubbles with a sender label above each message.'**
+  String get chat_density_comfortable_description;
+
+  /// No description provided for @chat_density_compact_description.
+  ///
+  /// In en, this message translates to:
+  /// **'Tighter, unlabelled bubbles so more messages fit on screen.'**
+  String get chat_density_compact_description;
+
+  /// No description provided for @chat_density_label_description.
+  ///
+  /// In en, this message translates to:
+  /// **'{label} — {description}'**
+  String chat_density_label_description(String label, String description);
+
+  /// No description provided for @compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact removes the You and Hermes labels and trims bubble padding, spacing, and side margins.'**
+  String
+  get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins;
 }
 
 class _AppLocalizationsDelegate

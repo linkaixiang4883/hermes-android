@@ -3,6 +3,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config_backup.dart';
+import 'app_update_service.dart';
+import 'chat_density_preference.dart';
 import 'connection_manager.dart';
 import 'local_chat_pin_store.dart';
 
@@ -57,6 +59,9 @@ class ConfigBackupService {
     'voice_name',
     'voice_locale',
     'app_text_size_preference',
+    AppUpdateService.checkOnLaunchKey,
+    AppUpdateService.skippedVersionKey,
+    ChatDensity.preferenceKey,
   };
 
   /// Prefixes for per-connection and per-chat preferences, which are keyed by
@@ -167,6 +172,10 @@ class ConfigBackupService {
       }
       applied++;
     }
+
+    // A restored density must reach a chat that is already mounted; writing the
+    // preference alone only affects the next ChatScreen construction.
+    ChatDensityStore(_preferences).read();
 
     return ConfigImportResult(
       connectionsAdded: added,

@@ -4,6 +4,26 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [2.1.33] - 2026-11-07
+
+Version aligned with upstream 2.1.33 (build 2176) for the fork's next stable
+release. This is a fork overlay release, not a wholesale merge of the upstream
+2.1.20–2.1.33 feature set.
+
+### Added
+
+- Fork release update check: launch-time prompt (throttled, skippable), manual
+  check in Settings → About, and an opt-out for launch checks. The feed points
+  at this fork, never at the stock upstream v3 stream.
+- Compact chat density: a Settings → Appearance choice that removes the visible
+  You/Hermes labels, tightens bubble geometry, and keeps the speaker in the
+  accessibility tree. The preference is included in configuration backups.
+
+### Changed
+
+- Version and F-Droid ABI version-code base aligned with upstream 2.1.33
+  (`2.1.33+2176`; arm64 effective code `21762`).
+
 ## [2.1.19] - 2026-10-12
 
 ### Added

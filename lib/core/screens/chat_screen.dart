@@ -15,6 +15,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../controllers/voice_composer_controller.dart';
 import '../services/chat_visibility.dart';
+import '../services/chat_density_preference.dart';
 import '../services/connection_manager.dart';
 import '../services/connection_rest_client.dart';
 import '../services/attachment_draft_service.dart';
@@ -519,6 +520,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   bool _loading = true;
   String? _error;
 
+  /// Current bubble density. The settings card broadcasts changes so a chat
+  /// that is already mounted re-lays out immediately.
+  ChatDensity _chatDensity = chatDensitySelection.value;
+
   /// Effective YOLO state of this chat (approvals skipped). Null until the
   /// gateway's attach payload reports it; the app-bar button stays hidden then.
   bool _yoloEnabled = false;
@@ -908,6 +913,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     unawaited(_refreshProjectName());
     unawaited(_initializeChat());
     _loadVerboseMode();
+    _loadChatDensity();
+    chatDensitySelection.addListener(_onChatDensityChanged);
     _initVoice();
     _recoverLostImage();
     _scrollController.addListener(_onScroll);
@@ -989,9 +996,23 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => _verboseMode = prefs.getBool('verbose_mode') ?? false);
   }
 
+  Future<void> _loadChatDensity() async {
+    final prefs = await SharedPreferences.getInstance();
+    final density = ChatDensityStore(prefs).read();
+    if (!mounted || density == _chatDensity) return;
+    setState(() => _chatDensity = density);
+  }
+
+  void _onChatDensityChanged() {
+    final density = chatDensitySelection.value;
+    if (!mounted || density == _chatDensity) return;
+    setState(() => _chatDensity = density);
+  }
+
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    chatDensitySelection.removeListener(_onChatDensityChanged);
     _projectNameRefreshGeneration += 1;
     pendingNotificationApprovals.removeListener(
       _consumePendingNotificationApproval,
@@ -5920,7 +5941,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         onNotification: _handleScrollNotification,
         child: ListView.builder(
           controller: _scrollController,
-          padding: const EdgeInsets.only(bottom: 4),
+          padding: EdgeInsets.only(bottom: _chatDensity.listEndPadding),
           itemCount: displayMessages.length,
           itemBuilder: (context, index) {
             final item = displayMessages[index];
@@ -5959,6 +5980,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               content: content,
               isUser: isUser,
               verbose: _verboseMode,
+              density: _chatDensity,
               metadata: msg,
               mediaReferencesFinal: msg['_gateway_pending_response'] != true,
               mediaFilesClient: isUser
@@ -6009,6 +6031,7 @@ class MessageBubble extends StatelessWidget {
   final String content;
   final bool isUser;
   final bool verbose;
+  final ChatDensity density;
   final Map<String, dynamic> metadata;
   final Future<void> Function()? onReadAloud;
   final VoidCallback? onEdit;
@@ -6026,6 +6049,7 @@ class MessageBubble extends StatelessWidget {
     required this.content,
     required this.isUser,
     this.verbose = false,
+    this.density = ChatDensity.comfortable,
     this.metadata = const {},
     this.onReadAloud,
     this.onEdit,
@@ -6382,33 +6406,36 @@ class MessageBubble extends StatelessWidget {
       onLongPress: () => _showActions(context),
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        margin: density.bubbleMargin,
         constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width - 80,
+          maxWidth: MediaQuery.of(context).size.width - density.maxWidthInset,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: density.bubblePadding,
         decoration: BoxDecoration(
           color: isUser ? userBubbleColor : assistantBubbleColor,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(density.bubbleRadius),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             // Role header keeps user and assistant prose clearly separated.
-            Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                isUser ? 'You' : 'Hermes',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: isUser
-                      ? hermesUserMessageForeground.withValues(alpha: 0.75)
-                      : theme.colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.4,
+            // Compact drops it: alignment and colour already identify the
+            // speaker, and the label costs a line per message.
+            if (density.showsSenderLabel)
+              Padding(
+                padding: EdgeInsets.only(bottom: density.senderLabelGap),
+                child: Text(
+                  isUser ? 'You' : 'Hermes',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isUser
+                        ? hermesUserMessageForeground.withValues(alpha: 0.75)
+                        : theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.4,
+                  ),
                 ),
               ),
-            ),
             // Verbose metadata header
             if (metaLines.isNotEmpty) ...[
               Container(
@@ -6448,7 +6475,7 @@ class MessageBubble extends StatelessWidget {
             // MEDIA: — the contract is assistant-side delivery, and quoted
             // tags in a prompt must stay verbatim.
             ..._renderContent(theme, isUser, assistantTextColor),
-            const SizedBox(height: 4),
+            SizedBox(height: density.bodyBottomGap),
           ],
         ),
       ),
@@ -6456,7 +6483,15 @@ class MessageBubble extends StatelessWidget {
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
-      child: bubble,
+      // Compact drops the visible label, but the speaker is still information:
+      // keep it for screen readers instead of removing it from the tree.
+      child: density.showsSenderLabel
+          ? bubble
+          : Semantics(
+              container: true,
+              label: isUser ? 'You' : 'Hermes',
+              child: bubble,
+            ),
     );
   }
 }

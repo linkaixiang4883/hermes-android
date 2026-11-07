@@ -2624,4 +2624,67 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get approval_no_longer_active => 'This approval is no longer active.';
+
+  @override
+  String get update_available => 'Update available';
+
+  @override
+  String get a_newer_hermes_android_build_is_available_on_github =>
+      'A newer Hermes Android build is available on GitHub.';
+
+  @override
+  String get release_notes => 'Release notes';
+
+  @override
+  String get view_release => 'View release';
+
+  @override
+  String get skip_this_version => 'Skip this version';
+
+  @override
+  String get later => 'Later';
+
+  @override
+  String get check_for_updates => 'Check for updates';
+
+  @override
+  String get check_for_updates_on_launch => 'Check for updates on launch';
+
+  @override
+  String get you_re_on_the_latest_version => 'You’re on the latest version.';
+
+  @override
+  String get couldn_t_check_for_updates => 'Couldn’t check for updates.';
+
+  @override
+  String get chat_density => 'Chat density';
+
+  @override
+  String chat_density_2(String label) {
+    return 'Chat density: $label';
+  }
+
+  @override
+  String get chat_density_comfortable => 'Comfortable';
+
+  @override
+  String get chat_density_compact => 'Compact';
+
+  @override
+  String get chat_density_comfortable_description =>
+      'Roomier bubbles with a sender label above each message.';
+
+  @override
+  String get chat_density_compact_description =>
+      'Tighter, unlabelled bubbles so more messages fit on screen.';
+
+  @override
+  String chat_density_label_description(String label, String description) {
+    return '$label — $description';
+  }
+
+  @override
+  String
+  get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
+      'Compact removes the You and Hermes labels and trims bubble padding, spacing, and side margins.';
 }

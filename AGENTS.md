@@ -47,9 +47,12 @@
 | MEDIA 卡保存到下载 + APK 安装/通知（App 侧） | `media_artifact_card`（下载按钮/非图片行点按 = 保存）+ `media_download_saver`（channel `.../downloads`，返回 `{filename, install}`）+ `isAndroidPackageFile`（`media_tags`）+ `MainActivity`（MediaStore API 29+；APK = cache 副本 + FileProvider 起系统安装器，**未授权时打开"安装未知应用"设置页**；原生通知 `hermes_media_downloads`，APK 通知带"安装"动作；日志 tag `HermesDownloads`）+ FileProvider/`REQUEST_INSTALL_PACKAGES` + `test/media_artifact_card_test`/`media_tags_test`（+5） | 上游卡只"下载→分享面板"（`d4e13bc`→`fcef7ce`→`c8a0547`）；文件落系统 Downloads 并发完成通知；**APK 存完即弹安装、未授权先开设置页、通知内可再点安装**；通知权限仅 Android 13+（首次保存时请求）；<29 回退分享；细节见技能 `pc-to-phone-media-delivery.md` 新增节 |
 | YOLO 模式按钮（会话内） | `chat_screen`（AppBar `chat-yolo-button`、确认框 `yolo-confirm`、顶部 `yolo-banner`、`_toggleYolo`）+ `desktop_gateway_client.setSessionYolo`/`sessionYoloFor`（状态取自 resume 的 `info.yolo`）+ `ws_client.setSessionYolo`（`config.set{key:'yolo',value:'on'/'off',scope:'session'}`）+ 7 l10n key + `test/chat_yolo_test.dart`（+2）/`desktop_gateway_cwd_binding_test`（+1） | 服务端 `_set_yolo`：session scope 只翻本会话；返回值是**服务端 OR 结果**（`approvals.mode=off` 或 `_YOLO_MODE_FROZEN` 也会显示 on，session 关不掉全局）；桌面 Shift+Tab 同语义 |
 | 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
+| 更新检查（参考上游 2.1.20） | `app_update_service.dart`（GitHub release 服务、12h 节流/ETag/skip/later）+ `update_available_dialog.dart` + `settings_screen` 的 About 卡（手动检查/启动开关/错误态仍可达）+ `workspace_screen` 普通启动提示 + `config_backup_service` 两项偏好 + 10 个 l10n key + `test/{app_update_service,update_available_dialog,settings_update_controls,workspace_update_prompt}_test.dart` | **更新源只指 fork `linkaixiang4883/hermes-android`**，不指 `rusty4444`（否则会引导装 stock v3.2.5）；启动/分享/Quick Chat 分流；`Later` 不写 skip，`Skip` 按版本压；上游代码只作行为参考，服务/测试用我们自己的依赖注入与 dashboard-only 连接 |
+| 紧凑聊天密度（参考上游 2.1.22） | `chat_density_preference.dart`（`ChatDensity`/`ChatDensityStore`/`chatDensitySelection`）+ `chat_density_settings_card.dart` + `settings_screen` 外观节 + `chat_screen`（state/监听/列表 padding/`MessageBubble.density`）+ `config_backup_service` + 8 个 l10n key + `test/chat_density_*`（+22） | 默认 `comfortable` 与现有布局逐像素一致；`compact` 只改气泡 margin/padding/radius/maxWidth/标签和列表底部 padding，**不动 live-follow/内容/MEDIA/长按**；紧凑仍用 `Semantics` 保留发送者；`listEndPadding` 属于 `ChatScreen` 的 ListView，不是气泡 |
 
-**已知未尽**：我们 8 条 key 仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1508**（2026-10-28 Q1 仪表盘直连校验后；此前 1507=REST 分流）。
+**已知未尽**：overlay 新增 key（原有 8 条 + 本次更新/密度 18 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1575**（2026-11-07 更新检查 + 紧凑密度移植后；此前 1508）。
+**真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk` SHA-256 `cbb667ab028f05597e0930eca6378670ce4114cf4812f7fb431da210c8ad8729`。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
 
@@ -250,7 +253,7 @@
 
 **换行符**：根 `.gitattributes` 统一（`* text=auto eol=lf`；二进制 `binary`；`*.bat/*.cmd/*.ps1` 强制 CRLF）。改换行策略前先 `git ls-files --eol` 看索引侧 `i/` 列，禁止制造跨平台无意义 diff。
 
-**上游跟进纪律**：v2.1.20+ 起**不整条 merge 上游**。`main` 只做对照镜像。若决定跟进 v3.x（UI 基线迁移），另开 `V3-dev` **以 upstream 为基重建 overlay**，`V2` 保留为可回退的稳定线——三条线之外不新增分支名。
+**上游跟进纪律**：v2.1.20+ 起**不整条 merge 上游**。`main` 只做对照镜像。若决定跟进 v3.x（UI 基线迁移），另开 `V3-dev` **以 upstream 为基重建 overlay**，`V2` 保留为可回退的稳定线——三条线之外只允许 `V3-dev`（v3 迁移专用），其余分支名（含 `develop`）不再新建。
 
 ## 拉取上游 / Merge 流程
 
@@ -273,7 +276,7 @@ git merge upstream/main
 - merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照；**本地检查点、不推送、不是版本 tag**）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（当前要求 base=**2152**，`pubspec.yaml` 的 `2.1.12+2152` 别动；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）
+- CI 另有 versionCode 门禁（**当前要求 base=2176**，`pubspec.yaml` 的 `2.1.33+2176` 别动；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152 属 2.1.12 历史窗口，勿照抄
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）

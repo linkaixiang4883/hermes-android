@@ -2530,6 +2530,67 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get approval_no_longer_active => '该审批已失效。';
+
+  @override
+  String get update_available => '有可用更新';
+
+  @override
+  String get a_newer_hermes_android_build_is_available_on_github =>
+      'GitHub 上有更新的 Hermes Android 版本。';
+
+  @override
+  String get release_notes => '更新说明';
+
+  @override
+  String get view_release => '查看发布';
+
+  @override
+  String get skip_this_version => '跳过此版本';
+
+  @override
+  String get later => '稍后';
+
+  @override
+  String get check_for_updates => '检查更新';
+
+  @override
+  String get check_for_updates_on_launch => '启动时检查更新';
+
+  @override
+  String get you_re_on_the_latest_version => '已是最新版本。';
+
+  @override
+  String get couldn_t_check_for_updates => '无法检查更新。';
+
+  @override
+  String get chat_density => '聊天密度';
+
+  @override
+  String chat_density_2(String label) {
+    return '聊天密度：$label';
+  }
+
+  @override
+  String get chat_density_comfortable => '舒适';
+
+  @override
+  String get chat_density_compact => '紧凑';
+
+  @override
+  String get chat_density_comfortable_description => '气泡更宽松，每条消息上方显示发送者标签。';
+
+  @override
+  String get chat_density_compact_description => '气泡更紧凑、不显示发送者标签，一屏能放更多消息。';
+
+  @override
+  String chat_density_label_description(String label, String description) {
+    return '$label — $description';
+  }
+
+  @override
+  String
+  get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
+      '紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5058,4 +5119,65 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get approval_no_longer_active => '该审批已失效。';
+
+  @override
+  String get update_available => '有可用更新';
+
+  @override
+  String get a_newer_hermes_android_build_is_available_on_github =>
+      'GitHub 上有更新的 Hermes Android 版本。';
+
+  @override
+  String get release_notes => '更新说明';
+
+  @override
+  String get view_release => '查看发布';
+
+  @override
+  String get skip_this_version => '跳过此版本';
+
+  @override
+  String get later => '稍后';
+
+  @override
+  String get check_for_updates => '检查更新';
+
+  @override
+  String get check_for_updates_on_launch => '启动时检查更新';
+
+  @override
+  String get you_re_on_the_latest_version => '已是最新版本。';
+
+  @override
+  String get couldn_t_check_for_updates => '无法检查更新。';
+
+  @override
+  String get chat_density => '聊天密度';
+
+  @override
+  String chat_density_2(String label) {
+    return '聊天密度：$label';
+  }
+
+  @override
+  String get chat_density_comfortable => '舒适';
+
+  @override
+  String get chat_density_compact => '紧凑';
+
+  @override
+  String get chat_density_comfortable_description => '气泡更宽松，每条消息上方显示发送者标签。';
+
+  @override
+  String get chat_density_compact_description => '气泡更紧凑、不显示发送者标签，一屏能放更多消息。';
+
+  @override
+  String chat_density_label_description(String label, String description) {
+    return '$label — $description';
+  }
+
+  @override
+  String
+  get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
+      '紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。';
 }
