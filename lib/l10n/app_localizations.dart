@@ -4539,6 +4539,72 @@ abstract class AppLocalizations {
   /// **'Compact removes the You and Hermes labels and trims bubble padding, spacing, and side margins.'**
   String
   get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins;
+
+  /// No description provided for @theme_palette.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour theme'**
+  String get theme_palette;
+
+  /// No description provided for @theme_palette_gold.
+  ///
+  /// In en, this message translates to:
+  /// **'Gold'**
+  String get theme_palette_gold;
+
+  /// No description provided for @theme_palette_purple.
+  ///
+  /// In en, this message translates to:
+  /// **'Purple'**
+  String get theme_palette_purple;
+
+  /// No description provided for @theme_palette_orange.
+  ///
+  /// In en, this message translates to:
+  /// **'Orange'**
+  String get theme_palette_orange;
+
+  /// No description provided for @theme_palette_green.
+  ///
+  /// In en, this message translates to:
+  /// **'Green'**
+  String get theme_palette_green;
+
+  /// No description provided for @theme_palette_blue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get theme_palette_blue;
+
+  /// No description provided for @theme_palette_red.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get theme_palette_red;
+
+  /// No description provided for @theme_palette_teal.
+  ///
+  /// In en, this message translates to:
+  /// **'Teal'**
+  String get theme_palette_teal;
+
+  /// No description provided for @theme_palette_pink.
+  ///
+  /// In en, this message translates to:
+  /// **'Pink'**
+  String get theme_palette_pink;
+
+  /// No description provided for @theme_palette_indigo.
+  ///
+  /// In en, this message translates to:
+  /// **'Indigo'**
+  String get theme_palette_indigo;
+
+  /// No description provided for @theme_palette_cyan.
+  ///
+  /// In en, this message translates to:
+  /// **'Cyan'**
+  String get theme_palette_cyan;
 }
 
 class _AppLocalizationsDelegate

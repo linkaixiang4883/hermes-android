@@ -2619,4 +2619,37 @@ class AppLocalizationsJa extends AppLocalizations {
   String
   get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
       'Compact removes the You and Hermes labels and trims bubble padding, spacing, and side margins.';
+
+  @override
+  String get theme_palette => 'Colour theme';
+
+  @override
+  String get theme_palette_gold => 'Gold';
+
+  @override
+  String get theme_palette_purple => 'Purple';
+
+  @override
+  String get theme_palette_orange => 'Orange';
+
+  @override
+  String get theme_palette_green => 'Green';
+
+  @override
+  String get theme_palette_blue => 'Blue';
+
+  @override
+  String get theme_palette_red => 'Red';
+
+  @override
+  String get theme_palette_teal => 'Teal';
+
+  @override
+  String get theme_palette_pink => 'Pink';
+
+  @override
+  String get theme_palette_indigo => 'Indigo';
+
+  @override
+  String get theme_palette_cyan => 'Cyan';
 }

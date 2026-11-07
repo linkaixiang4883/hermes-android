@@ -16,6 +16,7 @@ import 'core/services/gateway_turn_application_controller.dart';
 import 'core/services/local_chat_pin_store.dart';
 import 'core/services/notification_prefs.dart';
 import 'core/services/text_size_preference.dart';
+import 'core/services/theme_preference.dart';
 import 'core/services/turn_notification_service.dart';
 import 'core/screens/chat_screen.dart';
 import 'core/screens/workspace_screen.dart';
@@ -430,17 +431,25 @@ class HermesAppState extends State<HermesApp> {
     if (mounted) setState(() {});
   }
 
+  /// Rebuild the MaterialApp after the palette or brightness is saved without
+  /// replacing any route (Settings stays open and chat drafts are untouched).
+  void refreshAppearancePreferences() {
+    if (mounted) setState(() {});
+  }
+
   @override
   Widget build(BuildContext context) {
+    final appearance = ThemePreferenceStore(widget.connManager.prefs);
+    final palette = appearance.readPalette();
     return MaterialApp(
       navigatorKey: _navigatorKey,
       onGenerateTitle: (context) => context.l10n.hermes_agent,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: preferredSupportedLocales(),
       localeListResolutionCallback: resolvePreferredLocale,
-      themeMode: HermesApp.getThemeMode(widget.connManager.prefs),
-      theme: hermesTheme(Brightness.light),
-      darkTheme: hermesTheme(Brightness.dark),
+      themeMode: appearance.readMode(),
+      theme: hermesTheme(Brightness.light, palette: palette),
+      darkTheme: hermesTheme(Brightness.dark, palette: palette),
       builder: (context, child) {
         final systemMediaQuery = MediaQuery.of(context);
         final preference = HermesApp.getTextSizePreference(

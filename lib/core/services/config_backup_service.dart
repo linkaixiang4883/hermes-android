@@ -7,6 +7,7 @@ import 'app_update_service.dart';
 import 'chat_density_preference.dart';
 import 'connection_manager.dart';
 import 'local_chat_pin_store.dart';
+import 'theme_preference.dart';
 
 /// How an imported backup is applied to the connections already on the device.
 enum ConfigImportMode {
@@ -62,6 +63,7 @@ class ConfigBackupService {
     AppUpdateService.checkOnLaunchKey,
     AppUpdateService.skippedVersionKey,
     ChatDensity.preferenceKey,
+    ThemePreferenceStore.paletteKey,
   };
 
   /// Prefixes for per-connection and per-chat preferences, which are keyed by

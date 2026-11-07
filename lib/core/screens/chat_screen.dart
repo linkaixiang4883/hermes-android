@@ -5684,9 +5684,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           ).colorScheme.surfaceContainerHighest,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Semantics(
-                          label: context.l10n.attachment_drafts,
-                          child: ConstrainedBox(
+                        child: Material(
+                          type: MaterialType.transparency,
+                          child: Semantics(
+                            label: context.l10n.attachment_drafts,
+                            child: ConstrainedBox(
                             constraints: BoxConstraints(
                               // Scaffold has already subtracted the keyboard and app bar.
                               maxHeight: availableHeight * 0.32,
@@ -5715,6 +5717,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       _attachmentDrafts[index],
                                     ),
                                   ),
+                              ),
                             ),
                           ),
                         ),

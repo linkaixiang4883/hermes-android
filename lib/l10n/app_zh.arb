@@ -733,5 +733,16 @@
   "chat_density_comfortable_description": "气泡更宽松，每条消息上方显示发送者标签。",
   "chat_density_compact_description": "气泡更紧凑、不显示发送者标签，一屏能放更多消息。",
   "chat_density_label_description": "{label} — {description}",
-  "compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins": "紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。"
+  "compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins": "紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。",
+  "theme_palette": "颜色主题",
+  "theme_palette_gold": "金色",
+  "theme_palette_purple": "紫色",
+  "theme_palette_orange": "橙色",
+  "theme_palette_green": "绿色",
+  "theme_palette_blue": "蓝色",
+  "theme_palette_red": "红色",
+  "theme_palette_teal": "青绿色",
+  "theme_palette_pink": "粉色",
+  "theme_palette_indigo": "靛蓝色",
+  "theme_palette_cyan": "青色"
 }

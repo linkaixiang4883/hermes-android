@@ -2591,6 +2591,39 @@ class AppLocalizationsZh extends AppLocalizations {
   String
   get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
       '紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。';
+
+  @override
+  String get theme_palette => '颜色主题';
+
+  @override
+  String get theme_palette_gold => '金色';
+
+  @override
+  String get theme_palette_purple => '紫色';
+
+  @override
+  String get theme_palette_orange => '橙色';
+
+  @override
+  String get theme_palette_green => '绿色';
+
+  @override
+  String get theme_palette_blue => '蓝色';
+
+  @override
+  String get theme_palette_red => '红色';
+
+  @override
+  String get theme_palette_teal => '青绿色';
+
+  @override
+  String get theme_palette_pink => '粉色';
+
+  @override
+  String get theme_palette_indigo => '靛蓝色';
+
+  @override
+  String get theme_palette_cyan => '青色';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5180,4 +5213,37 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String
   get compact_removes_the_you_and_hermes_labels_and_trims_bubble_padding_spacing_and_side_margins =>
       '紧凑模式会隐藏 You 和 Hermes 标签，并收紧气泡内边距、间距和两侧留白。';
+
+  @override
+  String get theme_palette => '颜色主题';
+
+  @override
+  String get theme_palette_gold => '金色';
+
+  @override
+  String get theme_palette_purple => '紫色';
+
+  @override
+  String get theme_palette_orange => '橙色';
+
+  @override
+  String get theme_palette_green => '绿色';
+
+  @override
+  String get theme_palette_blue => '蓝色';
+
+  @override
+  String get theme_palette_red => '红色';
+
+  @override
+  String get theme_palette_teal => '青绿色';
+
+  @override
+  String get theme_palette_pink => '粉色';
+
+  @override
+  String get theme_palette_indigo => '靛蓝色';
+
+  @override
+  String get theme_palette_cyan => '青色';
 }

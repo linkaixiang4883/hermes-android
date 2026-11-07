@@ -13,6 +13,7 @@ import '../services/notification_prefs.dart';
 import '../services/turn_notification_service.dart';
 import '../widgets/config_backup_card.dart';
 import '../widgets/chat_density_settings_card.dart';
+import '../widgets/theme_palette_picker.dart';
 import '../widgets/update_available_dialog.dart';
 import '../widgets/text_size_settings_card.dart';
 import '../../main.dart';
@@ -373,7 +374,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         // ---- Section: Theme ----
         _buildSectionHeader(context.l10n.appearance),
-        _ThemeToggle(),
+        ThemeAppearanceSettings(
+          preferences: context
+              .findAncestorStateOfType<HermesAppState>()!
+              .widget
+              .connManager
+              .prefs,
+          onChanged: () => context
+              .findAncestorStateOfType<HermesAppState>()!
+              .refreshAppearancePreferences(),
+        ),
         const SizedBox(height: 8),
         TextSizeSettingsCard(
           preferences: context
