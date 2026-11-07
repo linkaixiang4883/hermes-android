@@ -793,4 +793,35 @@ void main() {
     await tester.pump();
     expect(loads, 2);
   });
+
+  group('filterCronChats', () {
+    test('keeps only cron runs and excludes human chats', () {
+      final result = filterCronChats(
+        sessions: [
+          _session('cron_job_1', 'Nightly report', source: 'cron'),
+          _session('cron_legacy_2', 'Legacy run', source: 'cli'),
+          _session('human_1', 'Human chat', source: 'gateway'),
+        ],
+        filter: WorkspaceChatsFilter.all,
+      );
+      expect(result.map((s) => s.id), ['cron_job_1', 'cron_legacy_2']);
+    });
+
+    test('supports archived and query filters', () {
+      final result = filterCronChats(
+        sessions: [
+          _session('cron_1', 'Nightly report', source: 'cron'),
+          _session(
+            'cron_2',
+            'Weekly report',
+            source: 'cron',
+            archived: true,
+          ),
+        ],
+        filter: WorkspaceChatsFilter.archived,
+        query: 'weekly',
+      );
+      expect(result.map((s) => s.id), ['cron_2']);
+    });
+  });
 }

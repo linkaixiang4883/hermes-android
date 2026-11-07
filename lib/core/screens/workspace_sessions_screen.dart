@@ -66,6 +66,42 @@ const Set<String> kMachineSessionSources = {'cron', 'kanban', 'oneshot'};
 bool isMachineSession(Session session) =>
     kMachineSessionSources.contains(session.source);
 
+/// Cron runs are machine sessions with a scheduler source or a legacy
+/// `cron_<job>_<time>` id. They are browsed in Crons, not in human Chats.
+bool isCronSession(Session session) =>
+    session.source == 'cron' || session.id.startsWith('cron_');
+
+/// Cron browser filter. Mirrors [filterChats] but admits cron rows instead of
+/// excluding machine sessions.
+List<Session> filterCronChats({
+  required List<Session> sessions,
+  required WorkspaceChatsFilter filter,
+  String query = '',
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  final normalized = query.trim().toLowerCase();
+  final recentCutoff =
+      current.subtract(kRecentChatsWindow).millisecondsSinceEpoch / 1000.0;
+  return [
+    for (final session in sessions)
+      if (isCronSession(session) &&
+          switch (filter) {
+            WorkspaceChatsFilter.all => !session.archived,
+            WorkspaceChatsFilter.recent =>
+              !session.archived && session.lastActive >= recentCutoff,
+            WorkspaceChatsFilter.archived => session.archived,
+            WorkspaceChatsFilter.unassigned => false,
+          } &&
+          (normalized.isEmpty ||
+              session.title.toLowerCase().contains(normalized) ||
+              session.preview.toLowerCase().contains(normalized) ||
+              session.id.toLowerCase().contains(normalized) ||
+              session.model.toLowerCase().contains(normalized)))
+        session,
+  ];
+}
+
 /// Assigns a conversation to its date bucket, by calendar day.
 ChatDateBucket chatDateBucket(DateTime now, double lastActiveSeconds) {
   final activity = DateTime.fromMillisecondsSinceEpoch(
@@ -275,6 +311,9 @@ class WorkspaceSessionsScreen extends StatefulWidget {
   final LocalChatPinStore? pinStore;
   final bool embedded;
 
+  /// Render only cron runs (the Crons destination), not human chats.
+  final bool crons;
+
   /// Clock injection for deterministic filter/date tests. When null the
   /// screen uses `DateTime.now()`.
   final DateTime? now;
@@ -294,6 +333,7 @@ class WorkspaceSessionsScreen extends StatefulWidget {
     this.onPromote,
     this.pinStore,
     this.embedded = false,
+    this.crons = false,
     this.now,
     this.refreshInterval,
     super.key,
@@ -622,15 +662,22 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
       ...data.archivedSessions,
     ];
     final sessions = widget.embedded
-        ? filterChats(
-            sessions: unionSessions,
-            filter: _filter,
-            claimedSessionIds: data.claimedSessionIds,
-            archivedQuickChatIds: data.archivedQuickChatIds,
-            query: _query,
-            now: _now,
-            projectsKnown: data.projectsKnown,
-          )
+        ? (widget.crons
+              ? filterCronChats(
+                  sessions: unionSessions,
+                  filter: _filter,
+                  query: _query,
+                  now: _now,
+                )
+              : filterChats(
+                  sessions: unionSessions,
+                  filter: _filter,
+                  claimedSessionIds: data.claimedSessionIds,
+                  archivedQuickChatIds: data.archivedQuickChatIds,
+                  query: _query,
+                  now: _now,
+                  projectsKnown: data.projectsKnown,
+                ))
         : filterWorkspaceSessions(
             sessions: data.sessions,
             view: widget.view,
@@ -756,16 +803,17 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
       child: Row(
         children: [
           for (final filter in WorkspaceChatsFilter.values)
-            Padding(
-              padding: const EdgeInsets.only(right: HermesSpacing.sm),
-              child: ChoiceChip(
-                label: Text(filter.label(context.l10n)),
-                selected: _filter == filter,
-                onSelected: (_) => setState(() {
-                  _filter = filter;
-                }),
+            if (!widget.crons || filter != WorkspaceChatsFilter.unassigned)
+              Padding(
+                padding: const EdgeInsets.only(right: HermesSpacing.sm),
+                child: ChoiceChip(
+                  label: Text(filter.label(context.l10n)),
+                  selected: _filter == filter,
+                  onSelected: (_) => setState(() {
+                    _filter = filter;
+                  }),
+                ),
               ),
-            ),
         ],
       ),
     );
@@ -902,6 +950,16 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
 
   String get _emptyMessage {
     if (widget.embedded) {
+      if (widget.crons) {
+        return switch (_filter) {
+          WorkspaceChatsFilter.archived =>
+            context.l10n.archived_conversations_appear_here,
+          WorkspaceChatsFilter.recent =>
+            context.l10n.nothing_changed_in_the_last_seven_days,
+          WorkspaceChatsFilter.all || WorkspaceChatsFilter.unassigned =>
+            context.l10n.no_conversation_matches_this_view,
+        };
+      }
       return switch (_filter) {
         WorkspaceChatsFilter.unassigned =>
           context.l10n.every_conversation_is_already_assigned_to_a_project,

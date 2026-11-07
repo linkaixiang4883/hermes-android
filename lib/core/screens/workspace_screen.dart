@@ -265,7 +265,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// touched once per refresh instead of once per build.
   Set<String> _archivedQuickChats = const {};
 
-
   /// Reaches the live Activity pane for the same reason.
   final _activityKey = GlobalKey<ActivityPaneState>();
 
@@ -619,6 +618,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         setState(() => _activityBlockedCount = pending);
       }
     }
+
     _promptBadgeSource = client.pendingPrompts;
     _promptBadgeListener = onPromptsChanged;
     client.pendingPrompts.addListener(onPromptsChanged);
@@ -938,9 +938,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           spaceStore: _spaceStore,
         );
       case HermesDestination.crons:
-        return CronScreen(
-          connection: widget.connection,
+        return WorkspaceSessionsScreen(
+          title: context.l10n.crons,
+          view: WorkspaceSessionView.all,
           embedded: true,
+          crons: true,
+          pinStore: _pinStore,
+          refreshInterval: widget.sessionsRefreshInterval,
+          load: _loadWorkspaceSessionsData,
+          loadHead: _loadSessionsHead,
+          loadMore: _loadMoreWorkspaceSessions,
+          onOpenSession: (session) => unawaited(
+            _openSession(session, projectName: _chatProjectLabels[session.id]),
+          ),
         );
       case HermesDestination.activity:
         return ActivityPane(
@@ -1608,8 +1618,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
             setState(() => _destination = destination),
         // The FAB belongs to the shell, not to this Scaffold: above the shell
         // it would float over the bottom bar and swallow taps on More.
-        floatingActionButton:
-            _destination == HermesDestination.chats
+        floatingActionButton: _destination == HermesDestination.chats
             ? FloatingActionButton.extended(
                 key: kWorkspaceNewChatButtonKey,
                 // Unique tag: the workspace IndexedStack keeps ProjectsPane's own
