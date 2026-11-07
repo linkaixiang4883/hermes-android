@@ -52,7 +52,7 @@
 
 **已知未尽**：overlay 新增 key（原有 8 条 + 本次更新/密度 18 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1753**（2026-11-07 V3 UI 壳迁移后；此前 1575）。
-**真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `eb7a9a52799eccd9746eadf1cdaee14d5a61128e83392010ceb18431e4e991db`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
+**真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `9e80e14e58d5291be8a7da276812e355a5b17162b5ba9b5c45fb2f782479238f`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
 ## V3 UI 壳迁移（2026-11-07，V2-dev）
 
@@ -68,7 +68,7 @@
 
 **禁止**：V3 的 `chat_screen.dart`、`NormalGatewayChatOwner`、receipts、event gate、quiet/verbose 状态机、`session.steer` 不进入本线。
 
-**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条；`flutter analyze` 0 + `flutter test` **1753**。
+**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条、Crons 目的地的 All/Recent/Archived 与空态；`flutter analyze` 0 + `flutter test` **1753**。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
 
