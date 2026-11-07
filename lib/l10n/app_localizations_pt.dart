@@ -2716,6 +2716,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get theme_palette_cyan => 'Cyan';
+
+  @override
+  String get crons => 'Crons';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).

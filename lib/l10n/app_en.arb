@@ -820,5 +820,6 @@
   "theme_palette_teal": "Teal",
   "theme_palette_pink": "Pink",
   "theme_palette_indigo": "Indigo",
-  "theme_palette_cyan": "Cyan"
+  "theme_palette_cyan": "Cyan",
+  "crons": "Crons"
 }

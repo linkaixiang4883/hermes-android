@@ -744,5 +744,6 @@
   "theme_palette_teal": "青绿色",
   "theme_palette_pink": "粉色",
   "theme_palette_indigo": "靛蓝色",
-  "theme_palette_cyan": "青色"
+  "theme_palette_cyan": "青色",
+  "crons": "定时任务"
 }

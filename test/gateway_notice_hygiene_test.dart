@@ -59,7 +59,7 @@ void main() {
   late TestDesktopAsyncEventHook asyncHook;
 
   setUp(() {
-    SharedPreferences.setMockInitialValues({'verbose_mode': false});
+    SharedPreferences.setMockInitialValues({'verbose_mode': true});
     asyncHook = TestDesktopAsyncEventHook();
   });
 

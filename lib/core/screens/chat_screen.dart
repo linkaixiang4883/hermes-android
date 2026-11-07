@@ -5929,6 +5929,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       subagentActivities: _subagentActivities,
       notices: _gatewayNotices,
       verbose: _verboseMode,
+      quiet: true,
     );
 
     return Listener(

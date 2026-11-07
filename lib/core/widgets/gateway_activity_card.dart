@@ -25,9 +25,10 @@ class _GatewayActivityCardState extends State<GatewayActivityCard> {
   @override
   void initState() {
     super.initState();
-    _expanded =
-        widget.activities.any((activity) => !activity.isTerminal) ||
-        widget.verbose;
+    // Active cards stay open so progress is visible; finished cards start
+    // collapsed. Quiet mode hides the card entirely, so this only affects
+    // users who explicitly enabled Verbose.
+    _expanded = widget.activities.any((activity) => !activity.isTerminal);
   }
 
   @override
@@ -65,7 +66,7 @@ class _GatewayActivityCardState extends State<GatewayActivityCard> {
               key: PageStorageKey<String>(
                 'gateway-activity-${activities.map((item) => item.toolId ?? item.name).join('-')}',
               ),
-              initiallyExpanded: active || widget.verbose,
+              initiallyExpanded: active,
               onExpansionChanged: (expanded) =>
                   setState(() => _expanded = expanded),
               leading: active

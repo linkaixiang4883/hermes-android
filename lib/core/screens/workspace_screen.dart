@@ -41,6 +41,7 @@ import '../services/remote_files_client.dart';
 import '../services/turn_completion_notifier.dart';
 import '../services/turn_notification_service.dart';
 import '../services/shared_attachment_preparer.dart';
+import '../widgets/home_pane.dart' show HomeSessionsLoader;
 import '../widgets/update_available_dialog.dart';
 import '../theme/hermes_theme.dart';
 import '../models/pending_prompt.dart';
@@ -50,7 +51,6 @@ import '../utils/new_chat_options.dart';
 import '../widgets/activity_pane.dart';
 import '../widgets/hermes_components.dart';
 import '../widgets/hermes_shell.dart';
-import '../widgets/home_pane.dart';
 import '../widgets/more_pane.dart';
 import '../widgets/new_chat_sheet.dart';
 import '../widgets/project_detail_screen.dart';
@@ -265,8 +265,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   /// touched once per refresh instead of once per build.
   Set<String> _archivedQuickChats = const {};
 
-  /// Reaches the live Home pane so it can be refreshed after a chat closes.
-  final _homeKey = GlobalKey<HomePaneState>();
 
   /// Reaches the live Activity pane for the same reason.
   final _activityKey = GlobalKey<ActivityPaneState>();
@@ -285,7 +283,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   /// The destination currently on screen. The New button is a Home
   /// affordance: over Projects or More it would be ambiguous what it creates.
-  HermesDestination _destination = HermesDestination.home;
+  HermesDestination _destination = HermesDestination.chats;
 
   /// The last known attention/running signals. Home ranks with these; an
   /// empty value simply means everything falls back to `Continue working`.
@@ -389,35 +387,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       endpointDigest: endpointDigest,
       l10n: context.l10n,
     );
-  }
-
-  /// Reads the sessions, and refreshes the signals alongside them.
-  ///
-  /// The signal read is deliberately *not* awaited before the sessions are
-  /// returned: it hits secure storage, and holding the whole screen on a
-  /// skeleton until the journal answers would trade a working Home for a
-  /// slightly better-ranked one. The ranking simply improves a frame later.
-  ///
-  /// Both are refreshed together so returning from a chat picks up both —
-  /// `HomePaneState.refresh` only knows how to re-read sessions, and a digest
-  /// ranked with stale signals is worse than one ranked with none.
-  Future<List<Session>> _loadHome() {
-    unawaited(_refreshTurnSignals());
-    return _loadSessions().then((sessions) {
-      // Cache the titles for Activity. Done here rather than in a second
-      // request: the journal knows what ran, the session list knows what it
-      // was called, and only one of the two costs a round trip.
-      _cacheSessionTitles(sessions);
-      // Which quick chats have aged out. Recomputed from the session list
-      // rather than on a timer, so the retention rule is applied whenever
-      // Home is read and never fires while the app is closed.
-      unawaited(_refreshQuickChats(sessions));
-      // The Activity badge is the only signal of blocked work visible while
-      // the user is on another destination, so it cannot wait for the pane
-      // to be mounted for the first time.
-      unawaited(_refreshActivityBadge());
-      return sessions;
-    });
   }
 
   /// Opens the Quick chat lifecycle store for this connection.
@@ -968,14 +937,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           onProjectSelected: (projectId) => _openProject(repository, projectId),
           spaceStore: _spaceStore,
         );
-      case HermesDestination.home:
-        return HomePane(
-          key: _homeKey,
-          loadSessions: _loadHome,
-          attention: _turnSignals.attention,
-          running: _turnSignals.running,
-          archived: _archivedQuickChats,
-          onOpenSession: _openSession,
+      case HermesDestination.crons:
+        return CronScreen(
+          connection: widget.connection,
+          embedded: true,
         );
       case HermesDestination.activity:
         return ActivityPane(
@@ -1069,7 +1034,6 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       ),
     );
     if (!mounted) return;
-    unawaited(_homeKey.currentState?.refresh() ?? Future<void>.value());
   }
 
   /// Opens one project's detail screen.
@@ -1335,8 +1299,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
   }
 
   Future<WorkspaceSessionsData> _loadWorkspaceSessionsData() async {
+    // Chats is now the default surface: keep the Activity badge honest even
+    // when Activity itself has never been opened.
+    unawaited(_refreshActivityBadge());
+    unawaited(_refreshTurnSignals());
     final sessions = await _loadSessions();
     _cacheSessionTitles(sessions);
+    unawaited(_refreshQuickChats(sessions));
 
     Set<String> claimed = const {};
     Map<String, String> projectLabels = const {};
@@ -1605,7 +1574,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         title: Text(widget.connection.label),
         centerTitle: false,
         actions: [
-          if (_destination == HermesDestination.home) ...[
+          if (_destination == HermesDestination.chats) ...[
             IconButton(
               tooltip: _inboxActionCount == 0
                   ? context.l10n.open_inbox
@@ -1627,12 +1596,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         ],
       ),
       body: HermesShell(
-        initialDestination: HermesDestination.home,
+        initialDestination: HermesDestination.chats,
         // The badge is the only attention signal visible from another
         // destination, so blocked work has to raise it even while the user is
         // in Projects or More.
         badges: {
-          HermesDestination.home: _turnSignals.attention.length,
+          HermesDestination.chats: _turnSignals.attention.length,
           HermesDestination.activity: _activityBlockedCount,
         },
         onDestinationChanged: (destination) =>
@@ -1640,8 +1609,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         // The FAB belongs to the shell, not to this Scaffold: above the shell
         // it would float over the bottom bar and swallow taps on More.
         floatingActionButton:
-            _destination == HermesDestination.home ||
-                _destination == HermesDestination.chats
+            _destination == HermesDestination.chats
             ? FloatingActionButton.extended(
                 key: kWorkspaceNewChatButtonKey,
                 // Unique tag: the workspace IndexedStack keeps ProjectsPane's own

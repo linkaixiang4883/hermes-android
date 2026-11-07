@@ -46,7 +46,13 @@ List<dynamic> buildChatDisplayItems({
   List<GatewaySubagentActivity> subagentActivities = const [],
   List<GatewayNotice> notices = const [],
   bool verbose = false,
+  /// V3-style quiet mode: hide tool/reasoning/subagent/notice cards from the
+  /// transcript while keeping human and assistant prose plus MEDIA cards.
+  /// Defaults to false so existing pure-model tests keep their explicit
+  /// activity fixtures.
+  bool quiet = false,
 }) {
+  final showActivity = verbose || !quiet;
   final toolQueue = List<GatewayToolActivity>.from(toolActivities);
   final displayItems = <dynamic>[];
   final currentGroup = <GatewayToolActivity>[];
@@ -54,7 +60,7 @@ List<dynamic> buildChatDisplayItems({
 
   void flushToolGroup() {
     if (currentGroup.isEmpty) return;
-    displayItems.add(currentGroup.toList());
+    if (showActivity) displayItems.add(currentGroup.toList());
     currentGroup.clear();
   }
 
@@ -75,7 +81,7 @@ List<dynamic> buildChatDisplayItems({
 
     flushToolGroup();
 
-    if (hasReasoning) {
+    if (hasReasoning && showActivity) {
       displayItems.add(
         ChatReasoningItem(
           reasoning,
@@ -99,11 +105,11 @@ List<dynamic> buildChatDisplayItems({
 
   // Tools from gateway events that arrived during streaming but were never
   // matched to a stored message — show them as a trailing card.
-  if (toolQueue.isNotEmpty) displayItems.add(toolQueue.toList());
-  if (subagentActivities.isNotEmpty) {
+  if (showActivity && toolQueue.isNotEmpty) displayItems.add(toolQueue.toList());
+  if (showActivity && subagentActivities.isNotEmpty) {
     displayItems.add(List<GatewaySubagentActivity>.from(subagentActivities));
   }
-  displayItems.addAll(notices);
+  if (showActivity) displayItems.addAll(notices);
 
   return displayItems;
 }

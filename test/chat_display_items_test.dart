@@ -340,6 +340,43 @@ void main() {
       expect((items[2] as GatewayNotice).text, 'task done');
     });
 
+    test('quiet mode hides tools, reasoning, subagents and notices', () {
+      final items = buildChatDisplayItems(
+        messages: [
+          {'role': 'user', 'content': 'question'},
+          {
+            'role': 'assistant',
+            'content': 'answer',
+            '_gateway_reasoning': 'thinking',
+          },
+        ],
+        toolActivities: [_tool('terminal')],
+        subagentActivities: [_subagent('a1')],
+        notices: [_notice],
+        quiet: true,
+      );
+
+      expect(items, hasLength(2));
+      expect(items[0], isA<Map<String, dynamic>>());
+      expect(items[1], isA<Map<String, dynamic>>());
+      expect((items[1] as Map<String, dynamic>)['_display_content'], 'answer');
+    });
+
+    test('quiet mode keeps activity when verbose is on', () {
+      final items = buildChatDisplayItems(
+        messages: [
+          {'role': 'assistant', 'content': 'answer'},
+        ],
+        toolActivities: [_tool('terminal')],
+        quiet: true,
+        verbose: true,
+      );
+
+      expect(items, hasLength(2));
+      expect(items[0], isA<Map<String, dynamic>>());
+      expect(items[1], isA<List<GatewayToolActivity>>());
+    });
+
     test('returns nothing for an empty conversation', () {
       expect(buildChatDisplayItems(messages: const []), isEmpty);
     });

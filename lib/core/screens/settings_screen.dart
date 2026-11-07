@@ -183,9 +183,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Device-local appearance controls. They must render even when the
+  /// dashboard-backed model section is loading or failed.
+  List<Widget> _appearanceWidgets() {
+    final app = context.findAncestorStateOfType<HermesAppState>();
+    // Standalone widget tests mount SettingsScreen without the app shell.
+    if (app == null) return const [];
+    final prefs = app.widget.connManager.prefs;
+    return [
+      _buildSectionHeader(context.l10n.appearance),
+      ThemeAppearanceSettings(
+        preferences: prefs,
+        onChanged: app.refreshAppearancePreferences,
+      ),
+      const SizedBox(height: 8),
+      TextSizeSettingsCard(
+        preferences: prefs,
+        onChanged: app.setTextSizePreference,
+      ),
+      const SizedBox(height: 8),
+      ChatDensitySettingsCard(preferences: prefs),
+      const SizedBox(height: 8),
+      _VerboseToggle(),
+      const SizedBox(height: 16),
+    ];
+  }
+
   Widget _buildBody() {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          ..._appearanceWidgets(),
+          const Card(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+          ),
+        ],
+      );
     }
 
     if (_error != null && _modelOptions == null) {
@@ -194,6 +231,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          ..._appearanceWidgets(),
           Center(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -238,6 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        ..._appearanceWidgets(),
         // ---- Section: Model ----
         _buildSectionHeader(context.l10n.profile_default_model),
         Text(
@@ -370,41 +409,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
 
-        const SizedBox(height: 16),
-
-        // ---- Section: Theme ----
-        _buildSectionHeader(context.l10n.appearance),
-        ThemeAppearanceSettings(
-          preferences: context
-              .findAncestorStateOfType<HermesAppState>()!
-              .widget
-              .connManager
-              .prefs,
-          onChanged: () => context
-              .findAncestorStateOfType<HermesAppState>()!
-              .refreshAppearancePreferences(),
-        ),
-        const SizedBox(height: 8),
-        TextSizeSettingsCard(
-          preferences: context
-              .findAncestorStateOfType<HermesAppState>()!
-              .widget
-              .connManager
-              .prefs,
-          onChanged: (preference) => context
-              .findAncestorStateOfType<HermesAppState>()!
-              .setTextSizePreference(preference),
-        ),
-        const SizedBox(height: 8),
-        ChatDensitySettingsCard(
-          preferences: context
-              .findAncestorStateOfType<HermesAppState>()!
-              .widget
-              .connManager
-              .prefs,
-        ),
-        const SizedBox(height: 8),
-        _VerboseToggle(),
         const SizedBox(height: 16),
 
         // ---- Section: Notifications ----

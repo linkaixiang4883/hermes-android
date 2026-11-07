@@ -16,7 +16,15 @@ import 'chat_screen.dart';
 import 'package:hermes_android/core/l10n/l10n.dart';
 class CronScreen extends StatefulWidget {
   final SavedConnection connection;
-  const CronScreen({required this.connection, super.key});
+
+  /// Embedded in the V3 shell's Crons destination: no nested app bar.
+  final bool embedded;
+
+  const CronScreen({
+    required this.connection,
+    this.embedded = false,
+    super.key,
+  });
 
   @override
   State<CronScreen> createState() => _CronScreenState();
@@ -510,6 +518,18 @@ class _CronScreenState extends State<CronScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final fab = FloatingActionButton(
+      tooltip: context.l10n.add_new_cron_job,
+      onPressed: _loading ? null : _showAddJobDialog,
+      child: const Icon(Icons.add),
+    );
+    if (widget.embedded) {
+      return Scaffold(
+        backgroundColor: Colors.transparent,
+        body: _buildBody(),
+        floatingActionButton: fab,
+      );
+    }
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(
@@ -522,11 +542,7 @@ class _CronScreenState extends State<CronScreen> {
         ],
       ),
       body: _buildBody(),
-      floatingActionButton: FloatingActionButton(
-        tooltip: context.l10n.add_new_cron_job,
-        onPressed: _loading ? null : _showAddJobDialog,
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton: fab,
     );
   }
 

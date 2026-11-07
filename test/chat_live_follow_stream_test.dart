@@ -97,7 +97,7 @@ StreamEvent _terminal(
 );
 
 void main() {
-  setUp(() => SharedPreferences.setMockInitialValues({}));
+  setUp(() => SharedPreferences.setMockInitialValues({'verbose_mode': true}));
 
   group('the async bridge carries the followed turn\'s stream', () {
     test('forwards stream frames, including the tool family', () {
@@ -388,14 +388,10 @@ void main() {
       );
       await tester.pump();
       expect(find.byType(GatewayReasoningCard), findsOneWidget);
-
-      await tester.tap(find.byType(GatewayReasoningCard));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 350));
       expect(
         find.text('weighing options'),
         findsOneWidget,
-        reason: 'the tapped reasoning card must open',
+        reason: 'verbose reasoning starts expanded',
       );
 
       // Another token grows the SAME block: its expansion must survive the

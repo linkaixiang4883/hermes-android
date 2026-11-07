@@ -2652,4 +2652,7 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get theme_palette_cyan => 'Cyan';
+
+  @override
+  String get crons => 'Crons';
 }

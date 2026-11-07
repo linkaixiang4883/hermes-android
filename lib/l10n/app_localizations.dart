@@ -4605,6 +4605,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cyan'**
   String get theme_palette_cyan;
+
+  /// No description provided for @crons.
+  ///
+  /// In en, this message translates to:
+  /// **'Crons'**
+  String get crons;
 }
 
 class _AppLocalizationsDelegate

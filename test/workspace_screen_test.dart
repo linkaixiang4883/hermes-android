@@ -16,13 +16,10 @@ import 'package:hermes_android/core/services/projects_gateway_client.dart';
 import 'package:hermes_android/core/services/projects_repository.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
 import 'package:hermes_android/core/utils/activity_feed.dart';
-import 'package:hermes_android/core/utils/home_digest.dart';
-import 'package:hermes_android/core/utils/home_turn_signals.dart';
 import 'package:hermes_android/core/utils/new_chat_options.dart';
 import 'package:hermes_android/core/widgets/activity_pane.dart';
 import 'package:hermes_android/core/widgets/hermes_components.dart';
 import 'package:hermes_android/core/widgets/hermes_shell.dart';
-import 'package:hermes_android/core/widgets/home_pane.dart';
 import 'package:hermes_android/core/widgets/more_pane.dart';
 import 'package:hermes_android/core/widgets/projects_pane.dart';
 import 'package:hermes_android/core/widgets/project_detail_screen.dart';
@@ -223,16 +220,6 @@ Future<void> _pump(
   );
 }
 
-/// Finds a Home section *header* by kind.
-///
-/// A plain text finder is ambiguous: `Needs you` is also the label of the
-/// blocked [StatusChip] on each row, so matching raw text would pass for the
-/// wrong reason.
-Finder _sectionHeader(HomeSectionKind kind, AppLocalizations l10n) =>
-    find.byWidgetPredicate(
-      (widget) => widget is SectionHeader && widget.title == kind.title(l10n),
-    );
-
 /// A turn session a widget test can drive: captures the workspace's
 /// session-bound handler and fires it on demand, like the real coordinator
 /// does when `session.open` first binds a draft id to a stored id.
@@ -357,10 +344,10 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.text(HermesDestination.home.label(l10n)).last);
-    await tester.pumpAndSettle();
+    await tester.tap(find.text(HermesDestination.activity.label(l10n)).last);
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text(HermesDestination.chats.label(l10n)).last);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 400));
 
     expect(
       tester
@@ -615,26 +602,6 @@ void main() {
     expect(find.text(l10n.inbox_is_clear), findsOneWidget);
   });
 
-  testWidgets('Home renders the attention digest instead of a placeholder', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-      repository: await _repository([]),
-      sessions: [_session(id: 's1', title: 'Roadmap slice')],
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byType(HomePane), findsOneWidget);
-    expect(
-      find.text(HomeSectionKind.continueWorking.title(l10n)),
-      findsOneWidget,
-    );
-    expect(find.text('Roadmap slice'), findsOneWidget);
-    // The placeholder it replaces must be gone, not merely pushed down.
-    expect(find.textContaining('Home — Coming next'), findsNothing);
-  });
 
   testWidgets('Home search opens the focused global Chats search', (
     tester,
@@ -662,83 +629,6 @@ void main() {
     );
   });
 
-  testWidgets('Home opens an actionable Inbox with a count', (tester) async {
-    final now = DateTime.now();
-    final opened = <String>[];
-    await _pump(
-      tester,
-      connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-      repository: await _repository([]),
-      sessions: [
-        _session(id: 'blocked', title: 'Approve deployment'),
-        _session(id: 'failed', title: 'Repair failed turn'),
-        _session(id: 'live', title: 'Still running'),
-      ],
-      openedSessions: opened,
-      activityFeedLoader: (_, _) async => ActivityFeed(
-        groups: [
-          ActivityGroup(
-            kind: ActivityGroupKind.needsYou,
-            items: [
-              ActivityItem(
-                sessionId: 'blocked',
-                title: 'Approve deployment',
-                clientTurnId: 'turn-blocked',
-                label: 'Waiting for your input',
-                status: HermesStatus.blocked,
-                updatedAt: now,
-              ),
-            ],
-            totalCount: 1,
-          ),
-          ActivityGroup(
-            kind: ActivityGroupKind.running,
-            items: [
-              ActivityItem(
-                sessionId: 'live',
-                title: 'Still running',
-                clientTurnId: 'turn-live',
-                label: 'Running',
-                status: HermesStatus.running,
-                updatedAt: now,
-              ),
-            ],
-            totalCount: 1,
-          ),
-          ActivityGroup(
-            kind: ActivityGroupKind.failed,
-            items: [
-              ActivityItem(
-                sessionId: 'failed',
-                title: 'Repair failed turn',
-                clientTurnId: 'turn-failed',
-                label: 'The turn failed',
-                status: HermesStatus.failed,
-                updatedAt: now,
-              ),
-            ],
-            totalCount: 1,
-          ),
-        ],
-        blockedCount: 1,
-        runningCount: 1,
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.byTooltip('Open inbox (2)'), findsOneWidget);
-    await tester.tap(find.byTooltip('Open inbox (2)'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Inbox'), findsOneWidget);
-    expect(find.text('Approve deployment'), findsOneWidget);
-    expect(find.text('Repair failed turn'), findsOneWidget);
-    expect(find.text('Still running'), findsNothing);
-
-    await tester.tap(find.text('Approve deployment'));
-    await tester.pumpAndSettle();
-    expect(opened, ['blocked']);
-  });
 
   testWidgets('opening a Home row reports the session to the host', (
     tester,
@@ -813,47 +703,6 @@ void main() {
     expect(find.text('chat'), findsNothing);
   });
 
-  testWidgets('returning from a chat refreshes the Home digest', (
-    tester,
-  ) async {
-    // Attention state changes while the user is inside the chat: coming back
-    // to a stale digest would re-show work that is no longer blocked.
-    var reads = 0;
-    final repository = await _repository([]);
-    await tester.pumpWidget(
-      MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        theme: hermesTheme(Brightness.dark),
-        home: WorkspaceScreen(
-          connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-          repositoryFactory: (_) => repository,
-          sessionsLoader: () async {
-            reads++;
-            return [_session(id: 's1', title: 'Roadmap slice')];
-          },
-          sessionScreenBuilder: (session) => Scaffold(
-            body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('back'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    final readsBeforeOpening = reads;
-
-    await tester.tap(find.text('Roadmap slice'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('back'));
-    await tester.pumpAndSettle();
-
-    expect(reads, greaterThan(readsBeforeOpening));
-    expect(find.text('Roadmap slice'), findsOneWidget);
-  });
 
   testWidgets('the default chat route carries the session and connection', (
     tester,
@@ -1148,7 +997,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Hermes Android'), findsOneWidget);
 
-    await tester.tap(find.text('Home').last);
+    await tester.tap(find.text('Chats').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Projects').last);
     await tester.pumpAndSettle();
@@ -1196,157 +1045,11 @@ void main() {
   });
 
   group('turn signals feed the Home digest', () {
-    testWidgets('a blocked turn ranks its chat under Needs you', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: await _repository([]),
-        sessions: [_session(id: 's1', title: 'Roadmap slice')],
-        turnSignalsLoader: (_) async => const HomeTurnSignals(
-          attention: {'s1': 'Waiting for your input'},
-          running: {},
-        ),
-      );
-      await tester.pumpAndSettle();
 
-      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsOneWidget);
-      expect(find.text('Waiting for your input'), findsOneWidget);
-      expect(
-        _sectionHeader(HomeSectionKind.continueWorking, l10n),
-        findsNothing,
-      );
-    });
 
-    testWidgets('a running turn ranks its chat under Running now', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: await _repository([]),
-        sessions: [_session(id: 's1', title: 'Roadmap slice')],
-        turnSignalsLoader: (_) async =>
-            const HomeTurnSignals(attention: {}, running: {'s1'}),
-      );
-      await tester.pumpAndSettle();
 
-      expect(_sectionHeader(HomeSectionKind.running, l10n), findsOneWidget);
-      expect(
-        _sectionHeader(HomeSectionKind.continueWorking, l10n),
-        findsNothing,
-      );
-    });
 
-    testWidgets('blocked work raises the Home badge', (tester) async {
-      // The badge is the only signal visible from another destination, so it
-      // must reflect blocked work rather than staying empty.
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: await _repository([]),
-        sessions: [
-          _session(id: 's1', title: 'Roadmap slice'),
-          _session(id: 's2', title: 'Second slice'),
-        ],
-        turnSignalsLoader: (_) async => const HomeTurnSignals(
-          attention: {'s1': 'The last turn failed', 's2': 'Waiting for you'},
-          running: {},
-        ),
-      );
-      await tester.pumpAndSettle();
 
-      final shell = tester.widget<HermesShell>(find.byType(HermesShell));
-      expect(shell.badges[HermesDestination.home], 2);
-    });
-
-    testWidgets('a signals read that fails still renders Home', (tester) async {
-      // Losing the recovery journal must degrade the ranking, never the
-      // screen: every chat simply falls back to Continue working.
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: await _repository([]),
-        sessions: [_session(id: 's1', title: 'Roadmap slice')],
-        turnSignalsLoader: (_) async => throw Exception('journal unavailable'),
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Roadmap slice'), findsOneWidget);
-      expect(
-        _sectionHeader(HomeSectionKind.continueWorking, l10n),
-        findsOneWidget,
-      );
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('returning from a chat re-reads the turn signals', (
-      tester,
-    ) async {
-      // A chat is usually opened *because* it was blocked; the reason normally
-      // stops being true inside it, so a stale signal would keep it pinned to
-      // Needs you forever.
-      var reads = 0;
-      await _pump(
-        tester,
-        connection: _connection(desktopGatewayUrl: 'https://host:8642'),
-        repository: await _repository([]),
-        sessions: [_session(id: 's1', title: 'Roadmap slice')],
-        turnSignalsLoader: (_) async {
-          reads++;
-          return reads == 1
-              ? const HomeTurnSignals(
-                  attention: {'s1': 'Waiting for your input'},
-                  running: {},
-                )
-              : const HomeTurnSignals(attention: {}, running: {});
-        },
-        sessionScreenBuilder: (session) => Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('back'),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsOneWidget);
-
-      await tester.tap(find.text('Roadmap slice'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('back'));
-      await tester.pumpAndSettle();
-
-      expect(reads, greaterThan(1));
-      expect(_sectionHeader(HomeSectionKind.needsYou, l10n), findsNothing);
-      expect(
-        _sectionHeader(HomeSectionKind.continueWorking, l10n),
-        findsOneWidget,
-      );
-    });
-
-    testWidgets('a legacy connection with no gateway reads no signals', (
-      tester,
-    ) async {
-      // A REST-only connection has no recovery journal scope. Home must still
-      // render rather than block on a scope that cannot exist.
-      SavedConnection? scoped;
-      await _pump(
-        tester,
-        connection: _connection(),
-        sessions: [_session(id: 's1', title: 'Roadmap slice')],
-        turnSignalsLoader: (connection) async {
-          scoped = connection;
-          return HomeTurnSignals.empty;
-        },
-      );
-      await tester.pumpAndSettle();
-
-      expect(find.text('Roadmap slice'), findsOneWidget);
-      expect(endpointDigestForConnection(scoped!), isNull);
-    });
   });
 
   group('the global New button', () {

@@ -159,6 +159,8 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(find.byType(GatewayActivityCard));
+      await tester.pumpAndSettle();
 
       expect(find.text('1 failed • 1 total'), findsOneWidget);
       expect(find.textContaining('Terminal'), findsOneWidget);
@@ -191,6 +193,8 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(GatewayActivityCard));
       await tester.pumpAndSettle();
 
       expect(find.text('Completed in 1.3 s'), findsOneWidget);
