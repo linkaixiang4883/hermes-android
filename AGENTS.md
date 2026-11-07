@@ -54,9 +54,9 @@
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1753**（2026-11-07 V3 UI 壳迁移后；此前 1575）。
 **真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `9e80e14e58d5291be8a7da276812e355a5b17162b5ba9b5c45fb2f782479238f`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
-## V3 UI 壳迁移（2026-11-07，V2-dev）
+## V3 UI 壳迁移（2026-11-07，V3 / V3-dev）
 
-**决议**：不切 V3、不 merge V3-dev。V2-dev 是唯一实现分支；V3.0.0 只作视觉/布局参考，聊天/传输/审批/转写继续用 V2 内核。V3-dev 冻结为只读参考，不推送、不合并。
+**决议（2026-11-07 晚更新）**：`V2-dev` 已升格为 **`V3`（3.0.0 发布线）**；`V3-dev` 从 `V3` 重新拉出作为 3.x 开发分支；旧 V3-dev 归档为 `V3-dev-legacy`（tag `archive/v3-dev-2026-11-07`）。V2 保留为 2.1.33 稳定线。消息/传输/审批/转写继续用 V2 内核；旧 V3-dev 不 merge、不推送。
 
 | 已落地 | 位置 | 说明 |
 |---|---|---|
@@ -248,28 +248,30 @@
 - **处置**：**升级服务端**（`hermes update` + 重启；需 ≥ 含 `88039d73b3` 的构建 = 2026-09-27 之后）。客户端侧**不要**为旧服务端裁剪 resume 参数（服务端是唯一演进方，裁剪 = 永久分叉）
 - **通用教训**：严格契约（§2）下"新客户端 + 旧服务端"会硬失败；`Extra inputs are not permitted` + "out of sync" 提示 = **升级服务端**的标准信号
 
-## 分支工作流（main 镜像 → V2-dev 开发 → squash 进 V2）· 红线
+## 分支工作流（main 镜像 → V3-dev 开发 → squash 进 V3；V2 保留 2.1.33）· 红线
 
 三条线各司其职，**没有"在 main 上开发"这回事**：
 
 | 分支 | 角色 | 推送 | 写入规则 |
 |---|---|---|---|
 | `main` | **上游镜像**（= rusty4444/main） | fork/main 仅作镜像 | **只允许快进**：`git switch main && git merge --ff-only upstream/main`；禁止手改、禁止在其上开发 |
-| `V2` | **我们的稳定版**（2.x overlay 全部在此线） | **推 `fork/V2`（备份）** | 只接受 `V2-dev` 的 squash，历史线性；**未经用户许可不得提交/合并/推送** |
-| `V2-dev` | **2.x 开发分支** | **永不推远端** | 日常提交，WIP 不限；每功能一条提交，便于单包回滚 |
+| `V2` | **2.x 稳定版**（2.1.33，历史线） | `fork/V2` 已推 | 冻结；不再加新功能，未经用户许可不得改写 |
+| `V3` | **3.0.0 发布线**（UI 壳 + V2 消息内核） | 推 `fork/V3`（经用户许可） | 只接受 `V3-dev` 的 squash，历史线性；受保护 |
+| `V3-dev` | **3.x 开发分支** | **永不推远端** | 日常提交，WIP 不限；每功能一条提交 |
+| `V3-dev-legacy` | 旧 V3 实验线归档 | **永不推远端** | 只读；不 merge、不改写 |
 
 **一次功能的标准动作**
 
-1. `git switch V2-dev` → 改代码 → `flutter gen-l10n`（改 ARB 时）→ `flutter analyze --no-pub --fatal-infos`（0）→ `flutter test --no-pub`（全绿且计数 ≥ 基线）
+1. `git switch V3-dev` → 改代码 → `flutter gen-l10n`（改 ARB 时）→ `flutter analyze --no-pub --fatal-infos`（0）→ `flutter test --no-pub`（全绿且计数 ≥ 基线）
 2. 报告用户，**取得许可**
-3. `git switch V2` → `git merge --squash V2-dev` → 一条功能级 commit → `git push fork V2`
-4. `git switch V2-dev && git reset --hard V2` 回到同一基点（第 3 步前先验 `git diff V2 V2-dev` 为空）
+3. `git switch V3` → `git merge --squash V3-dev` → 一条功能级 commit → 经许可后 `git push fork V3`
+4. `git switch V3-dev && git reset --hard V3` 回到同一基点（第 3 步前先验 `git diff V3 V3-dev` 为空）
 
-**版本号**：只以 tag 标记，且**只在合入 `V2` 之后**打（`git tag v2.x.y` → `git push fork V2 --tags`）；开发过程不打 tag。`pre-*` 这类本地检查点 tag 不算版本标记，不推送。
+**版本号**：只以 tag 标记，且**只在合入发布线之后**打（当前 `V3` → `git tag v3.0.0`；后续 `v3.x.y` → `git push fork V3 --tags`）；开发过程不打 tag。`pre-*` / `archive/*` 是本地检查点，不推送。上游同名 `v3.0.0` tag 已归档为 `upstream-v3.0.0`，本地 `v3.0.0` 指本 fork 的发布提交。
 
 **换行符**：根 `.gitattributes` 统一（`* text=auto eol=lf`；二进制 `binary`；`*.bat/*.cmd/*.ps1` 强制 CRLF）。改换行策略前先 `git ls-files --eol` 看索引侧 `i/` 列，禁止制造跨平台无意义 diff。
 
-**上游跟进纪律**：v2.1.20+ 起**不整条 merge 上游**。`main` 只做对照镜像。若决定跟进 v3.x（UI 基线迁移），另开 `V3-dev` **以 upstream 为基重建 overlay**，`V2` 保留为可回退的稳定线——三条线之外只允许 `V3-dev`（v3 迁移专用），其余分支名（含 `develop`）不再新建。
+**上游跟进纪律**：v2.1.20+ 起**不整条 merge 上游**。`main` 只做对照镜像。V3 是“V3 UI 壳 + V2 消息内核”，不是上游 V3 分支的重建；V2 保留为可回退的 2.1.33 稳定线。旧 `V3-dev` 已归档，不再新建其它 V3 分支名。
 
 ## 拉取上游 / Merge 流程
 
