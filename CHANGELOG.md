@@ -4,6 +4,34 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [3.0.0] - 2026-11-07
+
+V3 release line: the V3.0.0 UI shell on the V2 desktop-gateway transport. The
+message/approval/transcript state machine remains the fork's V2 implementation;
+V3's `chat_screen`, receipts, and event gates are not part of this release.
+
+### Added
+
+- Ten-palette appearance system (Gold, Purple, Orange, Green, Blue, Red, Teal,
+  Pink, Indigo, Cyan) with independent System/Light/Dark brightness, a Settings
+  picker, persistence, and configuration-backup support.
+- Five-destination shell: Chats, Crons, Projects, Activity, and More. Chats is
+  the default; the standalone Home destination is gone.
+- Crons conversation browser with All/Recent/Archived filters, separate from
+  human chats.
+- Quiet transcript: with Verbose off, tool, reasoning, subagent, and notice
+  cards stay out of the transcript while prose, MEDIA cards, approvals, and the
+  current-work indicator remain visible.
+- Settings now places Appearance first and keeps device-local controls reachable
+  when model information is loading or unavailable.
+
+### Changed
+
+- Version and F-Droid ABI version-code base: `3.0.0+3000`; arm64 effective code
+  `30002`.
+- `V3` is the release line; `V3-dev` is the development line. The previous
+  frozen V3-dev is preserved as `V3-dev-legacy` and its archive tag.
+
 ## [2.1.33] - 2026-11-07
 
 Version aligned with upstream 2.1.33 (build 2176) for the fork's next stable
