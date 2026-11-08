@@ -308,4 +308,128 @@ void main() {
     );
     expect(find.text('Older chat'), findsNothing);
   });
+
+  testWidgets('server pin calls the callback and keeps device pins empty', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = LocalChatPinStore(prefs, connectionId: 'server-pin');
+    final now = DateTime.fromMillisecondsSinceEpoch((_now * 1000).toInt());
+    final old = _session('old', 'Older chat', activity: _now - 86400 * 20);
+    final recent = _session('recent', 'Recent chat');
+    final calls = <String>[];
+    final data = WorkspaceSessionsData(sessions: [recent, old]);
+
+    await tester.pumpWidget(
+      _app(
+        WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          embedded: true,
+          now: now,
+          pinStore: store,
+          load: () async => data,
+          onOpenSession: (_) {},
+          onSetPinned: (session, pinned) async {
+            calls.add('${session.id}:$pinned');
+            return pinned;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final oldRow = find.ancestor(
+      of: find.text('Older chat'),
+      matching: find.byType(HermesCard),
+    );
+    await tester.tap(
+      find.descendant(
+        of: oldRow,
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Pin chat').last);
+    await tester.pumpAndSettle();
+
+    expect(calls, ['old:true']);
+    expect(await store.load(), isEmpty);
+    expect(find.text('Pinned'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Older chat')).dy,
+      lessThan(tester.getTopLeft(find.text('Recent chat')).dy),
+    );
+
+    final pinnedRow = find.ancestor(
+      of: find.text('Older chat'),
+      matching: find.byType(HermesCard),
+    );
+    await tester.tap(
+      find.descendant(
+        of: pinnedRow,
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Unpin chat').last);
+    await tester.pumpAndSettle();
+    expect(calls, ['old:true', 'old:false']);
+    expect(find.text('Pinned'), findsNothing);
+  });
+
+  testWidgets('archive calls the server callback and removes the row', (
+    tester,
+  ) async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = LocalChatPinStore(prefs, connectionId: 'server-archive');
+    final now = DateTime.fromMillisecondsSinceEpoch((_now * 1000).toInt());
+    final old = _session('old', 'Older chat', activity: _now - 86400 * 20);
+    final recent = _session('recent', 'Recent chat');
+    final calls = <String>[];
+    var archived = false;
+    final data = WorkspaceSessionsData(sessions: [recent, old]);
+
+    await tester.pumpWidget(
+      _app(
+        WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          embedded: true,
+          now: now,
+          pinStore: store,
+          load: () async => archived
+              ? WorkspaceSessionsData(
+                  sessions: [recent, old.withArchived(true)],
+                )
+              : data,
+          onOpenSession: (_) {},
+          onSetArchived: (session, next) async {
+            calls.add('${session.id}:$next');
+            archived = next;
+            return next;
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final oldRow = find.ancestor(
+      of: find.text('Older chat'),
+      matching: find.byType(HermesCard),
+    );
+    await tester.tap(
+      find.descendant(
+        of: oldRow,
+        matching: find.byType(PopupMenuButton<String>),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Archive chat').last);
+    await tester.pumpAndSettle();
+
+    expect(calls, ['old:true']);
+    expect(find.text('Older chat'), findsNothing);
+    expect(find.text('Recent chat'), findsOneWidget);
+  });
 }

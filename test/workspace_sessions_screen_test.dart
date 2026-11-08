@@ -275,6 +275,43 @@ void main() {
     expect(find.text('Matching old chat'), findsOneWidget);
   });
 
+  testWidgets('a short filtered list auto-loads the next page', (
+    tester,
+  ) async {
+    var loadMoreCalls = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: hermesTheme(Brightness.dark),
+        home: WorkspaceSessionsScreen(
+          title: 'Crons',
+          view: WorkspaceSessionView.all,
+          embedded: true,
+          crons: true,
+          load: () async => WorkspaceSessionsData(
+            sessions: [_session('human', 'Human chat')],
+          ),
+          loadMore: (offset) async {
+            loadMoreCalls++;
+            return [_session('cron-run', 'Cron run', source: 'cron')];
+          },
+          onOpenSession: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      loadMoreCalls,
+      greaterThan(0),
+      reason: 'a filtered list shorter than the viewport must still page',
+    );
+    expect(find.text('Cron run'), findsOneWidget);
+    final list = tester.widget<ListView>(find.byType(ListView).first);
+    expect(list.physics, isA<AlwaysScrollableScrollPhysics>());
+  });
+
   testWidgets('the silent tick refreshes only the head and merges it', (
     tester,
   ) async {
@@ -540,7 +577,7 @@ void main() {
         ],
       );
 
-      expect(find.byIcon(Icons.push_pin_outlined), findsOneWidget);
+      expect(find.byIcon(Icons.push_pin), findsOneWidget);
     });
   });
 

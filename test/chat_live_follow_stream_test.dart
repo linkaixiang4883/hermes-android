@@ -459,6 +459,8 @@ void main() {
         reason: 'a finished card starts collapsed',
       );
 
+      await tester.ensureVisible(find.byType(GatewayActivityCard));
+      await tester.pump();
       await tester.tap(find.byType(GatewayActivityCard));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 350));

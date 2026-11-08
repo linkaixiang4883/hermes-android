@@ -9,6 +9,7 @@ import 'package:http/io_client.dart' show IOClient;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 import '../models/connection.dart';
+import '../models/fallback_config.dart';
 import '../models/session.dart';
 import 'hermes_rest_client.dart';
 
@@ -846,6 +847,124 @@ class ApiClient implements HermesRestClient {
     }
   }
 
+  String _errorCode(String body) {
+    if (body.trim().isEmpty) return '';
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['code'] is String) {
+        return decoded['code'] as String;
+      }
+    } catch (_) {}
+    return '';
+  }
+
+  Map<String, dynamic> _patchedSession(
+    http.Response response, {
+    required String sessionId,
+  }) {
+    final data = jsonDecode(response.body);
+    final session = data is Map ? data['session'] : null;
+    final row = session is Map
+        ? Map<String, dynamic>.from(session)
+        : data is Map<String, dynamic>
+        ? Map<String, dynamic>.from(data)
+        : null;
+    if (row == null || row['id'] != sessionId) {
+      throw const FormatException('Gateway returned a different session id');
+    }
+    return row;
+  }
+
+  @override
+  Future<bool> setSessionPinned({
+    required String sessionId,
+    required bool pinned,
+    String? profile,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError.value(sessionId, 'sessionId', 'must not be blank');
+    }
+    final res = await _http
+        .patch(
+          Uri.parse('$baseUrl/api/sessions/${Uri.encodeComponent(sessionId)}'),
+          headers: _headers,
+          body: jsonEncode({'pinned': pinned}),
+        )
+        .timeout(requestTimeout);
+    if (res.statusCode == 404 &&
+        _errorCode(res.body) == 'session_not_found') {
+      throw SessionNotFoundException(sessionId);
+    }
+    if (res.statusCode == 400 &&
+        _errorCode(res.body) == 'unsupported_session_field') {
+      throw const SyncedPinsUnsupportedException();
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+    final saved = _patchedSession(res, sessionId: sessionId);
+    if (saved['pinned'] != pinned) {
+      throw const FormatException('Gateway returned no confirmed pin state');
+    }
+    final confirmed = await getSession(sessionId, profile: profile);
+    if (confirmed['id'] != sessionId || confirmed['pinned'] != pinned) {
+      throw const FormatException('Gateway pin read-back did not match');
+    }
+    return pinned;
+  }
+
+  @override
+  Future<bool> setSessionArchived({
+    required String sessionId,
+    required bool archived,
+    bool clearPin = false,
+    String? profile,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError.value(sessionId, 'sessionId', 'must not be blank');
+    }
+    var unpin = archived && clearPin;
+    final res = await _http
+        .patch(
+          Uri.parse('$baseUrl/api/sessions/${Uri.encodeComponent(sessionId)}'),
+          headers: _headers,
+          body: jsonEncode({
+            'archived': archived,
+            if (unpin) 'pinned': false,
+          }),
+        )
+        .timeout(requestTimeout);
+    if (res.statusCode == 404 &&
+        _errorCode(res.body) == 'session_not_found') {
+      throw SessionNotFoundException(sessionId);
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+    final saved = _patchedSession(res, sessionId: sessionId);
+    if (saved['archived'] != archived ||
+        (unpin && saved['pinned'] != false)) {
+      throw const FormatException(
+        'Gateway returned no confirmed archive state',
+      );
+    }
+    if (archived && !unpin && saved['pinned'] == true) {
+      await setSessionPinned(
+        sessionId: sessionId,
+        pinned: false,
+        profile: profile,
+      );
+      unpin = true;
+    }
+    final confirmed = await getSession(sessionId, profile: profile);
+    if (confirmed['id'] != sessionId ||
+        confirmed['archived'] != archived ||
+        (unpin && confirmed['pinned'] != false)) {
+      throw const FormatException('Gateway archive read-back did not match');
+    }
+    return archived;
+  }
+
   // ── Models ───────────────────────────────────────────────────────────
 
   Future<List<String>> getModels() async {
@@ -1373,10 +1492,13 @@ class _LiveStream {
 /// matching a bare Exception.
 class DashboardHttpException implements Exception {
   final int statusCode;
-  const DashboardHttpException(this.statusCode);
+  final String? body;
+  const DashboardHttpException(this.statusCode, [this.body]);
 
   @override
-  String toString() => 'HTTP $statusCode';
+  String toString() => body == null || body!.isEmpty
+      ? 'HTTP $statusCode'
+      : 'HTTP $statusCode: $body';
 }
 
 /// Client for the Hermes Dashboard REST API.
@@ -1617,6 +1739,35 @@ class DashboardClient {
       return apiGet(endpoint, queryParameters: queryParameters, retried: true);
     }
     if (res.statusCode != 200) throw DashboardHttpException(res.statusCode);
+    return _decodeMapResponse(res);
+  }
+
+  Future<Map<String, dynamic>> apiPatch(
+    String endpoint, {
+    Map<String, dynamic>? body,
+    Map<String, String>? queryParameters,
+    bool retried = false,
+  }) async {
+    final authGeneration = _authGeneration;
+    final headers = await _authHeaders();
+    final uri = Uri.parse(
+      '$_baseUrl/api/$endpoint',
+    ).replace(queryParameters: queryParameters);
+    final res = await _http
+        .patch(uri, headers: headers, body: jsonEncode(body ?? const {}))
+        .timeout(ApiClient.requestTimeout);
+    if (res.statusCode == 401 && !retried) {
+      _resetAuth(ifGeneration: authGeneration);
+      return apiPatch(
+        endpoint,
+        body: body,
+        queryParameters: queryParameters,
+        retried: true,
+      );
+    }
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      throw DashboardHttpException(res.statusCode, res.body);
+    }
     return _decodeMapResponse(res);
   }
 
@@ -1912,6 +2063,40 @@ class DashboardClient {
 
   Future<Map<String, dynamic>> getModelInfo() => apiGet('model/info');
   Future<Map<String, dynamic>> getModelOptions() => apiGet('model/options');
+
+  Map<String, String>? _profileQuery([Map<String, String>? parameters]) {
+    final profile = _gatewayProfile;
+    if (profile == null) return parameters;
+    return {...?parameters, 'profile': profile};
+  }
+
+  /// Raw saved fallback values only. Never retain the full config: it may
+  /// contain credentials and unrelated provider settings.
+  Future<FallbackConfig> getFallbackConfig() async => FallbackConfig.fromConfig(
+    await apiGet(
+      'config',
+      queryParameters: {...?_profileQuery(), 'include_defaults': 'false'},
+    ),
+  );
+
+  /// Replaces only the ordered primary fallback chain. Legacy fallback_model
+  /// and all other config keys are left untouched.
+  Future<bool> setFallbackProviders(List<FallbackEntry> entries) async {
+    if (entries.any((entry) => !entry.complete)) {
+      throw const FormatException('Incomplete fallback selection');
+    }
+    final response = await apiPut(
+      'config',
+      body: {
+        'config': {
+          'fallback_providers': entries.map((entry) => entry.toJson()).toList(),
+        },
+        'profile': ?_gatewayProfile,
+      },
+    );
+    return response['ok'] == true;
+  }
+
   Future<List<Map<String, dynamic>>> getSkills() async {
     final data = await apiGetList('skills');
     return data.whereType<Map<String, dynamic>>().toList();
@@ -1920,10 +2105,16 @@ class DashboardClient {
   Future<Map<String, dynamic>> setModel(
     String scope,
     String provider,
-    String model,
-  ) => apiPost(
+    String model, {
+    bool confirmExpensiveModel = false,
+  }) => apiPost(
     'model/set',
-    body: {'scope': scope, 'provider': provider, 'model': model},
+    body: {
+      'scope': scope,
+      'provider': provider,
+      'model': model,
+      if (confirmExpensiveModel) 'confirm_expensive_model': true,
+    },
   );
 
   // ── Cron job management ──────────────────────────────────────────────

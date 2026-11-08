@@ -48,13 +48,16 @@ import '../models/turn_usage.dart';
 import '../utils/chat_display_items.dart';
 import '../utils/chat_history_scroll.dart';
 import '../utils/message_content.dart';
+import '../utils/message_time.dart';
 import '../utils/responsive.dart';
 import '../utils/turn_recovery_fallback.dart';
 import 'files_screen.dart';
+import '../widgets/context_usage_bar.dart';
 import '../widgets/gateway_activity_card.dart';
 import '../widgets/chat_context_header.dart';
 import '../widgets/markdown_code_block.dart';
 import '../widgets/attachment_draft_tile.dart';
+import '../widgets/asset_preview_sheet.dart';
 import '../widgets/chat_end_affordance.dart';
 import '../widgets/gateway_approval_dialog.dart';
 import '../widgets/gateway_clarify_dialog.dart';
@@ -135,6 +138,218 @@ class _ModelChoice {
   final String model;
 
   const _ModelChoice({required this.provider, required this.model});
+}
+
+/// Per-chat model picker with a live filter over model IDs and provider names.
+///
+/// Filtering only decides which rows are visible; it never changes the
+/// selected choice or applies anything. A selected row hidden by the query
+/// stays selected, and duplicate model IDs remain distinct by provider.
+class _ChatModelPickerSheet extends StatefulWidget {
+  const _ChatModelPickerSheet({
+    required this.choices,
+    required this.modelInfo,
+    required this.initialChoice,
+    required this.initialEffort,
+    required this.providerChoiceRequired,
+  });
+
+  final List<_ModelChoice> choices;
+  final Map<String, dynamic> modelInfo;
+  final _ModelChoice? initialChoice;
+  final String initialEffort;
+  final bool providerChoiceRequired;
+
+  @override
+  State<_ChatModelPickerSheet> createState() => _ChatModelPickerSheetState();
+}
+
+class _ChatModelPickerSheetState extends State<_ChatModelPickerSheet> {
+  final _searchController = TextEditingController();
+  late _ModelChoice? _selectedChoice = widget.initialChoice;
+  late String _selectedEffort = widget.initialEffort;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final query = _searchController.text.trim().toLowerCase();
+    final visibleChoices = widget.choices
+        .where(
+          (choice) =>
+              choice.model.toLowerCase().contains(query) ||
+              choice.provider.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 640),
+          child: Column(
+            children: [
+              // Let the header and search scroll too: on a compact phone or
+              // at large text sizes the keyboard can leave very little room.
+              Expanded(
+                child: CustomScrollView(
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.tune),
+                            title: Text(
+                              context.l10n.model_and_thinking_for_this_chat,
+                            ),
+                            subtitle: Text(
+                              'Profile default: ${widget.modelInfo['model'] ?? 'unknown'}'
+                              '${widget.modelInfo['provider'] == null ? '' : ' • ${widget.modelInfo['provider']}'}',
+                            ),
+                          ),
+                          if (widget.providerChoiceRequired)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: Text(
+                                'This model is available from multiple providers. Choose a provider to continue.',
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                            child: InputDecorator(
+                              decoration: InputDecoration(
+                                labelText: context.l10n.thinking_effort,
+                                border: const OutlineInputBorder(),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  isExpanded: true,
+                                  value: _selectedEffort,
+                                  items: _reasoningEffortOptions
+                                      .map(
+                                        (effort) => DropdownMenuItem(
+                                          value: effort,
+                                          child: Text(
+                                            _reasoningEffortLabel(
+                                              context,
+                                              effort,
+                                            ),
+                                          ),
+                                        ),
+                                      )
+                                      .toList(growable: false),
+                                  onChanged: (value) {
+                                    if (value == null) return;
+                                    setState(() => _selectedEffort = value);
+                                  },
+                                ),
+                              ),
+                            ),
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                            child: TextField(
+                              key: const Key('chat-model-search'),
+                              controller: _searchController,
+                              decoration: InputDecoration(
+                                labelText: context.l10n.search,
+                                prefixIcon: const Icon(Icons.search),
+                                border: const OutlineInputBorder(),
+                                suffixIcon: _searchController.text.isEmpty
+                                    ? null
+                                    : IconButton(
+                                        tooltip: context.l10n.clear_search,
+                                        icon: const Icon(Icons.clear),
+                                        onPressed: () =>
+                                            setState(_searchController.clear),
+                                      ),
+                              ),
+                              autocorrect: false,
+                              enableSuggestions: false,
+                              textInputAction: TextInputAction.search,
+                              onChanged: (_) => setState(() {}),
+                            ),
+                          ),
+                          const Divider(height: 1),
+                        ],
+                      ),
+                    ),
+                    if (visibleChoices.isEmpty)
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            context.l10n.no_matches,
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    else
+                      SliverList.builder(
+                        itemCount: visibleChoices.length,
+                        itemBuilder: (context, index) {
+                          final choice = visibleChoices[index];
+                          final selected =
+                              choice.model == _selectedChoice?.model &&
+                              choice.provider == _selectedChoice?.provider;
+                          return ListTile(
+                            leading: Icon(
+                              selected
+                                  ? Icons.check_circle
+                                  : Icons.smart_toy_outlined,
+                              color: selected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : null,
+                            ),
+                            title: Text(choice.model),
+                            subtitle: Text(choice.provider),
+                            onTap: () =>
+                                setState(() => _selectedChoice = choice),
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+                child: OverflowBar(
+                  alignment: MainAxisAlignment.end,
+                  overflowAlignment: OverflowBarAlignment.end,
+                  spacing: 8,
+                  children: [
+                    TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: Text(context.l10n.cancel),
+                    ),
+                    FilledButton(
+                      onPressed: _selectedChoice == null
+                          ? null
+                          : () => Navigator.pop(
+                              context,
+                              _ModelSelection(
+                                choice: _selectedChoice!,
+                                reasoningEffort: _selectedEffort,
+                              ),
+                            ),
+                      child: Text(context.l10n.apply_to_this_chat),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ModelSelection {
@@ -498,6 +713,23 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   List<Map<String, dynamic>> _messages = [];
+
+  /// Local epoch-seconds stamp for optimistic rows. History rows carry the
+  /// server's per-message timestamp; locally inserted rows must not wait for a
+  /// history refresh to show a clock.
+  double _messageTimestampNow() =>
+      DateTime.now().millisecondsSinceEpoch / 1000.0;
+
+  /// Marks a locally pending assistant row complete and stamps the completion
+  /// clock. Historical rows already carry the server timestamp; this only
+  /// rewrites rows whose `_gateway_pending_response` was true.
+  void _markAssistantComplete(Map<String, dynamic> message) {
+    if (message['_gateway_pending_response'] == true) {
+      message['timestamp'] = _messageTimestampNow();
+    }
+    message['_gateway_pending_response'] = false;
+  }
+
   final List<GatewayToolActivity> _toolActivities = [];
   final List<GatewaySubagentActivity> _subagentActivities = [];
   final Map<String, GatewayNotification> _gatewayNotifications = {};
@@ -1179,11 +1411,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     await _fetchMessages();
     if (!mounted) return;
     unawaited(_refreshContextUsage());
-    // A dashboard connection has no legacy REST chat transport: recovery
-    // failure must surface as an error, never fall through to 8642.
-    await _recoverPendingTurn(
-      allowLegacyFallback: !usesDashboardRest(widget.connection),
-    );
+    // The fallback here is the desktop gateway's own legacy `prompt.submit`
+    // route, not 8642: a stock gateway without durable-turn capability must
+    // still be able to send. `_sendMessage` keeps the dashboard connection
+    // off the 8642 REST path when no desktop client exists.
+    await _recoverPendingTurn(allowLegacyFallback: true);
   }
 
   /// Pulls the WS breakdown snapshot into [_contextUsage].
@@ -1222,28 +1454,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     setState(() => _contextUsage = parsed);
   }
 
-  String _hintLabel() {
-    final contextUsage = _contextUsage;
-    if (contextUsage != null) {
-      return context.l10n.usage_bar_summary(
-        TurnUsage.formatCompact(contextUsage.used),
-        TurnUsage.formatCompact(contextUsage.max),
-        contextUsage.percent.round(),
-      );
-    }
-    final lastTurn = _lastTurnUsage;
-    if (lastTurn != null) {
-      return context.l10n.usage_this_turn(
-        TurnUsage.formatCompact(lastTurn.totalTokens),
-      );
-    }
-    return '';
-  }
-
   bool _compressing = false;
 
+  /// A `status.update` compression edge from the gateway. Manual compression
+  /// from this screen uses [_compressing]; this flag lets a compression
+  /// started by another client (or an automatic one) drive the same bar.
+  bool _remoteCompressing = false;
+
+  bool get _compressionActive => _compressing || _remoteCompressing;
+
   bool get _canCompress =>
-      !_compressing &&
+      !_compressionActive &&
       !_sending &&
       !_streaming &&
       !_localSubmitActive &&
@@ -1335,50 +1556,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _showUsageDialog() {
-    if (!mounted) return;
-    final contextUsage = _contextUsage;
-    final lastTurn = _lastTurnUsage;
-    if (contextUsage == null && lastTurn == null) return;
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        final dialogL10n = dialogContext.l10n;
-        return AlertDialog(
-          title: Text(dialogL10n.usage_title),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (contextUsage != null) ...[
-                Text(
-                  dialogL10n.usage_bar_summary(
-                    TurnUsage.formatCompact(contextUsage.used),
-                    TurnUsage.formatCompact(contextUsage.max),
-                    contextUsage.percent.round(),
-                  ),
-                ),
-                if (contextUsage.model.isNotEmpty)
-                  Text(dialogL10n.usage_model_name(contextUsage.model)),
-              ] else if (lastTurn != null)
-                Text(
-                  dialogL10n.usage_this_turn(
-                    TurnUsage.formatCompact(lastTurn.totalTokens),
-                  ),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(dialogContext).pop(),
-              child: Text(dialogL10n.dismiss),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   /// Desktop gateway connection-state transitions.
   ///
   /// A deliberate connection switch or a dropped socket detaches the WS
@@ -1414,7 +1591,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     }
     if (state != DesktopConnectionState.connected) _pauseReattachRetry();
-    setState(() => _desktopConnectionState = state);
+    setState(() {
+      _desktopConnectionState = state;
+      // A compression started on the old socket cannot deliver its clear
+      // edge after the transport drops; unlock the composer instead of
+      // leaving it disabled forever.
+      if (state != DesktopConnectionState.connected) {
+        _remoteCompressing = false;
+      }
+    });
     if (connectionChanged && state == DesktopConnectionState.connected) {
       final reconnected = _desktopHasConnected;
       _desktopHasConnected = true;
@@ -1486,6 +1671,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
     unawaited(_refreshProjectName());
+    // The init-time usage read can race the session binding (it returns null
+    // while `_gatewaySessionIds` is still empty). A successful resume is the
+    // first moment the breakdown RPC is guaranteed addressable, so re-read it.
+    unawaited(_refreshContextUsage());
     final yolo = gateway.sessionYoloFor(widget.session.id);
     if (yolo != null && mounted) {
       setState(() {
@@ -1700,12 +1889,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       if (userText.isNotEmpty &&
           (lastUser['content']?.toString() ?? '').trim() != userText) {
-        _messages.add({'role': 'user', 'content': userText});
+        _messages.add({
+          'role': 'user',
+          'content': userText,
+          'timestamp': _messageTimestampNow(),
+        });
       }
       _messages.removeWhere((message) => message['_follow_projection'] == true);
       _messages.add({
         'role': 'assistant',
         'content': projection.assistant,
+        'timestamp': _messageTimestampNow(),
         '_gateway_pending_response': true,
         '_follow_projection': true,
       });
@@ -3169,123 +3363,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               : desktopGateway != null
               ? modelInfo['provider']?.toString().trim()
               : null);
-      var selectedChoice = _initialModelChoice(
+      final selectedChoice = _initialModelChoice(
         choices,
         selectedModel: selectedModel,
         provider: providerHint,
       );
       final providerChoiceRequired = selectedChoice == null;
-      var selectedEffort = currentEffort;
       final selection = await showModalBottomSheet<_ModelSelection>(
         context: context,
         showDragHandle: true,
         isScrollControlled: true,
-        builder: (sheetContext) => StatefulBuilder(
-          builder: (context, setSheetState) => SafeArea(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 640),
-              child: Column(
-                children: [
-                  ListTile(
-                    leading: const Icon(Icons.tune),
-                    title: Text(context.l10n.model_and_thinking_for_this_chat),
-                    subtitle: Text(
-                      'Profile default: ${modelInfo['model'] ?? 'unknown'}'
-                      '${modelInfo['provider'] == null ? '' : ' • ${modelInfo['provider']}'}',
-                    ),
-                  ),
-                  if (providerChoiceRequired)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Text(
-                        'This model is available from multiple providers. Choose a provider to continue.',
-                      ),
-                    ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-                    child: InputDecorator(
-                      decoration: InputDecoration(
-                        labelText: context.l10n.thinking_effort,
-                        border: OutlineInputBorder(),
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          isExpanded: true,
-                          value: selectedEffort,
-                          items: _reasoningEffortOptions
-                              .map(
-                                (effort) => DropdownMenuItem(
-                                  value: effort,
-                                  child: Text(
-                                    _reasoningEffortLabel(context, effort),
-                                  ),
-                                ),
-                              )
-                              .toList(growable: false),
-                          onChanged: (value) {
-                            if (value == null) return;
-                            setSheetState(() => selectedEffort = value);
-                          },
-                        ),
-                      ),
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: choices.length,
-                      itemBuilder: (context, index) {
-                        final choice = choices[index];
-                        final selected =
-                            choice.model == selectedChoice?.model &&
-                            choice.provider == selectedChoice?.provider;
-                        return ListTile(
-                          leading: Icon(
-                            selected
-                                ? Icons.check_circle
-                                : Icons.smart_toy_outlined,
-                            color: selected
-                                ? Theme.of(context).colorScheme.primary
-                                : null,
-                          ),
-                          title: Text(choice.model),
-                          subtitle: Text(choice.provider),
-                          onTap: () =>
-                              setSheetState(() => selectedChoice = choice),
-                        );
-                      },
-                    ),
-                  ),
-                  const Divider(height: 1),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
-                      children: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(sheetContext),
-                          child: Text(context.l10n.cancel),
-                        ),
-                        const SizedBox(width: 8),
-                        FilledButton(
-                          onPressed: selectedChoice == null
-                              ? null
-                              : () => Navigator.pop(
-                                  sheetContext,
-                                  _ModelSelection(
-                                    choice: selectedChoice!,
-                                    reasoningEffort: selectedEffort,
-                                  ),
-                                ),
-                          child: Text(context.l10n.apply_to_this_chat),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+        builder: (sheetContext) => _ChatModelPickerSheet(
+          choices: choices,
+          modelInfo: modelInfo,
+          initialChoice: selectedChoice,
+          initialEffort: currentEffort,
+          providerChoiceRequired: providerChoiceRequired,
         ),
       );
       if (selection != null && mounted && !_pendingReattachResync) {
@@ -3428,6 +3521,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   /// Send message via SSE streaming (Gateway API Server).
   Future<void> _sendMessage({bool speakResponse = false}) async {
     if (_voiceComposer.listening) return;
+    if (_compressionActive) return;
     final text = _textController.text.trim();
     final attachments = List<AttachmentDraft>.from(_attachmentDrafts);
     if (text.isEmpty && attachments.isEmpty) return;
@@ -3521,11 +3615,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         kind: 'starting',
         text: context.l10n.starting_hermes,
       );
-      _messages.add({'role': 'user', 'content': localContent});
+      _messages.add({
+        'role': 'user',
+        'content': localContent,
+        'timestamp': _messageTimestampNow(),
+      });
       // Insert a placeholder streaming message
       _messages.add({
         'role': 'assistant',
         'content': '',
+        'timestamp': _messageTimestampNow(),
         '_gateway_pending_response': true,
       });
     });
@@ -3612,7 +3711,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           _scrollCoordinator.cancelStreaming();
           setState(() {
             if (_messages.isNotEmpty && _messages.last['role'] == 'assistant') {
-              _messages.last['_gateway_pending_response'] = false;
+              _markAssistantComplete(_messages.last);
             }
             _streaming = false;
             _sending = false;
@@ -3752,10 +3851,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               text: context.l10n.starting_hermes,
             );
             _attachmentDrafts.clear();
-            _messages.add({'role': 'user', 'content': localContent});
+            _messages.add({
+              'role': 'user',
+              'content': localContent,
+              'timestamp': _messageTimestampNow(),
+            });
             _messages.add({
               'role': 'assistant',
               'content': '',
+              'timestamp': _messageTimestampNow(),
               '_gateway_pending_response': true,
             });
             turnAdded = true;
@@ -3805,7 +3909,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         final assistant = _lastAssistantMessage();
         if (assistant != null) {
-          assistant['_gateway_pending_response'] = false;
+          _markAssistantComplete(assistant);
         }
         _streaming = false;
         _sending = false;
@@ -3974,10 +4078,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         text: context.l10n.starting_hermes,
       );
       _attachmentDrafts.clear();
-      _messages.add({'role': 'user', 'content': localContent});
+      _messages.add({
+        'role': 'user',
+        'content': localContent,
+        'timestamp': _messageTimestampNow(),
+      });
       _messages.add({
         'role': 'assistant',
         'content': '',
+        'timestamp': _messageTimestampNow(),
         '_gateway_pending_response': true,
       });
     });
@@ -4048,7 +4157,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
     if (reasoning != null) {
       setState(() {
-        _gatewayTurnStatus = null;
+        _gatewayTurnStatus = const GatewayTurnStatus(
+          kind: 'reasoning',
+          text: '',
+        );
         final assistant = _lastAssistantMessage();
         if (assistant == null) return;
         // `reasoning.available` carries the reply's own opening, not thinking
@@ -4134,10 +4246,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         assistant['content'] = transition.sealedText;
         if (transition.startsNewMessage) {
           assistant['_gateway_interim'] = true;
-          assistant['_gateway_pending_response'] = false;
+          _markAssistantComplete(assistant);
           _messages.add({
             'role': 'assistant',
             'content': '',
+            'timestamp': _messageTimestampNow(),
             '_gateway_pending_response': true,
           });
         }
@@ -4153,7 +4266,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         final assistant = _lastAssistantMessage();
         if (assistant != null) {
-          assistant['_gateway_pending_response'] = false;
+          _markAssistantComplete(assistant);
           if (completeText.isNotEmpty) {
             final current = assistant['content']?.toString() ?? '';
             if (current.isEmpty) _registerMaterializedAssistantMessage();
@@ -4183,8 +4296,36 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     return null;
   }
 
+  /// Drives the compression bar from `status.update` edges emitted by the
+  /// gateway. Manual compression from this screen uses [_compressing]; this
+  /// covers a compression started elsewhere (another client or automatic).
+  bool _handleCompressionStatusEvent(StreamEvent event) {
+    final kind = event.data['kind']?.toString().trim();
+    final text = event.data['text']?.toString().trim().toLowerCase();
+    if (kind == 'compressing' || kind == 'compacting') {
+      if (!_remoteCompressing) {
+        setState(() => _remoteCompressing = true);
+      }
+      return true;
+    }
+    // `_status_update(sid, 'ready')` sends the bare kind as text, so the
+    // clear edge arrives as status/ready rather than kind=ready.
+    if (kind == 'compacted' ||
+        kind == 'ready' ||
+        (kind == 'status' && text == 'ready')) {
+      if (_remoteCompressing) {
+        setState(() => _remoteCompressing = false);
+      }
+      return true;
+    }
+    return false;
+  }
+
   void _handleDesktopAsyncEvent(String mobileSessionId, StreamEvent event) {
     if (!mounted || mobileSessionId != widget.session.id) return;
+    if (event.type == 'status.update' && _handleCompressionStatusEvent(event)) {
+      return;
+    }
     // A followed turn renders HERE, and its frames arrive on the shared
     // connection rather than on a submit listener this screen owns. The frame
     // a running local submit already rendered is dropped here as its
@@ -4210,6 +4351,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     // blocking cards parked for it are cleared first (see
     // [_clearTurnEndBlockingPrompts]).
     if (_gatewayTerminalEventTypes.contains(event.type)) {
+      if (_remoteCompressing) {
+        setState(() => _remoteCompressing = false);
+      }
       _clearTurnEndBlockingPrompts();
       if (_followLiveTurn) {
         _handleFollowTerminalFrame(event);
@@ -5104,7 +5248,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           final assistant = _lastAssistantMessage();
           if (assistant != null) {
-            assistant['_gateway_pending_response'] = false;
+            _markAssistantComplete(assistant);
           }
         });
       }
@@ -5337,12 +5481,27 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             PopupMenuButton<String>(
               tooltip: context.l10n.chat_actions,
               onSelected: (action) {
+                if (action == 'compress') unawaited(_confirmCompress());
                 if (action == 'refresh' && !_pendingReattachResync) {
                   _fetchMessages();
                 }
                 if (action == 'export') _exportConversation();
               },
               itemBuilder: (_) => [
+                PopupMenuItem(
+                  key: const Key('chat-compress-menu-item'),
+                  value: 'compress',
+                  enabled: _canCompress,
+                  child: ListTile(
+                    leading: _compressing
+                        ? const SizedBox.square(
+                            dimension: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.compress),
+                    title: Text(context.l10n.compress_context),
+                  ),
+                ),
                 PopupMenuItem(
                   value: 'refresh',
                   enabled: !_pendingReattachResync,
@@ -5514,8 +5673,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (_gatewayTurnStatus != null && (_sending || _streaming))
+                    if (_compressionActive ||
+                        (_gatewayTurnStatus != null &&
+                            (_sending || _streaming)))
                       Container(
+                        key: const Key('chat-turn-status'),
                         width: double.infinity,
                         margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
                         padding: const EdgeInsets.symmetric(
@@ -5540,7 +5702,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                _gatewayTurnStatus!.text,
+                                _compressionActive
+                                    ? context.l10n.compress_in_progress
+                                    : _gatewayTurnStatus!.kind == 'reasoning'
+                                    ? context.l10n.reasoning
+                                    : _gatewayTurnStatus!.text,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.bodySmall,
@@ -5599,78 +5765,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
-                    if (_contextUsage != null || _lastTurnUsage != null)
-                      Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.fromLTRB(4, 2, 4, 2),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.55),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Semantics(
-                          label: context.l10n.usage_title,
-                          value: _hintLabel(),
-                          button: true,
-                          excludeSemantics: true,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(minHeight: 48),
-                            child: InkWell(
-                              key: const Key('usage-hint-bar'),
-                              borderRadius: BorderRadius.circular(12),
-                              onTap: _showUsageDialog,
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(12, 6, 8, 6),
-                                child: Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        _hintLabel(),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: Theme.of(context).textTheme.bodySmall,
-                                      ),
-                                    ),
-                                    if (_desktopGateway != null ||
-                                        widget.testSlashExec != null)
-                                      IconButton(
-                                        key: const Key('compress-button'),
-                                        tooltip: context.l10n.compress_context,
-                                        visualDensity: VisualDensity.compact,
-                                        padding: EdgeInsets.zero,
-                                        constraints:
-                                            const BoxConstraints.tightFor(
-                                          width: 32,
-                                          height: 32,
-                                        ),
-                                        icon: _compressing
-                                            ? const SizedBox.square(
-                                                dimension: 16,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                  strokeWidth: 2,
-                                                ),
-                                              )
-                                            : const Icon(
-                                                Icons.compress,
-                                                size: 18,
-                                              ),
-                                        onPressed: _canCompress
-                                            ? _confirmCompress
-                                            : null,
-                                      ),
-                                    Icon(
-                                      Icons.chevron_right,
-                                      size: 14,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
-                                    ),
-                                  ],
-                                ),
-                              ),
+                    if (_contextUsage != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: ContextUsageBar(usage: _contextUsage!),
+                      )
+                    else if (_lastTurnUsage != null)
+                      Padding(
+                        key: const Key('turn-usage-hint-bar'),
+                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 4),
+                        child: Text(
+                          context.l10n.usage_this_turn(
+                            TurnUsage.formatCompact(
+                              _lastTurnUsage!.totalTokens,
                             ),
                           ),
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
                     if (_attachmentDrafts.isNotEmpty)
@@ -5689,34 +5799,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                           child: Semantics(
                             label: context.l10n.attachment_drafts,
                             child: ConstrainedBox(
-                            constraints: BoxConstraints(
-                              // Scaffold has already subtracted the keyboard and app bar.
-                              maxHeight: availableHeight * 0.32,
-                            ),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: _attachmentDrafts.length,
-                              itemBuilder: (context, index) =>
-                                  AttachmentDraftTile(
-                                    draft: _attachmentDrafts[index],
-                                    index: index,
-                                    total: _attachmentDrafts.length,
-                                    busy: _sending,
-                                    onMovePrevious: () => _moveAttachment(
-                                      _attachmentDrafts[index],
-                                      -1,
+                              constraints: BoxConstraints(
+                                // Scaffold has already subtracted the keyboard and app bar.
+                                maxHeight: availableHeight * 0.32,
+                              ),
+                              child: ListView.builder(
+                                shrinkWrap: true,
+                                itemCount: _attachmentDrafts.length,
+                                itemBuilder: (context, index) =>
+                                    AttachmentDraftTile(
+                                      draft: _attachmentDrafts[index],
+                                      index: index,
+                                      total: _attachmentDrafts.length,
+                                      busy: _sending,
+                                      onMovePrevious: () => _moveAttachment(
+                                        _attachmentDrafts[index],
+                                        -1,
+                                      ),
+                                      onMoveNext: () => _moveAttachment(
+                                        _attachmentDrafts[index],
+                                        1,
+                                      ),
+                                      onRetry: () => _retryAttachment(
+                                        _attachmentDrafts[index],
+                                      ),
+                                      onRemove: () => _removeAttachment(
+                                        _attachmentDrafts[index],
+                                      ),
                                     ),
-                                    onMoveNext: () => _moveAttachment(
-                                      _attachmentDrafts[index],
-                                      1,
-                                    ),
-                                    onRetry: () => _retryAttachment(
-                                      _attachmentDrafts[index],
-                                    ),
-                                    onRemove: () => _removeAttachment(
-                                      _attachmentDrafts[index],
-                                    ),
-                                  ),
                               ),
                             ),
                           ),
@@ -5842,6 +5952,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                       _streaming ||
                       (!_transcriptLoadBlocksComposer &&
                           !_sending &&
+                          !_compressionActive &&
                           !_pendingReattachResync &&
                           !_voiceComposer.listening),
                   excludeSemantics: true,
@@ -5867,6 +5978,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                               onPressed:
                                   _transcriptLoadBlocksComposer ||
                                       _sending ||
+                                      _compressionActive ||
                                       _pendingReattachResync ||
                                       _voiceComposer.listening
                                   ? null
@@ -5937,75 +6049,82 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       onPointerUp: (_) => _releaseTranscriptPointer(),
       onPointerCancel: (_) => _releaseTranscriptPointer(),
       child: NotificationListener<ScrollMetricsNotification>(
-      onNotification: (notification) {
-        _syncEndAffordance(notification.metrics, clearUnreadAtEnd: false);
-        return false;
-      },
-      child: NotificationListener<ScrollNotification>(
-        onNotification: _handleScrollNotification,
-        child: ListView.builder(
-          controller: _scrollController,
-          padding: EdgeInsets.only(bottom: _chatDensity.listEndPadding),
-          itemCount: displayMessages.length,
-          itemBuilder: (context, index) {
-            final item = displayMessages[index];
+        onNotification: (notification) {
+          _syncEndAffordance(notification.metrics, clearUnreadAtEnd: false);
+          return false;
+        },
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _handleScrollNotification,
+          child: ListView.builder(
+            controller: _scrollController,
+            padding: EdgeInsets.only(bottom: _chatDensity.listEndPadding),
+            itemCount: displayMessages.length,
+            itemBuilder: (context, index) {
+              final item = displayMessages[index];
 
-            if (item is List<GatewayToolActivity>) {
-              return GatewayActivityCard(
-                activities: item,
+              if (item is List<GatewayToolActivity>) {
+                return GatewayActivityCard(
+                  activities: item,
+                  verbose: _verboseMode,
+                );
+              }
+              if (item is List<GatewaySubagentActivity>) {
+                return GatewaySubagentCard(activities: item);
+              }
+              if (item is ChatReasoningItem) {
+                return GatewayReasoningCard(
+                  text: item.text,
+                  initiallyExpanded: item.initiallyExpanded,
+                  identity: item.identity,
+                );
+              }
+              if (item is GatewayNotice) {
+                return GatewayNoticeCard(
+                  notice: item,
+                  onDismiss: () => _dismissGatewayNotice(item),
+                );
+              }
+
+              final msg = item as Map<String, dynamic>;
+              final role = (msg['role'] as String?) ?? 'assistant';
+              final content =
+                  (msg['_display_content'] as String?) ??
+                  stripToolResultText(messageContentToText(msg['content']));
+              final isUser = role == 'user';
+              final timestamp = messageTimestamp(msg);
+
+              return MessageBubble(
+                content: content,
+                isUser: isUser,
                 verbose: _verboseMode,
+                density: _chatDensity,
+                metadata: msg,
+                timestamp: isUser || msg['_gateway_pending_response'] != true
+                    ? timestamp
+                    : null,
+                mediaReferencesFinal: msg['_gateway_pending_response'] != true,
+                mediaFilesClient: isUser
+                    ? null
+                    : () =>
+                          widget.testMediaFilesClient?.call(
+                            _storedSessionKey,
+                          ) ??
+                          RemoteFilesClient.fromConnection(
+                            widget.connection,
+                            sessionId: _storedSessionKey,
+                          ),
+                onReadAloud: isUser
+                    ? null
+                    : () => _readAssistantText(content, announce: true),
+                onEdit: isUser ? () => _editAndResend(content) : null,
+                onRetry: isUser
+                    ? null
+                    : () =>
+                          _retryPrompt(msg['_retry_prompt']?.toString() ?? ''),
               );
-            }
-            if (item is List<GatewaySubagentActivity>) {
-              return GatewaySubagentCard(activities: item);
-            }
-            if (item is ChatReasoningItem) {
-              return GatewayReasoningCard(
-                text: item.text,
-                initiallyExpanded: item.initiallyExpanded,
-                identity: item.identity,
-              );
-            }
-            if (item is GatewayNotice) {
-              return GatewayNoticeCard(
-                notice: item,
-                onDismiss: () => _dismissGatewayNotice(item),
-              );
-            }
-
-            final msg = item as Map<String, dynamic>;
-            final role = (msg['role'] as String?) ?? 'assistant';
-            final content =
-                (msg['_display_content'] as String?) ??
-                stripToolResultText(messageContentToText(msg['content']));
-            final isUser = role == 'user';
-
-            return MessageBubble(
-              content: content,
-              isUser: isUser,
-              verbose: _verboseMode,
-              density: _chatDensity,
-              metadata: msg,
-              mediaReferencesFinal: msg['_gateway_pending_response'] != true,
-              mediaFilesClient: isUser
-                  ? null
-                  : () =>
-                        widget.testMediaFilesClient?.call(_storedSessionKey) ??
-                        RemoteFilesClient.fromConnection(
-                          widget.connection,
-                          sessionId: _storedSessionKey,
-                        ),
-              onReadAloud: isUser
-                  ? null
-                  : () => _readAssistantText(content, announce: true),
-              onEdit: isUser ? () => _editAndResend(content) : null,
-              onRetry: isUser
-                  ? null
-                  : () => _retryPrompt(msg['_retry_prompt']?.toString() ?? ''),
-            );
-          },
+            },
+          ),
         ),
-      ),
       ),
     );
   }
@@ -6041,6 +6160,7 @@ class MessageBubble extends StatelessWidget {
   final VoidCallback? onEdit;
   final Future<void> Function()? onRetry;
   final bool mediaReferencesFinal;
+  final DateTime? timestamp;
 
   /// Gateway files client factory for `MEDIA:` artifact cards. Assistant
   /// bubbles without it render `MEDIA:` tags as prose (e.g. transcript views
@@ -6060,6 +6180,7 @@ class MessageBubble extends StatelessWidget {
     this.onRetry,
     this.mediaFilesClient,
     this.mediaReferencesFinal = true,
+    this.timestamp,
   });
 
   Future<void> _copyMessage(BuildContext context) async {
@@ -6186,6 +6307,7 @@ class MessageBubble extends StatelessWidget {
   /// documentation, not a delivery. Mid-line refs stay in the prose as
   /// markdown links so they never fragment a list item or table row.
   List<Widget> _renderContent(
+    BuildContext context,
     ThemeData theme,
     bool isUser,
     Color assistantTextColor,
@@ -6207,10 +6329,21 @@ class MessageBubble extends StatelessWidget {
                   ? null
                   : mediaPathFromArtifactHref(href);
               if (path == null) return;
+              final ref = MediaTagRef(path: path);
+              if (isVideoAsset(ref) || isOfficeAsset(ref)) {
+                unawaited(
+                  showAssetPreview(
+                    context: context,
+                    ref: ref,
+                    filesClient: filesClient,
+                  ),
+                );
+                return;
+              }
               unawaited(
                 downloadAndShareMediaFile(
                   filesClient: filesClient,
-                  ref: MediaTagRef(path: path),
+                  ref: ref,
                 ).catchError((Object e) {
                   debugPrint('media link download failed: $e');
                 }),
@@ -6478,7 +6611,26 @@ class MessageBubble extends StatelessWidget {
             // language, copy, and wrap controls. User bubbles never parse
             // MEDIA: — the contract is assistant-side delivery, and quoted
             // tags in a prompt must stay verbatim.
-            ..._renderContent(theme, isUser, assistantTextColor),
+            ..._renderContent(context, theme, isUser, assistantTextColor),
+            if (timestamp case final time?) ...[
+              SizedBox(height: density.timestampGap),
+              Align(
+                alignment: isUser
+                    ? Alignment.centerRight
+                    : Alignment.centerLeft,
+                child: Text(
+                  formatMessageClock(context, time),
+                  key: const Key('message-timestamp'),
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isUser
+                        ? hermesUserMessageForeground.withValues(alpha: 0.65)
+                        : theme.colorScheme.onSurfaceVariant,
+                    fontSize: 11,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+            ],
             SizedBox(height: density.bodyBottomGap),
           ],
         ),

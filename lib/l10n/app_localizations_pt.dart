@@ -951,7 +951,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Certifique-se de que o servidor de API do Gateway esteja em execução\n(hermes gateway status)';
 
   @override
-  String matches(Object assigned, Object name) {
+  String matches(String name, String assigned) {
     return 'Corresponde a $name · $assigned';
   }
 
@@ -2719,6 +2719,160 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get crons => 'Crons';
+
+  @override
+  String get pin_chat => 'Pin chat';
+
+  @override
+  String get unpin_chat => 'Unpin chat';
+
+  @override
+  String get could_not_update_chat_pin => 'Could not update chat pin';
+
+  @override
+  String get chat_pin_server_unsupported =>
+      'This gateway does not support synced pins; the chat was pinned on this device only.';
+
+  @override
+  String get pinned_chats => 'Pinned';
+
+  @override
+  String get archive_chat => 'Archive chat';
+
+  @override
+  String get unarchive_chat => 'Unarchive chat';
+
+  @override
+  String get could_not_update_chat_archive => 'Could not update chat archive';
+
+  @override
+  String get crons_upcoming => 'Upcoming';
+
+  @override
+  String get crons_history => 'History';
+
+  @override
+  String get cron_no_next_run => 'No next run scheduled';
+
+  @override
+  String get cron_timezone_unknown => 'timezone unknown';
+
+  @override
+  String get cron_needs_dashboard =>
+      'Scheduled jobs need a Dashboard connection.';
+
+  @override
+  String get cron_upcoming_empty => 'No scheduled jobs.';
+
+  @override
+  String get cron_open_manager => 'Open cron manager';
+
+  @override
+  String get cron_status_enabled => 'Enabled';
+
+  @override
+  String get cron_status_paused => 'Paused';
+
+  @override
+  String cron_deliver_to(String target) {
+    return 'Delivers to: $target';
+  }
+
+  @override
+  String get fallback_title => 'Fallback models';
+
+  @override
+  String get fallback_notice =>
+      'Tried in order when the main model is unavailable. Changes apply to this profile only; save the complete list explicitly.';
+
+  @override
+  String get fallback_unavailable =>
+      'Fallback settings are unavailable or invalid. Check the connection, selected profile and host version, then retry.';
+
+  @override
+  String get fallback_discovery_unavailable =>
+      'Provider discovery is unavailable. Existing entries are preserved; retry to choose providers and models.';
+
+  @override
+  String get fallback_empty => 'No entries in this fallback list.';
+
+  @override
+  String get fallback_incomplete =>
+      'Choose a provider and model for every entry, or remove incomplete entries before saving.';
+
+  @override
+  String get fallback_add => 'Add fallback';
+
+  @override
+  String get fallback_save => 'Save fallback list';
+
+  @override
+  String get fallback_save_failed =>
+      'Could not verify the saved fallback list. Your draft is preserved. Retry saving or refresh to reload the host settings.';
+
+  @override
+  String get fallback_saved => 'Fallback list saved and verified.';
+
+  @override
+  String get fallback_legacy_title => 'Legacy fallbacks (read-only)';
+
+  @override
+  String get fallback_legacy_notice =>
+      'The host also uses fallback_model after this list, skipping duplicate routes. These legacy entries are preserved, even when the list above is empty. Edit them on the host.';
+
+  @override
+  String fallback_priority(String position) {
+    return 'Priority $position';
+  }
+
+  @override
+  String get fallback_move_up => 'Move up';
+
+  @override
+  String get fallback_move_down => 'Move down';
+
+  @override
+  String get fallback_routing_read_only =>
+      'Routing details or an unlisted provider are preserved. Edit this provider/model on the host; you can still reorder or remove the entry.';
+
+  @override
+  String get context_usage_title => 'Context usage';
+
+  @override
+  String context_usage_percent(int percent) {
+    return 'Context $percent%';
+  }
+
+  @override
+  String context_usage_tokens(String used, String max) {
+    return '$used / $max';
+  }
+
+  @override
+  String get context_usage_no_breakdown =>
+      'No per-category breakdown is available for this session.';
+
+  @override
+  String get context_usage_estimated => 'Estimated';
+
+  @override
+  String get compress_in_progress => 'Compressing context…';
+
+  @override
+  String get could_not_refresh_conversations =>
+      'Could not refresh conversations — showing the last results';
+
+  @override
+  String get unknown => 'unknown';
+
+  @override
+  String get voice_gender_male => '(male)';
+
+  @override
+  String get voice_gender_female => '(female)';
+
+  @override
+  String get no_cron_runs_match => 'No cron runs match this view';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -3661,7 +3815,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Certifique-se de que o servidor de API do Gateway esteja em execução\n(hermes gateway status)';
 
   @override
-  String matches(Object assigned, Object name) {
+  String matches(String name, String assigned) {
     return 'Corresponde a $name · $assigned';
   }
 

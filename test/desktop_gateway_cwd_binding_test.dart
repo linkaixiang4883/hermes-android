@@ -134,7 +134,8 @@ class _FakeGateway {
     final params = (frame['params'] as Map?)?.cast<String, dynamic>() ?? {};
 
     void reply(Object? result, {Map<String, dynamic>? error}) {
-      _safeAdd(socket,
+      _safeAdd(
+        socket,
         jsonEncode({
           'jsonrpc': '2.0',
           'id': frame['id'],
@@ -159,11 +160,14 @@ class _FakeGateway {
         creates.add(params);
         if (rejectCwdExplicitOnce && params.containsKey('cwd_explicit')) {
           rejectCwdExplicitOnce = false;
-          reply(null, error: {
-            'code': -32602,
-            'message':
-                'invalid params for session.create: cwd_explicit: Extra inputs are not permitted',
-          });
+          reply(
+            null,
+            error: {
+              'code': -32602,
+              'message':
+                  'invalid params for session.create: cwd_explicit: Extra inputs are not permitted',
+            },
+          );
         } else if (failFirstCreate) {
           failFirstCreate = false;
           reply(null, error: {'code': -32603, 'message': 'gateway hiccup'});
@@ -218,34 +222,37 @@ Future<void> _waitFor(bool Function() condition, {int tries = 100}) async {
 }
 
 void main() {
-  test('a prompt arriving after a reconnect still routes to its chat', () async {
-    final gateway = _FakeGateway(
-      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
-    );
-    gateway.liveSessionId = 'mob-1';
-    final client = DesktopGatewayClient.fromConnection(
-      _connection(gateway.baseUrl),
-    );
-    addTearDown(() async {
-      client.close();
-      await gateway.close();
-    });
+  test(
+    'a prompt arriving after a reconnect still routes to its chat',
+    () async {
+      final gateway = _FakeGateway(
+        await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      gateway.liveSessionId = 'mob-1';
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(() async {
+        client.close();
+        await gateway.close();
+      });
 
-    await client.ensureSession('mob-1');
-    expect(client.pendingPrompts.value, isEmpty);
+      await client.ensureSession('mob-1');
+      expect(client.pendingPrompts.value, isEmpty);
 
-    gateway.dropSocket();
-    await _waitFor(
-      () =>
-          gateway.socketOpens >= 2 &&
-          client.connectionState == DesktopConnectionState.connected,
-    );
+      gateway.dropSocket();
+      await _waitFor(
+        () =>
+            gateway.socketOpens >= 2 &&
+            client.connectionState == DesktopConnectionState.connected,
+      );
 
-    gateway.pushApproval(sessionId: 'runtime-1');
-    await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
+      gateway.pushApproval(sessionId: 'runtime-1');
+      await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
 
-    expect(client.pendingPrompts.value.single.mobileSessionId, 'mob-1');
-  });
+      expect(client.pendingPrompts.value.single.mobileSessionId, 'mob-1');
+    },
+  );
 
   test('a chat can read its prompt before the session is ever bound', () async {
     final gateway = _FakeGateway(
@@ -262,10 +269,7 @@ void main() {
     // The socket is up, but resume AND create both fail, so this chat has no
     // runtime mapping. The prompt names the chat by its own id.
     gateway.failFirstCreate = true;
-    await expectLater(
-      client.ensureSession('mob-1'),
-      throwsA(anything),
-    );
+    await expectLater(client.ensureSession('mob-1'), throwsA(anything));
     gateway.pushApproval(sessionId: 'mob-1');
     await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
 
@@ -275,9 +279,42 @@ void main() {
     expect(visible.single.event.type, 'approval.request');
   });
 
+  test('a failed preflight keeps the Project folder for the call that creates '
+      'the session', () async {
+    final gateway = _FakeGateway(
+      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+    );
+    gateway.failFirstCreate = true;
+    final client = DesktopGatewayClient.fromConnection(
+      _connection(gateway.baseUrl),
+    );
+    addTearDown(() async {
+      client.close();
+      await gateway.close();
+    });
+
+    // The open-time preflight — the gateway hiccups on its first create.
+    await expectLater(
+      client.ensureSession('mob-1', workingDirectory: '/srv/p1'),
+      throwsA(anything),
+    );
+
+    // The first action after the failure drives the retry that creates the
+    // session. It must still be born in the project's folder.
+    final attachment = await client.attachFile(
+      sessionId: 'mob-1',
+      name: 'notes.txt',
+      dataUrl: 'data:text/plain;base64,aGk=',
+    );
+
+    expect(attachment.refText, '@file:one');
+    expect(gateway.creates, hasLength(2));
+    expect(gateway.creates.first, {'cwd': '/srv/p1', 'cwd_explicit': true});
+    expect(gateway.creates.last, {'cwd': '/srv/p1', 'cwd_explicit': true});
+  });
+
   test(
-    'a failed preflight keeps the Project folder for the call that creates '
-    'the session',
+    'a failed preflight keeps the profile for the call that creates it',
     () async {
       final gateway = _FakeGateway(
         await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
@@ -291,78 +328,77 @@ void main() {
         await gateway.close();
       });
 
-      // The open-time preflight — the gateway hiccups on its first create.
       await expectLater(
-        client.ensureSession('mob-1', workingDirectory: '/srv/p1'),
+        client.ensureSession('mob-profile', profile: 'bot-a'),
         throwsA(anything),
       );
-
-      // The first action after the failure drives the retry that creates the
-      // session. It must still be born in the project's folder.
-      final attachment = await client.attachFile(
-        sessionId: 'mob-1',
+      await client.attachFile(
+        sessionId: 'mob-profile',
         name: 'notes.txt',
         dataUrl: 'data:text/plain;base64,aGk=',
       );
 
-      expect(attachment.refText, '@file:one');
       expect(gateway.creates, hasLength(2));
-      expect(gateway.creates.first, {'cwd': '/srv/p1', 'cwd_explicit': true});
-      expect(gateway.creates.last, {'cwd': '/srv/p1', 'cwd_explicit': true});
+      expect(gateway.creates.first['profile'], 'bot-a');
+      expect(gateway.creates.last['profile'], 'bot-a');
     },
   );
 
-  test('a first send with no preflight still creates inside the Project folder',
-      () async {
-    final gateway = _FakeGateway(
-      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
-    );
-    final client = DesktopGatewayClient.fromConnection(
-      _connection(gateway.baseUrl),
-    );
-    addTearDown(() async {
-      client.close();
-      await gateway.close();
-    });
-
-    // No ensureSession at all: the draft's first contact is the prompt. The
-    // submit path must still carry the Project folder into session.create.
-    try {
-      await client.submitPrompt(
-        sessionId: 'mob-draft',
-        text: 'hello',
-        workingDirectory: '/srv/p2',
-        onEvent: (_) {},
-        onSent: () {},
+  test(
+    'a first send with no preflight still creates inside the Project folder',
+    () async {
+      final gateway = _FakeGateway(
+        await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
       );
-    } catch (_) {
-      // prompt.submit itself is unanswered by this fixture; the assertion is
-      // about the create that precedes it.
-    }
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(() async {
+        client.close();
+        await gateway.close();
+      });
 
-    expect(gateway.creates.single, {'cwd': '/srv/p2', 'cwd_explicit': true});
-  });
+      // No ensureSession at all: the draft's first contact is the prompt. The
+      // submit path must still carry the Project folder into session.create.
+      try {
+        await client.submitPrompt(
+          sessionId: 'mob-draft',
+          text: 'hello',
+          workingDirectory: '/srv/p2',
+          onEvent: (_) {},
+          onSent: () {},
+        );
+      } catch (_) {
+        // prompt.submit itself is unanswered by this fixture; the assertion is
+        // about the create that precedes it.
+      }
 
-  test('an older gateway rejects cwd_explicit; the create is retried without it',
-      () async {
-    final gateway = _FakeGateway(
-      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
-    );
-    gateway.rejectCwdExplicitOnce = true;
-    final client = DesktopGatewayClient.fromConnection(
-      _connection(gateway.baseUrl),
-    );
-    addTearDown(() async {
-      client.close();
-      await gateway.close();
-    });
+      expect(gateway.creates.single, {'cwd': '/srv/p2', 'cwd_explicit': true});
+    },
+  );
 
-    await client.ensureSession('mob-old', workingDirectory: '/srv/p3');
+  test(
+    'an older gateway rejects cwd_explicit; the create is retried without it',
+    () async {
+      final gateway = _FakeGateway(
+        await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      gateway.rejectCwdExplicitOnce = true;
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(() async {
+        client.close();
+        await gateway.close();
+      });
 
-    expect(gateway.creates, hasLength(2));
-    expect(gateway.creates.first, {'cwd': '/srv/p3', 'cwd_explicit': true});
-    expect(gateway.creates.last, {'cwd': '/srv/p3'});
-  });
+      await client.ensureSession('mob-old', workingDirectory: '/srv/p3');
+
+      expect(gateway.creates, hasLength(2));
+      expect(gateway.creates.first, {'cwd': '/srv/p3', 'cwd_explicit': true});
+      expect(gateway.creates.last, {'cwd': '/srv/p3'});
+    },
+  );
 
   test('session YOLO toggles through config.set and is remembered', () async {
     final gateway = _FakeGateway(
@@ -398,40 +434,42 @@ void main() {
     expect(gateway.controls.last['value'], 'off');
   });
 
-  test('a prompt raised with no mounted screen is replayed to the next one',
-      () async {
-    final gateway = _FakeGateway(
-      await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
-    );
-    final client = DesktopGatewayClient.fromConnection(
-      _connection(gateway.baseUrl),
-    );
-    addTearDown(() async {
-      client.close();
-      await gateway.close();
-    });
+  test(
+    'a prompt raised with no mounted screen is replayed to the next one',
+    () async {
+      final gateway = _FakeGateway(
+        await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(() async {
+        client.close();
+        await gateway.close();
+      });
 
-    await client.ensureSession('mob-replay');
-    gateway.pushApproval();
-    await Future<void>.delayed(const Duration(milliseconds: 150));
+      await client.ensureSession('mob-replay');
+      gateway.pushApproval();
+      await Future<void>.delayed(const Duration(milliseconds: 150));
 
-    expect(client.pendingPrompts.value, hasLength(1));
-    final prompt = client.pendingPrompts.value.single;
-    expect(prompt.method, 'approval');
-    expect(prompt.wireRequestId, 'srq-replay1');
+      expect(client.pendingPrompts.value, hasLength(1));
+      final prompt = client.pendingPrompts.value.single;
+      expect(prompt.method, 'approval');
+      expect(prompt.wireRequestId, 'srq-replay1');
 
-    final seen = <StreamEvent>[];
-    client.addAsyncEventListener((mobileId, event) => seen.add(event));
-    client.replayServerRequestsForSession('mob-replay');
+      final seen = <StreamEvent>[];
+      client.addAsyncEventListener((mobileId, event) => seen.add(event));
+      client.replayServerRequestsForSession('mob-replay');
 
-    expect(seen.single.type, 'approval.request');
-    expect(seen.single.data['server_request_id'], prompt.id);
-    expect(
-      client.respondToPromptWireId('srq-replay1', {'choice': 'once'}),
-      isTrue,
-    );
-    expect(client.pendingPrompts.value, isEmpty);
-  });
+      expect(seen.single.type, 'approval.request');
+      expect(seen.single.data['server_request_id'], prompt.id);
+      expect(
+        client.respondToPromptWireId('srq-replay1', {'choice': 'once'}),
+        isTrue,
+      );
+      expect(client.pendingPrompts.value, isEmpty);
+    },
+  );
 
   test('a turn ending drops prompts that can no longer be answered', () async {
     final gateway = _FakeGateway(
@@ -456,7 +494,41 @@ void main() {
     expect(client.ownsServerRequest('srq-stale', 'approval'), isFalse);
   });
 
-  test('a stale registry key is never sent to the gateway as a wire id', () async {
+  test(
+    'a stale registry key is never sent to the gateway as a wire id',
+    () async {
+      final gateway = _FakeGateway(
+        await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
+      );
+      final client = DesktopGatewayClient.fromConnection(
+        _connection(gateway.baseUrl),
+      );
+      addTearDown(() async {
+        client.close();
+        await gateway.close();
+      });
+
+      await expectLater(
+        client.respondToClarify(
+          requestId: '1.1:srq-dead',
+          answer: 'x',
+          questionId: 'q',
+        ),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        client.respondToSudo(requestId: '1.1:srq-dead', password: 'x'),
+        throwsA(isA<StateError>()),
+      );
+      await expectLater(
+        client.respondToSecret(requestId: '1.1:srq-dead', value: 'x'),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
+
+  test('closing the client clears prompts that can no longer be answered',
+      () async {
     final gateway = _FakeGateway(
       await HttpServer.bind(InternetAddress.loopbackIPv4, 0),
     );
@@ -468,22 +540,12 @@ void main() {
       await gateway.close();
     });
 
-    await expectLater(
-      client.respondToClarify(
-        requestId: '1.1:srq-dead',
-        answer: 'x',
-        questionId: 'q',
-      ),
-      throwsA(isA<StateError>()),
-    );
-    await expectLater(
-      client.respondToSudo(requestId: '1.1:srq-dead', password: 'x'),
-      throwsA(isA<StateError>()),
-    );
-    await expectLater(
-      client.respondToSecret(requestId: '1.1:srq-dead', value: 'x'),
-      throwsA(isA<StateError>()),
-    );
+    await client.ensureSession('mob-close');
+    gateway.pushApproval();
+    await _waitFor(() => client.pendingPrompts.value.isNotEmpty);
+
+    client.close();
+    expect(client.pendingPrompts.value, isEmpty);
   });
 
   test('a chat that already exists is never re-homed by the remembered '

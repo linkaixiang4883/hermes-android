@@ -43,3 +43,26 @@ class SessionSearchHit {
     );
   }
 }
+
+/// Search results omit `pinned`; borrow it from the already-loaded session
+/// list by id, matching Desktop's search merge.
+///
+/// A hit absent from the loaded rows keeps `pinKnown == false`, so it neither
+/// shows a pin nor offers Pin/Unpin; omission is not evidence of "not pinned".
+List<SessionSearchHit> inheritLoadedSessionPins(
+  Iterable<SessionSearchHit> hits,
+  Iterable<Session> loaded,
+) {
+  final byId = {for (final session in loaded) session.id: session};
+  return [
+    for (final hit in hits)
+      if (byId[hit.session.id] case final loadedSession?)
+        SessionSearchHit(
+          session: loadedSession,
+          snippet: hit.snippet,
+          role: hit.role,
+        )
+      else
+        hit,
+  ];
+}

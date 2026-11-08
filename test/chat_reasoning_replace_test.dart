@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -104,6 +105,48 @@ void main() {
       expect(find.text(_thinking), findsNothing);
     },
   );
+
+  testWidgets('shows Reasoning while the reasoning stream is active', (
+    tester,
+  ) async {
+    final gate = Completer<void>();
+    await _pumpChat(
+      tester,
+      remoteSubmit:
+          ({
+            required sessionId,
+            required text,
+            required onEvent,
+            required onSent,
+          }) async {
+            onSent();
+            onEvent(
+              StreamEvent(
+                type: 'reasoning.delta',
+                data: {'text': _thinking, 'verbose': true},
+              ),
+            );
+            await gate.future;
+          },
+    );
+
+    await tester.enterText(find.byType(TextField), 'Group this chat');
+    await tester.tap(find.byTooltip('Send'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-turn-status')),
+        matching: find.text('Reasoning'),
+      ),
+      findsOneWidget,
+    );
+
+    gate.complete();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+  });
 }
 
 Future<void> _send(WidgetTester tester) async {

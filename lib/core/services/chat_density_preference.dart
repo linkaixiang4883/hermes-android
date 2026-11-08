@@ -40,6 +40,9 @@ enum ChatDensity {
   /// Gap between the sender label and the message body.
   double get senderLabelGap => isCompact ? 0 : 6;
 
+  /// Gap between the message body and its clock footer.
+  double get timestampGap => isCompact ? 2 : 4;
+
   /// Trailing gap inside the bubble, below the message body.
   double get bodyBottomGap => isCompact ? 0 : 4;
 

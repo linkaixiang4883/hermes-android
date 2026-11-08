@@ -7,7 +7,10 @@
 /// `last_active` at least once a minute, so the window cannot miss live work.
 const double kSessionActiveWindowSeconds = 300;
 
-/// Session model matching the Gateway API Server response format.
+/// The server owns a chat's pinned flag (Hermes Desktop and the dashboard
+/// share it). Older gateways do not send `pinned` at all; [pinKnown] keeps
+/// "explicitly false" distinct from "this row predates synced pins" so the
+/// client never silently overwrites a desktop pin with a guessed false.
 class Session {
   final String id;
   final String title;
@@ -29,8 +32,11 @@ class Session {
   /// Whether the user pinned the chat server-side.
   final bool pinned;
 
+  /// Whether [pinned] came from the server (rather than a parser default).
+  final bool pinKnown;
+
   /// The stable root id of a compressed conversation whose visible id is its
-  /// latest continuation. Local pins on the old id follow the visible tip.
+  /// latest continuation. Pins follow the visible tip.
   final String? lineageRootId;
 
   /// Whether the Gateway archived the session.
@@ -64,11 +70,52 @@ class Session {
     this.endedAt,
     this.lastActive = 0,
     this.pinned = false,
+    this.pinKnown = true,
     this.lineageRootId,
     this.archived = false,
     this.isLocalDraft = false,
     this.profile,
   });
+
+  /// Returns this row with the server-confirmed pin flag.
+  Session withPinned(bool pinned) => Session(
+    id: id,
+    title: title,
+    model: model,
+    source: source,
+    messageCount: messageCount,
+    isActive: isActive,
+    preview: preview,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    lastActive: lastActive,
+    pinned: pinned,
+    pinKnown: true,
+    lineageRootId: lineageRootId,
+    archived: archived,
+    isLocalDraft: isLocalDraft,
+    profile: profile,
+  );
+
+  /// Returns this row with the server-confirmed archive flag.
+  Session withArchived(bool archived) => Session(
+    id: id,
+    title: title,
+    model: model,
+    source: source,
+    messageCount: messageCount,
+    isActive: isActive,
+    preview: preview,
+    startedAt: startedAt,
+    endedAt: endedAt,
+    lastActive: lastActive,
+    pinned: archived ? false : pinned,
+    pinKnown: archived ? true : pinKnown,
+    lineageRootId: lineageRootId,
+    archived: archived,
+    isLocalDraft: isLocalDraft,
+    profile: profile,
+  );
 
   /// Parses one session row.
   ///
@@ -108,6 +155,7 @@ class Session {
     // placeholder (Projects RPC rows) pass [ignoreIsActive] and always take
     // the recency path.
     final isActiveJson = json['is_active'];
+    final pinnedRaw = json['pinned'];
     return Session(
       id: json['id'] ?? '',
       title: json['title'] ?? 'Untitled',
@@ -123,7 +171,8 @@ class Session {
       startedAt: startedAt,
       endedAt: endedAt == null ? null : asDouble(endedAt),
       lastActive: lastActive,
-      pinned: json['pinned'] == true,
+      pinned: pinnedRaw == true,
+      pinKnown: pinnedRaw is bool,
       lineageRootId: json['_lineage_root_id'] is String
           ? json['_lineage_root_id'] as String
           : null,

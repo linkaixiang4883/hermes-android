@@ -1,5 +1,6 @@
 package com.hermesagent.hermes_android
 
+import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -8,9 +9,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.provider.MediaStore
 import android.provider.OpenableColumns
 import android.provider.Settings
@@ -33,6 +36,14 @@ class MainActivity : FlutterActivity() {
     /// install lands on a later launch.
     private data class SavedDownload(val filename: String, val uri: String)
 
+    private data class PendingDownload(
+        val filename: String,
+        val mimeType: String?,
+        val bytes: ByteArray,
+        val installAfterSave: Boolean,
+        val result: MethodChannel.Result,
+    )
+
     private val shareChannelName = "com.hermesagent.hermes_android/share"
     private val launchChannelName = "com.hermesagent.hermes_android/launch"
     private val downloadsChannelName = "com.hermesagent.hermes_android/downloads"
@@ -44,6 +55,7 @@ class MainActivity : FlutterActivity() {
     private val installCacheMaxAgeMs = 7L * 24L * 60L * 60L * 1000L
     private val notificationChannelId = "hermes_media_downloads"
     private val notificationPermissionRequest = 4310
+    private val writeStoragePermissionRequest = 4311
     private val quickChatAction = "com.hermesagent.hermes_android.action.QUICK_CHAT"
     private val maxSharedItems = 10
     private val maxSharedBytes = 64L * 1024L * 1024L
@@ -53,6 +65,7 @@ class MainActivity : FlutterActivity() {
     private var keepAliveChannel: MethodChannel? = null
     private var initialShareIntent: Intent? = null
     private var initialLaunchAction: String? = null
+    private var pendingDownload: PendingDownload? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         initialShareIntent = intent.takeIf(::isShareIntent)
@@ -106,54 +119,19 @@ class MainActivity : FlutterActivity() {
                             // copy): keep it off the platform thread, then come
                             // back for the intent, the notification and the reply.
                             val name = filename.substringAfterLast('/')
-                            Thread {
-                                val saved = saveToDownloads(name, mimeType, bytes)
-                                    ?: if (installAfterSave &&
-                                        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
-                                    ) {
-                                        // API < 29 has no MediaStore.Downloads. For an
-                                        // APK the installer can still read the cache copy;
-                                        // do not silently fall through to the share sheet.
-                                        SavedDownload(name, "")
-                                    } else {
-                                        null
-                                    }
-                                Log.i(TAG, "saveToDownloads filename=$name saved=${saved?.filename} mime=$mimeType")
-                                var installIntent: Intent? = null
-                                var installStatus = "none"
-                                if (saved != null && installAfterSave) {
-                                    val mayInstall = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
-                                        packageManager.canRequestPackageInstalls()
-                                    Log.i(TAG, "install requested; mayInstall=$mayInstall")
-                                    installIntent = if (mayInstall) buildInstallIntent(name, bytes) else null
-                                    installStatus = when {
-                                        !mayInstall -> "permission"
-                                        installIntent == null -> "failed"
-                                        else -> "launched"
-                                    }
-                                }
-                                runOnUiThread {
-                                    if (installStatus == "launched" && installIntent != null) {
-                                        try {
-                                            startActivity(installIntent)
-                                            // This process dies with the install, so
-                                            // record what to delete before handing
-                                            // over to the installer.
-                                            rememberInstallCleanup(name, saved?.uri)
-                                        } catch (e: Exception) {
-                                            Log.w(TAG, "installer launch failed", e)
-                                            installStatus = "failed"
-                                        }
-                                    } else if (installStatus == "permission") {
-                                        openInstallPermissionSettings()
-                                    }
-                                    if (saved != null) postSavedNotification(saved.filename, installIntent)
-                                    result.success(
-                                        if (saved == null) null
-                                        else mapOf("filename" to saved.filename, "install" to installStatus)
-                                    )
-                                }
-                            }.start()
+                            val pending = PendingDownload(name, mimeType, bytes, installAfterSave, result)
+                            if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P &&
+                                checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                                PackageManager.PERMISSION_GRANTED
+                            ) {
+                                pendingDownload = pending
+                                requestPermissions(
+                                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                                    writeStoragePermissionRequest,
+                                )
+                            } else {
+                                startDownloadThread(pending)
+                            }
                         }
                     }
                     else -> result.notImplemented()
@@ -186,6 +164,90 @@ class MainActivity : FlutterActivity() {
         val started = HermesConnectionService.start(this)
         Log.i(TAG, "keep-alive start requested started=$started")
         return started
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != writeStoragePermissionRequest) return
+        val pending = pendingDownload ?: return
+        pendingDownload = null
+        if (grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            startDownloadThread(pending)
+        } else {
+            // The card falls back to the share sheet when the platform answers
+            // null; do not pretend the file reached Downloads.
+            Log.w(TAG, "saveToDownloads denied WRITE_EXTERNAL_STORAGE")
+            pending.result.success(null)
+        }
+    }
+
+    private fun startDownloadThread(pending: PendingDownload) {
+        Thread {
+            try {
+                val saved = saveToDownloads(
+                    pending.filename,
+                    pending.mimeType,
+                    pending.bytes,
+                )
+                Log.i(
+                    TAG,
+                    "saveToDownloads filename=${pending.filename} " +
+                        "saved=${saved?.filename} mime=${pending.mimeType}",
+                )
+                var installIntent: Intent? = null
+                var installStatus = "none"
+                if (saved != null && pending.installAfterSave) {
+                    val mayInstall = Build.VERSION.SDK_INT < Build.VERSION_CODES.O ||
+                        packageManager.canRequestPackageInstalls()
+                    Log.i(TAG, "install requested; mayInstall=$mayInstall")
+                    installIntent = if (mayInstall) {
+                        buildInstallIntent(pending.filename, pending.bytes)
+                    } else {
+                        null
+                    }
+                    installStatus = when {
+                        !mayInstall -> "permission"
+                        installIntent == null -> "failed"
+                        else -> "launched"
+                    }
+                }
+                runOnUiThread {
+                    if (installStatus == "launched" && installIntent != null) {
+                        try {
+                            startActivity(installIntent)
+                            rememberInstallCleanup(pending.filename, saved?.uri)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "installer launch failed", e)
+                            installStatus = "failed"
+                        }
+                    } else if (installStatus == "permission") {
+                        openInstallPermissionSettings()
+                    }
+                    if (saved != null) {
+                        postSavedNotification(saved.filename, installIntent)
+                    }
+                    pending.result.success(
+                        if (saved == null) null
+                        else mapOf("filename" to saved.filename, "install" to installStatus)
+                    )
+                }
+            } catch (t: Throwable) {
+                Log.e(TAG, "saveToDownloads failed filename=${pending.filename}", t)
+                runOnUiThread {
+                    pending.result.error(
+                        "download_save_failed",
+                        t.message ?: "Could not save download",
+                        null
+                    )
+                }
+            }
+        }.start()
     }
 
     /// Builds the system package-installer intent for an APK save. The bytes
@@ -418,8 +480,50 @@ class MainActivity : FlutterActivity() {
     /// Returns the saved row, or null when this release predates scoped
     /// storage — the caller then falls back to the share sheet. The uri is kept
     /// because the cleanup pass deletes exactly this row after the APK installs.
+    private fun uniqueDownloadFile(dir: File, name: String): File {
+        var candidate = File(dir, name)
+        if (!candidate.exists()) return candidate
+        val dot = name.lastIndexOf('.')
+        val base = if (dot > 0) name.substring(0, dot) else name
+        val extension = if (dot > 0) name.substring(dot) else ""
+        var index = 1
+        while (candidate.exists()) {
+            candidate = File(dir, "$base-$index$extension")
+            index += 1
+        }
+        return candidate
+    }
+
+    @Suppress("DEPRECATION")
     private fun saveToDownloads(filename: String, mimeType: String?, bytes: ByteArray): SavedDownload? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return null
+            }
+            val dir = Environment.getExternalStoragePublicDirectory(
+                Environment.DIRECTORY_DOWNLOADS,
+            )
+            if (!dir.exists() && !dir.mkdirs()) return null
+            val safeName = filename.replace(Regex("[\\\\/]"), "_").ifBlank {
+                "hermes-download"
+            }
+            val target = uniqueDownloadFile(dir, safeName)
+            return try {
+                FileOutputStream(target).use { it.write(bytes) }
+                MediaScannerConnection.scanFile(
+                    this,
+                    arrayOf(target.absolutePath),
+                    arrayOf(mimeType ?: "application/octet-stream"),
+                    null,
+                )
+                SavedDownload(target.name, "")
+            } catch (e: Exception) {
+                runCatching { target.delete() }
+                throw e
+            }
+        }
         val resolver = contentResolver
         val values = ContentValues().apply {
             put(MediaStore.Downloads.DISPLAY_NAME, filename)
@@ -448,9 +552,15 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        WindowViewport.refresh(window.decorView)
+    }
+
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+        WindowViewport.refresh(window.decorView)
         launchActionFor(intent)?.let { action ->
             launchChannel?.invokeMethod("launchAction", action)
             return

@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../services/media_download_saver.dart';
 import '../services/remote_files_client.dart';
 import '../utils/media_tags.dart';
+import 'asset_preview_sheet.dart';
 
 /// Download a gateway path and hand it to the system share sheet. Shared by
 /// [MediaArtifactCard] and inline `media-artifact://` markdown links.
@@ -125,10 +126,10 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
   Future<void> _saveToDownloads() async {
     final bytes = await _ensureBytes();
     if (bytes == null || !mounted) return;
-    final installAfterSave = isAndroidPackageFile(
-      widget.ref.filename,
-      _mime,
-    );
+    // Chat attachments are downloads, not an install channel: an APK from a
+    // model response must never hand the system installer a package the app
+    // did not author. The user can still open it from Downloads.
+    const installAfterSave = false;
     final l10n = context.l10n;
     try {
       final result = await MediaDownloadSaver.save(
@@ -139,8 +140,9 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
       );
       if (!mounted) return;
       if (result == null) {
-        // Older Android: the platform cannot write the Downloads collection,
-        // so hand it to the share sheet like before.
+        // The platform could not write Downloads (pre-29 permission denied,
+        // or no native handler). Keep the share sheet as the fallback rather
+        // than pretending the file was saved.
         await _saveAndShare();
         return;
       }
@@ -239,6 +241,28 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
   ];
 
   bool get _isImage => _imageExts.contains(widget.ref.extension);
+
+  bool get _isVideo => const {
+    'mp4',
+    'm4v',
+    'mov',
+    'webm',
+    'mkv',
+    'avi',
+    '3gp',
+  }.contains(widget.ref.extension);
+
+  bool get _isOffice => const {'docx', 'xlsx', 'pptx'}.contains(
+    widget.ref.extension,
+  );
+
+  Future<void> _showSharedPreview() {
+    return showAssetPreview(
+      context: context,
+      ref: widget.ref,
+      filesClient: widget.filesClient,
+    );
+  }
 
   String? get _mime {
     switch (widget.ref.extension) {
@@ -400,6 +424,8 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
                   ? null
                   : (isImage
                         ? _showImagePreview
+                        : (_isVideo || _isOffice)
+                        ? () => unawaited(_showSharedPreview())
                         : () => unawaited(_saveToDownloads())),
             ),
           ],

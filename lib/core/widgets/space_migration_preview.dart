@@ -240,7 +240,7 @@ class _EntryCard extends StatelessWidget {
           Text(
             matched == null
                 ? context.l10n.no_server_project_matches_this_name(assigned)
-                : context.l10n.matches(assigned, matched.name),
+                : context.l10n.matches(matched.name, assigned),
             style: tokens.typography.body.copyWith(color: tokens.muted),
           ),
         ],

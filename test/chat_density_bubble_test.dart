@@ -11,11 +11,17 @@ Future<void> pumpBubble(
   required ChatDensity density,
   required bool isUser,
   String content = 'A short reply.',
+  DateTime? timestamp,
 }) {
   return tester.pumpWidget(
     testAppWithL10n(
       Scaffold(
-        body: MessageBubble(content: content, isUser: isUser, density: density),
+        body: MessageBubble(
+          content: content,
+          isUser: isUser,
+          density: density,
+          timestamp: timestamp,
+        ),
       ),
     ),
   );
@@ -130,5 +136,21 @@ void main() {
     final compact = await columnHeight(ChatDensity.compact);
 
     expect(compact, lessThan(comfortable));
+  });
+
+  testWidgets('renders the clock footer only when a timestamp is known', (
+    tester,
+  ) async {
+    await pumpBubble(
+      tester,
+      density: ChatDensity.comfortable,
+      isUser: true,
+      timestamp: DateTime(2026, 1, 1, 14, 32),
+    );
+    expect(find.byKey(const Key('message-timestamp')), findsOneWidget);
+    expect(find.textContaining(RegExp(r'2:32|14:32')), findsOneWidget);
+
+    await pumpBubble(tester, density: ChatDensity.compact, isUser: false);
+    expect(find.byKey(const Key('message-timestamp')), findsNothing);
   });
 }

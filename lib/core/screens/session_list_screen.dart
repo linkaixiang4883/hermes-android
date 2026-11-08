@@ -12,6 +12,7 @@ import '../services/connection_rest_client.dart';
 import '../services/desktop_gateway_client.dart';
 import '../services/gateway_client_registry.dart';
 import '../services/gateway_turn_application_controller.dart';
+import '../services/hermes_rest_client.dart';
 import '../services/local_chat_pin_store.dart';
 import '../services/session_search_client.dart';
 import '../services/session_search_preferences.dart';
@@ -469,7 +470,8 @@ class _SessionListScreenState extends State<SessionListScreen> {
           model: selected.model,
         );
       }
-      final hits = await _ensureSearchClient().search(effectiveQuery);
+      final rawHits = await _ensureSearchClient().search(effectiveQuery);
+      final hits = inheritLoadedSessionPins(rawHits, _sessions);
       if (!requestIsCurrent()) return;
       setState(() {
         _serverResults = hits;
@@ -689,12 +691,48 @@ class _SessionListScreenState extends State<SessionListScreen> {
         await _moveSession(session);
       case 'pin':
         await _togglePin(session);
+      case 'archive':
+        await _toggleArchive(session);
       case 'rename':
         await _renameSession(session);
       case 'branch':
         await _branchSession(session);
       case 'delete':
         await _confirmDeleteSession(session);
+    }
+  }
+
+  Future<void> _toggleArchive(Session session) async {
+    if (!usesDashboardRest(widget.connection) ||
+        !_pinChanges.add(session.id)) {
+      return;
+    }
+    try {
+      final archived = await _client.setSessionArchived(
+        sessionId: session.id,
+        archived: !session.archived,
+        clearPin: !session.archived && session.pinned,
+        profile: widget.connection.gatewayProfile,
+      );
+      if (!mounted) return;
+      final store = _pinStore;
+      if (archived && store != null) {
+        final localPinId = localPinIdForSession(session, _pinnedIds);
+        if (localPinId != null) {
+          final pins = await store.setPinned(localPinId, pinned: false);
+          if (!mounted) return;
+          setState(() => _pinnedIds = pins);
+        }
+      }
+      await _fetchSessions();
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.l10n.could_not_update_chat_archive)),
+        );
+      }
+    } finally {
+      _pinChanges.remove(session.id);
     }
   }
 
@@ -741,16 +779,53 @@ class _SessionListScreenState extends State<SessionListScreen> {
     final store = _pinStore;
     if (store == null || !_pinChanges.add(session.id)) return;
     try {
-      final pinnedId = localPinIdForSession(session, _pinnedIds);
+      final localPinId = localPinIdForSession(session, _pinnedIds);
+      final currentlyPinned = session.pinned || localPinId != null;
+      final nextPinned = !currentlyPinned;
+      final serverPins = usesDashboardRest(widget.connection);
+      if (serverPins) {
+        try {
+          final confirmed = await _client.setSessionPinned(
+            sessionId: session.id,
+            pinned: nextPinned,
+            profile: widget.connection.gatewayProfile,
+          );
+          if (!mounted) return;
+          if (localPinId != null) {
+            final pins = await store.setPinned(localPinId, pinned: false);
+            if (!mounted) return;
+            setState(() => _pinnedIds = pins);
+          }
+          setState(() {
+            _sessions = [
+              for (final row in _sessions)
+                if (row.id == session.id ||
+                    (session.lineageRootId != null &&
+                        (row.id == session.lineageRootId ||
+                            row.lineageRootId == session.lineageRootId)))
+                  row.withPinned(confirmed)
+                else
+                  row,
+            ];
+          });
+          return;
+        } on SyncedPinsUnsupportedException {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(context.l10n.chat_pin_server_unsupported)),
+            );
+          }
+        }
+      }
       final pins = await store.setPinned(
-        pinnedId ?? session.id,
-        pinned: pinnedId == null,
+        localPinId ?? session.id,
+        pinned: nextPinned,
       );
       if (mounted) setState(() => _pinnedIds = pins);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(context.l10n.could_not_save_chat_pin)),
+          SnackBar(content: Text(context.l10n.could_not_update_chat_pin)),
         );
       }
     } finally {
@@ -1316,7 +1391,7 @@ class _SessionListScreenState extends State<SessionListScreen> {
       for (final hit in serverHitsCurrent ?? const <SessionSearchHit>[])
         hit.session.id: hit,
     };
-    final orderedSessions = orderLocalPinnedChats(visibleSessions, _pinnedIds);
+    final orderedSessions = orderChatPins(visibleSessions, _pinnedIds);
 
     return RefreshIndicator(
       onRefresh: rawQuery.isNotEmpty && serverMode
@@ -1566,17 +1641,20 @@ class _SessionListScreenState extends State<SessionListScreen> {
             final isBranching = _branchingSessionIds.contains(session.id);
             final locallyPinned =
                 localPinIdForSession(session, _pinnedIds) != null;
+            final pinned = session.pinned || locallyPinned;
+            final serverPinAvailable =
+                usesDashboardRest(widget.connection) && session.pinKnown;
             return Card(
               margin: const EdgeInsets.only(bottom: 8),
               child: ListTile(
                 enabled: !isDeleting && !isBranching,
                 leading: Icon(
-                  locallyPinned
+                  pinned
                       ? Icons.push_pin
                       : session.isActive
                       ? Icons.chat
                       : Icons.chat_bubble_outline,
-                  color: locallyPinned || session.isActive
+                  color: pinned || session.isActive
                       ? const Color(0xFFD4AF37)
                       : Colors.grey,
                 ),
@@ -1595,17 +1673,37 @@ class _SessionListScreenState extends State<SessionListScreen> {
                             value: 'pin',
                             child: ListTile(
                               leading: Icon(
-                                locallyPinned
+                                pinned
                                     ? Icons.push_pin_outlined
                                     : Icons.push_pin,
                               ),
                               title: Text(
-                                locallyPinned
-                                    ? context.l10n.unpin_on_this_device
-                                    : context.l10n.pin_on_this_device,
+                                serverPinAvailable
+                                    ? (pinned
+                                          ? context.l10n.unpin_chat
+                                          : context.l10n.pin_chat)
+                                    : (locallyPinned
+                                          ? context.l10n.unpin_on_this_device
+                                          : context.l10n.pin_on_this_device),
                               ),
                             ),
                           ),
+                          if (usesDashboardRest(widget.connection))
+                            PopupMenuItem(
+                              value: 'archive',
+                              child: ListTile(
+                                leading: Icon(
+                                  session.archived
+                                      ? Icons.unarchive_outlined
+                                      : Icons.archive_outlined,
+                                ),
+                                title: Text(
+                                  session.archived
+                                      ? context.l10n.unarchive_chat
+                                      : context.l10n.archive_chat,
+                                ),
+                              ),
+                            ),
                           PopupMenuItem(
                             value: 'move',
                             child: ListTile(

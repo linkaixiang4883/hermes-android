@@ -1676,7 +1676,7 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Matches {name} · {assigned}'**
-  String matches(Object assigned, Object name);
+  String matches(String name, String assigned);
 
   /// No description provided for @memory.
   ///
@@ -4611,6 +4611,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Crons'**
   String get crons;
+
+  /// No description provided for @pin_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Pin chat'**
+  String get pin_chat;
+
+  /// No description provided for @unpin_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin chat'**
+  String get unpin_chat;
+
+  /// No description provided for @could_not_update_chat_pin.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update chat pin'**
+  String get could_not_update_chat_pin;
+
+  /// No description provided for @chat_pin_server_unsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'This gateway does not support synced pins; the chat was pinned on this device only.'**
+  String get chat_pin_server_unsupported;
+
+  /// No description provided for @pinned_chats.
+  ///
+  /// In en, this message translates to:
+  /// **'Pinned'**
+  String get pinned_chats;
+
+  /// No description provided for @archive_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Archive chat'**
+  String get archive_chat;
+
+  /// No description provided for @unarchive_chat.
+  ///
+  /// In en, this message translates to:
+  /// **'Unarchive chat'**
+  String get unarchive_chat;
+
+  /// No description provided for @could_not_update_chat_archive.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update chat archive'**
+  String get could_not_update_chat_archive;
+
+  /// No description provided for @crons_upcoming.
+  ///
+  /// In en, this message translates to:
+  /// **'Upcoming'**
+  String get crons_upcoming;
+
+  /// No description provided for @crons_history.
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get crons_history;
+
+  /// No description provided for @cron_no_next_run.
+  ///
+  /// In en, this message translates to:
+  /// **'No next run scheduled'**
+  String get cron_no_next_run;
+
+  /// No description provided for @cron_timezone_unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'timezone unknown'**
+  String get cron_timezone_unknown;
+
+  /// No description provided for @cron_needs_dashboard.
+  ///
+  /// In en, this message translates to:
+  /// **'Scheduled jobs need a Dashboard connection.'**
+  String get cron_needs_dashboard;
+
+  /// No description provided for @cron_upcoming_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No scheduled jobs.'**
+  String get cron_upcoming_empty;
+
+  /// No description provided for @cron_open_manager.
+  ///
+  /// In en, this message translates to:
+  /// **'Open cron manager'**
+  String get cron_open_manager;
+
+  /// No description provided for @cron_status_enabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get cron_status_enabled;
+
+  /// No description provided for @cron_status_paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused'**
+  String get cron_status_paused;
+
+  /// No description provided for @cron_deliver_to.
+  ///
+  /// In en, this message translates to:
+  /// **'Delivers to: {target}'**
+  String cron_deliver_to(String target);
+
+  /// No description provided for @fallback_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Fallback models'**
+  String get fallback_title;
+
+  /// No description provided for @fallback_notice.
+  ///
+  /// In en, this message translates to:
+  /// **'Tried in order when the main model is unavailable. Changes apply to this profile only; save the complete list explicitly.'**
+  String get fallback_notice;
+
+  /// No description provided for @fallback_unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Fallback settings are unavailable or invalid. Check the connection, selected profile and host version, then retry.'**
+  String get fallback_unavailable;
+
+  /// No description provided for @fallback_discovery_unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider discovery is unavailable. Existing entries are preserved; retry to choose providers and models.'**
+  String get fallback_discovery_unavailable;
+
+  /// No description provided for @fallback_empty.
+  ///
+  /// In en, this message translates to:
+  /// **'No entries in this fallback list.'**
+  String get fallback_empty;
+
+  /// No description provided for @fallback_incomplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a provider and model for every entry, or remove incomplete entries before saving.'**
+  String get fallback_incomplete;
+
+  /// No description provided for @fallback_add.
+  ///
+  /// In en, this message translates to:
+  /// **'Add fallback'**
+  String get fallback_add;
+
+  /// No description provided for @fallback_save.
+  ///
+  /// In en, this message translates to:
+  /// **'Save fallback list'**
+  String get fallback_save;
+
+  /// No description provided for @fallback_save_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not verify the saved fallback list. Your draft is preserved. Retry saving or refresh to reload the host settings.'**
+  String get fallback_save_failed;
+
+  /// No description provided for @fallback_saved.
+  ///
+  /// In en, this message translates to:
+  /// **'Fallback list saved and verified.'**
+  String get fallback_saved;
+
+  /// No description provided for @fallback_legacy_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Legacy fallbacks (read-only)'**
+  String get fallback_legacy_title;
+
+  /// No description provided for @fallback_legacy_notice.
+  ///
+  /// In en, this message translates to:
+  /// **'The host also uses fallback_model after this list, skipping duplicate routes. These legacy entries are preserved, even when the list above is empty. Edit them on the host.'**
+  String get fallback_legacy_notice;
+
+  /// No description provided for @fallback_priority.
+  ///
+  /// In en, this message translates to:
+  /// **'Priority {position}'**
+  String fallback_priority(String position);
+
+  /// No description provided for @fallback_move_up.
+  ///
+  /// In en, this message translates to:
+  /// **'Move up'**
+  String get fallback_move_up;
+
+  /// No description provided for @fallback_move_down.
+  ///
+  /// In en, this message translates to:
+  /// **'Move down'**
+  String get fallback_move_down;
+
+  /// No description provided for @fallback_routing_read_only.
+  ///
+  /// In en, this message translates to:
+  /// **'Routing details or an unlisted provider are preserved. Edit this provider/model on the host; you can still reorder or remove the entry.'**
+  String get fallback_routing_read_only;
+
+  /// No description provided for @context_usage_title.
+  ///
+  /// In en, this message translates to:
+  /// **'Context usage'**
+  String get context_usage_title;
+
+  /// No description provided for @context_usage_percent.
+  ///
+  /// In en, this message translates to:
+  /// **'Context {percent}%'**
+  String context_usage_percent(int percent);
+
+  /// No description provided for @context_usage_tokens.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} / {max}'**
+  String context_usage_tokens(String used, String max);
+
+  /// No description provided for @context_usage_no_breakdown.
+  ///
+  /// In en, this message translates to:
+  /// **'No per-category breakdown is available for this session.'**
+  String get context_usage_no_breakdown;
+
+  /// No description provided for @context_usage_estimated.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated'**
+  String get context_usage_estimated;
+
+  /// No description provided for @compress_in_progress.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressing context…'**
+  String get compress_in_progress;
+
+  /// No description provided for @could_not_refresh_conversations.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not refresh conversations — showing the last results'**
+  String get could_not_refresh_conversations;
+
+  /// No description provided for @unknown.
+  ///
+  /// In en, this message translates to:
+  /// **'unknown'**
+  String get unknown;
+
+  /// No description provided for @voice_gender_male.
+  ///
+  /// In en, this message translates to:
+  /// **'(male)'**
+  String get voice_gender_male;
+
+  /// No description provided for @voice_gender_female.
+  ///
+  /// In en, this message translates to:
+  /// **'(female)'**
+  String get voice_gender_female;
+
+  /// No description provided for @no_cron_runs_match.
+  ///
+  /// In en, this message translates to:
+  /// **'No cron runs match this view'**
+  String get no_cron_runs_match;
 }
 
 class _AppLocalizationsDelegate

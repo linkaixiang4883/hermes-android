@@ -31,8 +31,7 @@ typedef DesktopLiveTurnCallback =
 ///
 /// The transport asks nothing further and delivers nothing else for that gap,
 /// so a re-read of history is the only repair there is.
-typedef DesktopReplayTruncatedCallback =
-    void Function(String mobileSessionId);
+typedef DesktopReplayTruncatedCallback = void Function(String mobileSessionId);
 
 enum DesktopConnectionState {
   disconnected,
@@ -120,6 +119,7 @@ class DesktopGatewayClient {
   int _nextServerRequestClientOrdinal = 1;
   final Map<String, Set<String>> _serverClarifyRemaining = {};
   final Map<String, String> _serverApprovalByMobileSession = {};
+
   /// Async-event listeners keyed by their registration token.
   ///
   /// A map, not a slot: the Phase 2B application-wide socket is shared, so a
@@ -130,7 +130,8 @@ class DesktopGatewayClient {
   final Map<Object, DesktopAsyncEventCallback> _asyncListeners = {};
 
   /// Per-token `acceptsSession` predicates, absent for uncapped listeners.
-  final Map<Object, DesktopAsyncEventSessionPredicate> _asyncListenerAccepts = {};
+  final Map<Object, DesktopAsyncEventSessionPredicate> _asyncListenerAccepts =
+      {};
 
   /// Connection-state listeners keyed by their registration token, in delivery
   /// order.
@@ -147,7 +148,8 @@ class DesktopGatewayClient {
 
   /// Session-bound listeners keyed by their registration token, in delivery
   /// order. Shared for the same reason as [_asyncListeners].
-  final Map<Object, GatewayTurnSessionBoundCallback> _sessionBoundListeners = {};
+  final Map<Object, GatewayTurnSessionBoundCallback> _sessionBoundListeners =
+      {};
 
   /// The latest live-turn projection per mobile session.
   ///
@@ -196,6 +198,9 @@ class DesktopGatewayClient {
   static const _asyncEventTypes = {
     'background.complete',
     'review.summary',
+    // Compression progress/clear edges: a screen that did not start the
+    // compression still needs the locked composer and the progress bar.
+    'status.update',
     'notification.show',
     'notification.clear',
     'subagent.spawn_requested',
@@ -335,6 +340,11 @@ class DesktopGatewayClient {
     String? workingDirectory,
     String? profile,
   }) async {
+    final scopedProfile = profile?.trim();
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      _sessionProfiles[mobileSessionId] = scopedProfile;
+    }
+    final effectiveProfile = _sessionProfiles[mobileSessionId];
     final requestedWorkingDirectory = workingDirectory?.trim();
     if (requestedWorkingDirectory != null &&
         requestedWorkingDirectory.isNotEmpty) {
@@ -351,7 +361,7 @@ class DesktopGatewayClient {
         existing,
         mobileSessionId,
         workingDirectory: effectiveWorkingDirectory,
-        profile: profile,
+        profile: effectiveProfile,
       );
       _rememberBinding(mobileSessionId, binding);
       return _DesktopGatewaySession(existing, binding.runtimeSessionId);
@@ -362,7 +372,7 @@ class DesktopGatewayClient {
       client,
       mobileSessionId,
       workingDirectory: effectiveWorkingDirectory,
-      profile: profile,
+      profile: effectiveProfile,
     );
     _rememberBinding(mobileSessionId, binding);
     return _DesktopGatewaySession(client, binding.runtimeSessionId);
@@ -379,11 +389,15 @@ class DesktopGatewayClient {
   }) {
     final inFlight = _bindingInFlight[mobileSessionId];
     if (inFlight != null) return inFlight;
+    final scopedProfile = profile?.trim();
+    final effectiveProfile = scopedProfile != null && scopedProfile.isNotEmpty
+        ? scopedProfile
+        : _sessionProfiles[mobileSessionId];
     final future = _resumeOrCreate(
       client,
       mobileSessionId,
       workingDirectory: workingDirectory,
-      profile: profile,
+      profile: effectiveProfile,
     );
     _bindingInFlight[mobileSessionId] = future;
     future.whenComplete(() {
@@ -446,7 +460,21 @@ class DesktopGatewayClient {
     // instead of staying short-circuited until app restart. gateway.ready
     // on the new socket re-populates protocol/advertisement.
     _capabilities.reset();
-    final ticket = await _dashboard.mintWebSocketTicket();
+    final String ticket;
+    try {
+      ticket = await _dashboard.mintWebSocketTicket();
+    } catch (_) {
+      // The connecting/reconnecting state was already published. A failed
+      // ticket mint (expired dashboard password, 404, network) must end in a
+      // visible disconnected state and let the backoff loop try again.
+      if (!_closed) {
+        _dispatchConnectionState(DesktopConnectionState.disconnected);
+        // A reconnect has a live client to retry on; an initial connect is
+        // usually a user action and must not leave a timer behind in tests.
+        if (existing != null) _scheduleReconnect();
+      }
+      rethrow;
+    }
     if (_closed) throw StateError('DesktopGatewayClient is closed.');
     // A reconnect keeps the SAME WsClient and rotates only its ticket.
     //
@@ -847,10 +875,17 @@ class DesktopGatewayClient {
     String mobileSessionId,
     Future<T> Function(_DesktopGatewaySession session) call, {
     String? workingDirectory,
+    String? profile,
   }) async {
+    final scopedProfile = profile?.trim();
+    if (scopedProfile != null && scopedProfile.isNotEmpty) {
+      _sessionProfiles[mobileSessionId] = scopedProfile;
+    }
+    final effectiveProfile = _sessionProfiles[mobileSessionId];
     final session = await _connect(
       mobileSessionId,
       workingDirectory: workingDirectory,
+      profile: effectiveProfile,
     );
     try {
       return await call(session);
@@ -867,6 +902,7 @@ class DesktopGatewayClient {
         client,
         mobileSessionId,
         workingDirectory: _workingDirectories[mobileSessionId],
+        profile: effectiveProfile,
       );
       _rememberBinding(mobileSessionId, binding);
       return call(_DesktopGatewaySession(client, binding.runtimeSessionId));
@@ -1147,8 +1183,7 @@ class DesktopGatewayClient {
     final rows = result is Map ? result['sessions'] : null;
     if (rows is! List) return const [];
     return [
-      for (final row in rows.whereType<Map>())
-        Map<String, dynamic>.from(row),
+      for (final row in rows.whereType<Map>()) Map<String, dynamic>.from(row),
     ];
   }
 
@@ -1172,7 +1207,9 @@ class DesktopGatewayClient {
       'idempotency_key': 'hermes-android-bot-chat-$scope',
     });
     if (created['error'] != null) {
-      throw StateError(_controlErrorMessage('session.create', created['error']));
+      throw StateError(
+        _controlErrorMessage('session.create', created['error']),
+      );
     }
     final adopted = await _findCanonicalBotChat(scope);
     if (adopted != null) return adopted;
@@ -1219,7 +1256,7 @@ class DesktopGatewayClient {
   /// session the user never opened have only the gateway id, so the central
   /// notifier needs this door. Delivery order is registration order.
   final Map<Object, void Function(StreamEvent event, String? mobileSessionId)>
-      _globalEventListeners = {};
+  _globalEventListeners = {};
 
   Object addGlobalEventListener(
     void Function(StreamEvent event, String? mobileSessionId) callback,
@@ -1256,8 +1293,7 @@ class DesktopGatewayClient {
     final rows = result is Map ? result['sessions'] : null;
     if (rows is! List) return const [];
     return [
-      for (final row in rows.whereType<Map>())
-        Map<String, dynamic>.from(row),
+      for (final row in rows.whereType<Map>()) Map<String, dynamic>.from(row),
     ];
   }
 
@@ -1787,13 +1823,13 @@ class DesktopGatewayClient {
       final request = entry.value;
       final params = request.params;
       final summary = switch (request.method) {
-        'approval' => (params['command'] ?? params['description'] ?? '')
-            .toString()
-            .trim(),
+        'approval' =>
+          (params['command'] ?? params['description'] ?? '').toString().trim(),
         'clarify' => _firstClarifyQuestion(params),
-        _ => (params['prompt'] ?? params['description'] ?? request.method)
-            .toString()
-            .trim(),
+        _ =>
+          (params['prompt'] ?? params['description'] ?? request.method)
+              .toString()
+              .trim(),
       };
       final rawChoices = params['choices'];
       prompts.add(
@@ -2218,11 +2254,10 @@ class DesktopGatewayClient {
     if (gatewaySessionId == null || client == null || !client.isConnected) {
       throw const SlashExecFailure('Not connected to the Desktop gateway');
     }
-    final response = await client.send(
-      'slash.exec',
-      {'session_id': gatewaySessionId, 'command': command},
-      timeout: timeout,
-    );
+    final response = await client.send('slash.exec', {
+      'session_id': gatewaySessionId,
+      'command': command,
+    }, timeout: timeout);
     final error = response['error'];
     if (error != null) {
       final message = error is Map
@@ -2334,8 +2369,10 @@ class DesktopGatewayClient {
     _serverRequestMobileSessionIds.clear();
     _serverRequestEvents.clear();
     _serverRequestClientOrdinals.clear();
+    _serverRequestRegisteredAt.clear();
     _serverClarifyRemaining.clear();
     _serverApprovalByMobileSession.clear();
+    _publishPendingPrompts();
     final turnCoordinatorRegistry = _turnCoordinatorRegistry;
     _turnCoordinatorRegistry = null;
     if (turnCoordinatorRegistry != null) {

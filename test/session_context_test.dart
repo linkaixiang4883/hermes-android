@@ -153,6 +153,34 @@ void main() {
       expect(ctx!.percent, closeTo(5.0, 1e-9));
     });
 
+    test('parses category breakdown and estimate flags', () {
+      final ctx = SessionContext.fromBreakdown({
+        'context_used': 12000,
+        'context_max': 200000,
+        'context_percent': 6.0,
+        'model': 'test-model',
+        'estimated_total': 18000,
+        'context_estimated': true,
+        'categories': [
+          {
+            'id': 'messages',
+            'label': 'Messages',
+            'tokens': 9000,
+            'color': '#3366ff',
+          },
+          {'label': 'System', 'tokens': 3000},
+          {'label': 'Broken', 'tokens': 'nope'},
+        ],
+      });
+      expect(ctx, isNotNull);
+      expect(ctx!.estimatedTotal, 18000);
+      expect(ctx.estimated, isTrue);
+      expect(ctx.categories, hasLength(2));
+      expect(ctx.categories.first.id, 'messages');
+      expect(ctx.categories.first.color, '#3366ff');
+      expect(ctx.categories.last.label, 'System');
+    });
+
     test('infinite percent falls back to derived used/max', () {
       final ctx = SessionContext.fromBreakdown({
         'context_used': 10000,

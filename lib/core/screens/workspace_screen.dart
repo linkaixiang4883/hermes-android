@@ -49,6 +49,8 @@ import '../utils/activity_feed.dart';
 import '../utils/home_turn_signals.dart';
 import '../utils/new_chat_options.dart';
 import '../widgets/activity_pane.dart';
+import '../widgets/cron_upcoming_pane.dart';
+import '../widgets/crons_pane.dart';
 import '../widgets/hermes_components.dart';
 import '../widgets/hermes_shell.dart';
 import '../widgets/more_pane.dart';
@@ -267,8 +269,10 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
 
   /// Reaches the live Activity pane for the same reason.
   final _activityKey = GlobalKey<ActivityPaneState>();
+  final _cronUpcomingKey = GlobalKey<CronUpcomingPaneState>();
 
   LiveSessionWatcher? _sessionWatcher;
+  Object? _sessionWatcherConnectionToken;
   PromptNotifier? _promptNotifier;
   TurnCompletionNotifier? _completionNotifier;
   ObservedTurnStore? _observedTurns;
@@ -331,6 +335,40 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           : null,
       httpClient: widget.testSessionsHttpClient,
     );
+  }
+
+  Future<bool> _setSessionPinned(Session session, bool pinned) {
+    return _sessionsClient().setSessionPinned(
+      sessionId: session.id,
+      pinned: pinned,
+      profile: widget.connection.gatewayProfile,
+    );
+  }
+
+  Future<bool> _setSessionArchived(Session session, bool archived) {
+    return _sessionsClient().setSessionArchived(
+      sessionId: session.id,
+      archived: archived,
+      clearPin: archived && session.pinned,
+      profile: widget.connection.gatewayProfile,
+    );
+  }
+
+  /// Move legacy device pins to the server after the first frame. Running this
+  /// before the repository is ready delays the Chats loader and hides project
+  /// labels; an empty store is a no-op, and failures keep the local ids.
+  Future<void> _migrateLegacyPins() async {
+    final store = _pinStore;
+    if (store == null || !usesDashboardRest(widget.connection)) return;
+    try {
+      await migrateLegacyChatPins(
+        _sessionsClient(),
+        store,
+        profile: widget.connection.gatewayProfile,
+      );
+    } catch (_) {
+      // The local ids remain; a later list load retries.
+    }
   }
 
   /// One request for the silent refresh: the newest page only.
@@ -589,11 +627,23 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     if (_notificationsAttached) return;
     final registry = widget.gatewayRegistry;
     if (registry == null) return;
+    // A legacy 8642 connection has no desktop socket: starting the watcher
+    // would issue a failing `session.active_list` every five seconds forever.
+    if (!usesDashboardRest(widget.connection)) return;
     final client = registry.clientFor(widget.connection);
     _notificationsAttached = true;
     final l10n = context.l10n;
     final watcher = LiveSessionWatcher(client: client);
     _sessionWatcher = watcher;
+    // A fresh socket has no session attachments. Clear the watcher's cache on
+    // every drop so its next tick re-activates running sessions; otherwise
+    // approvals/clarify for an unwatched chat stay silent after reconnect.
+    _sessionWatcherConnectionToken = client.addConnectionListener((state) {
+      if (!mounted) return;
+      if (state != DesktopConnectionState.connected) {
+        watcher.resetAttachments();
+      }
+    });
     watcher.start();
     _promptNotifier = PromptNotifier(
       notifications: TurnNotificationService.shared,
@@ -814,6 +864,13 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
       badgeSource.removeListener(badgeListener);
     }
     _sessionWatcher?.stop();
+    final watcherToken = _sessionWatcherConnectionToken;
+    final watcherClient = widget.gatewayRegistry?.existingFor(
+      widget.connection.id,
+    );
+    if (watcherToken != null && watcherClient != null) {
+      watcherClient.removeConnectionListener(watcherToken);
+    }
     _promptNotifier?.detach();
     _completionNotifier?.detach();
     final observedToken = _observedTurnsToken;
@@ -861,6 +918,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         _ownsRepository = false;
         _initialized = true;
       });
+      unawaited(_migrateLegacyPins());
       return;
     }
 
@@ -890,6 +948,7 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         _ownsRepository = true;
         _initialized = true;
       });
+      unawaited(_migrateLegacyPins());
     } catch (_) {
       // A malformed gateway URL is a configuration problem, not a crash: fall
       // through to the same explanation a legacy connection gets.
@@ -905,6 +964,12 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           view: WorkspaceSessionView.all,
           embedded: true,
           pinStore: _pinStore,
+          onSetPinned: usesDashboardRest(widget.connection)
+              ? _setSessionPinned
+              : null,
+          onSetArchived: usesDashboardRest(widget.connection)
+              ? _setSessionArchived
+              : null,
           refreshInterval: widget.sessionsRefreshInterval,
           load: _loadWorkspaceSessionsData,
           loadHead: _loadSessionsHead,
@@ -938,18 +1003,28 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
           spaceStore: _spaceStore,
         );
       case HermesDestination.crons:
-        return WorkspaceSessionsScreen(
-          title: context.l10n.crons,
-          view: WorkspaceSessionView.all,
-          embedded: true,
-          crons: true,
-          pinStore: _pinStore,
-          refreshInterval: widget.sessionsRefreshInterval,
-          load: _loadWorkspaceSessionsData,
-          loadHead: _loadSessionsHead,
-          loadMore: _loadMoreWorkspaceSessions,
-          onOpenSession: (session) => unawaited(
-            _openSession(session, projectName: _chatProjectLabels[session.id]),
+        return CronsPane(
+          upcoming: CronUpcomingPane(
+            key: _cronUpcomingKey,
+            connection: widget.connection,
+            refreshInterval: widget.sessionsRefreshInterval,
+            onOpenManager: usesDashboardRest(widget.connection)
+                ? _openCronManager
+                : null,
+          ),
+          history: WorkspaceSessionsScreen(
+            title: context.l10n.crons,
+            view: WorkspaceSessionView.all,
+            embedded: true,
+            crons: true,
+            pinStore: _pinStore,
+            refreshInterval: widget.sessionsRefreshInterval,
+            load: _loadWorkspaceSessionsData,
+            loadHead: _loadSessionsHead,
+            loadMore: _loadMoreWorkspaceSessions,
+            onOpenSession: (session) => unawaited(
+              _openSession(session, projectName: _chatProjectLabels[session.id]),
+            ),
           ),
         );
       case HermesDestination.activity:
@@ -1414,6 +1489,14 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
         title: title,
         view: view,
         pinStore: _pinStore,
+        onSetPinned: usesDashboardRest(widget.connection) &&
+                view != WorkspaceSessionView.archivedQuick
+            ? _setSessionPinned
+            : null,
+        onSetArchived: usesDashboardRest(widget.connection) &&
+                view != WorkspaceSessionView.archivedQuick
+            ? _setSessionArchived
+            : null,
         refreshInterval: widget.sessionsRefreshInterval,
         load: _loadWorkspaceSessionsData,
         loadHead: _loadSessionsHead,
@@ -1539,6 +1622,19 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
   }
 
+  void _openCronManager() {
+    final connection = widget.connection;
+    unawaited(
+      Navigator.of(context)
+          .push(
+            MaterialPageRoute<void>(
+              builder: (_) => CronScreen(connection: connection),
+            ),
+          )
+          .then((_) => _cronUpcomingKey.currentState?.refresh()),
+    );
+  }
+
   void _openMoreEntry(MoreEntry entry) {
     final connection = widget.connection;
     switch (entry.id) {
@@ -1579,6 +1675,8 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     final tokens = HermesTokens.of(context);
 
     return Scaffold(
+      // The nested HermesShell owns keyboard resizing and the bottom navigation.
+      resizeToAvoidBottomInset: false,
       backgroundColor: tokens.surface,
       appBar: AppBar(
         title: Text(widget.connection.label),

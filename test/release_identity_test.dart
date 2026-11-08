@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test(
-    'Build 3.0.0 has the exact release identity and an upgrade-safe code',
+    'Build 3.2.5 has the exact release identity and an upgrade-safe code',
     () {
       final pubspec = File('pubspec.yaml').readAsStringSync();
       final match = RegExp(
@@ -13,7 +13,7 @@ void main() {
       ).firstMatch(pubspec);
 
       expect(match, isNotNull);
-      expect(match!.group(1), '3.0.0');
+      expect(match!.group(1), '3.2.5');
       expect(int.parse(match.group(2)!), 3000);
       expect(int.parse(match.group(2)!), greaterThan(2999));
       // F-Droid ABI split: packaged arm64 code is base * 10 + ABI code.

@@ -2133,6 +2133,38 @@ void main() {
       },
     );
 
+    test('sends the expensive-model confirmation on the retry', () async {
+      final bodies = <Map<String, dynamic>>[];
+      final client = DashboardClient(
+        host: 'hermes.local',
+        port: 9119,
+        proxied: true,
+        httpClient: MockClient((request) async {
+          if (request.url.path == '/api/model/set') {
+            bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
+            return http.Response('{"ok":true}', 200);
+          }
+          return http.Response('not found', 404);
+        }),
+      );
+
+      await client.setModel('main', 'provider-a', 'model-a');
+      await client.setModel(
+        'main',
+        'provider-a',
+        'model-a',
+        confirmExpensiveModel: true,
+      );
+
+      expect(bodies.first, {
+        'scope': 'main',
+        'provider': 'provider-a',
+        'model': 'model-a',
+      });
+      expect(bodies.last['confirm_expensive_model'], isTrue);
+      client.close();
+    });
+
     test('SavedConnection serializes gateway and dashboard prefixes', () {
       final conn = SavedConnection(
         id: '1',

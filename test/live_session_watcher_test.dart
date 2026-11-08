@@ -39,6 +39,27 @@ void main() {
     expect(activated, ['s-working', 's-waiting', 's-working']);
   });
 
+  test('resetAttachments makes the next tick re-attach a running session',
+      () async {
+    final activated = <String>[];
+    final watcher = LiveSessionWatcher(
+      activeSessionLoader: () async => _rows([
+        ('s-working', 'Working chat', 'working'),
+      ]),
+      sessionActivator: (id) async => activated.add(id),
+    );
+
+    await watcher.tick();
+    expect(activated, ['s-working']);
+
+    // A new socket starts with no session attachments; the watcher must not
+    // keep believing the old attach is still valid.
+    watcher.resetAttachments();
+    await watcher.tick();
+
+    expect(activated, ['s-working', 's-working']);
+  });
+
   test('activates by the stored key, not the runtime id', () async {
     final activated = <String>[];
     final watcher = LiveSessionWatcher(

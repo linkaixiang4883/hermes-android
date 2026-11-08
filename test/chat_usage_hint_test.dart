@@ -90,6 +90,14 @@ Map<String, dynamic> _breakdown() => {
       'context_max': 200000,
       'context_percent': 6.0,
       'model': 'fixture-model',
+      'categories': [
+        {
+          'id': 'messages',
+          'label': 'Messages',
+          'tokens': 12000,
+          'color': '#3366ff',
+        },
+      ],
     };
 
 void main() {
@@ -106,13 +114,13 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    final bar = find.byKey(const Key('usage-hint-bar'));
+    final bar = find.byKey(const Key('context-usage-bar'));
     expect(bar, findsOneWidget);
-    final label = tester.widget<Text>(
+    final labels = tester.widgetList<Text>(
       find.descendant(of: bar, matching: find.byType(Text)),
     );
-    expect(label.data, contains('of '));
-    expect(label.data, contains('%'));
+    expect(labels.any((label) => label.data?.contains('%') == true), isTrue);
+    expect(labels.any((label) => label.data?.contains('/') == true), isTrue);
     expect(tester.takeException(), isNull);
   });
 
@@ -128,7 +136,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    expect(find.byKey(const Key('usage-hint-bar')), findsNothing);
+    expect(find.byKey(const Key('context-usage-bar')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -153,12 +161,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump(const Duration(seconds: 1));
 
-    final bar = find.byKey(const Key('usage-hint-bar'));
+    final bar = find.byKey(const Key('turn-usage-hint-bar'));
     expect(bar, findsOneWidget);
-    final label = tester.widget<Text>(
-      find.descendant(of: bar, matching: find.byType(Text)),
+    expect(
+      find.descendant(of: bar, matching: find.textContaining('This turn')),
+      findsOneWidget,
     );
-    expect(label.data, contains('This turn'));
     expect(tester.takeException(), isNull);
   });
 
@@ -170,18 +178,22 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
-    await tester.tap(find.byKey(const Key('usage-hint-bar')));
+    await tester.tap(find.byKey(const Key('context-usage-bar')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    final dialog = find.byType(AlertDialog);
-    expect(dialog, findsOneWidget);
+    final sheet = find.byKey(const Key('context-usage-sheet'));
+    expect(sheet, findsOneWidget);
     expect(
-      find.descendant(of: dialog, matching: find.textContaining('%')),
+      find.descendant(of: sheet, matching: find.textContaining('%')),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(of: sheet, matching: find.textContaining('Model:')),
       findsOneWidget,
     );
     expect(
-      find.descendant(of: dialog, matching: find.textContaining('Model:')),
+      find.descendant(of: sheet, matching: find.text('Messages')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -194,7 +206,7 @@ void main() {
     await _pumpChat(tester, sessionId: 'session-a', fetcher: fetcher);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(find.byKey(const Key('usage-hint-bar')), findsOneWidget);
+    expect(find.byKey(const Key('context-usage-bar')), findsOneWidget);
 
     // Dispose the old screen so the new session starts from a fresh state,
     // mirroring the real navigation-driven session switch.
@@ -206,7 +218,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.byKey(const Key('usage-hint-bar')), findsNothing);
+    expect(find.byKey(const Key('context-usage-bar')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

@@ -13,6 +13,7 @@ import '../services/notification_prefs.dart';
 import '../services/turn_notification_service.dart';
 import '../widgets/config_backup_card.dart';
 import '../widgets/chat_density_settings_card.dart';
+import '../widgets/fallback_models.dart';
 import '../widgets/theme_palette_picker.dart';
 import '../widgets/update_available_dialog.dart';
 import '../widgets/text_size_settings_card.dart';
@@ -150,7 +151,67 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
 
     try {
-      await _client.setModel('main', _selectedProvider, _selectedModel);
+      final first = await _client.setModel(
+        'main',
+        _selectedProvider,
+        _selectedModel,
+      );
+      if (!mounted) return;
+      if (first['confirm_required'] == true) {
+        final message = (first['confirm_message'] ?? first['detail'] ?? '')
+            .toString()
+            .trim();
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: Text(dialogContext.l10n.profile_default_model),
+            content: Text(
+              message.isEmpty
+                  ? dialogContext.l10n.profile_default_model
+                  : message,
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(dialogContext.l10n.cancel),
+              ),
+              FilledButton(
+                key: const Key('model-default-confirm'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(dialogContext.l10n.continue_label),
+              ),
+            ],
+          ),
+        );
+        if (confirmed != true || !mounted) return;
+        final retry = await _client.setModel(
+          'main',
+          _selectedProvider,
+          _selectedModel,
+          confirmExpensiveModel: true,
+        );
+        if (!mounted) return;
+        if (retry['ok'] == false) {
+          setState(() {
+            _error =
+                (retry['confirm_message'] ??
+                        retry['error'] ??
+                        retry['detail'] ??
+                        'Could not set the profile default model')
+                    .toString();
+          });
+          return;
+        }
+      } else if (first['ok'] == false) {
+        setState(() {
+          _error =
+              (first['error'] ??
+                      first['detail'] ??
+                      'Could not set the profile default model')
+                  .toString();
+        });
+        return;
+      }
       if (!mounted) return;
       setState(() {
         _successMsg = context.l10n
@@ -411,6 +472,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
         const SizedBox(height: 16),
 
+        FallbackModels(client: _client),
+        const SizedBox(height: 16),
+
         // ---- Section: Notifications ----
         _buildSectionHeader(context.l10n.notifications),
         const _NotificationSettings(),
@@ -589,7 +653,7 @@ class _AboutCardState extends State<_AboutCard> {
       setState(() => _version = '${info.version}+${info.buildNumber}');
     } catch (_) {
       if (!mounted) return;
-      setState(() => _version = 'unknown');
+      setState(() => _version = context.l10n.unknown);
     }
   }
 
@@ -875,9 +939,9 @@ class _VoicePickerState extends State<_VoicePicker> {
     final locale = voice['locale'] ?? '';
     if (name == locale) return locale;
     final gender = name.contains('male')
-        ? '(male)'
+        ? context.l10n.voice_gender_male
         : name.contains('female')
-        ? '(female)'
+        ? context.l10n.voice_gender_female
         : '';
     return '$locale $gender  [$name]';
   }

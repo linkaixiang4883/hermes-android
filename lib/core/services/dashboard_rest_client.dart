@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math' as math;
 
 import 'connection_manager.dart';
+import 'hermes_rest_client.dart';
 
 /// Raised when the dashboard reports that a profile's state.db is unreadable.
 ///
@@ -255,6 +256,126 @@ class DashboardRestClient implements HermesRestClient {
       );
     } on DashboardHttpException catch (error) {
       if (error.statusCode == 404) return;
+      rethrow;
+    }
+  }
+
+  String _errorCode(String? body) {
+    if (body == null || body.trim().isEmpty) return '';
+    try {
+      final decoded = jsonDecode(body);
+      if (decoded is Map && decoded['code'] is String) {
+        return decoded['code'] as String;
+      }
+    } catch (_) {
+      // A non-JSON error body still carries the HTTP status; callers use that.
+    }
+    return '';
+  }
+
+  Map<String, dynamic> _patchedSession(
+    Map<String, dynamic> data, {
+    required String sessionId,
+  }) {
+    final session = data['session'];
+    final row = session is Map
+        ? Map<String, dynamic>.from(session)
+        : Map<String, dynamic>.from(data);
+    if (row['id'] != sessionId) {
+      throw const FormatException('Gateway returned a different session id');
+    }
+    return row;
+  }
+
+  @override
+  Future<bool> setSessionPinned({
+    required String sessionId,
+    required bool pinned,
+    String? profile,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError.value(sessionId, 'sessionId', 'must not be blank');
+    }
+    final scopedProfile = _profile(profile);
+    try {
+      final data = await _dashboard.apiPatch(
+        'sessions/${Uri.encodeComponent(sessionId)}',
+        body: {'pinned': pinned},
+        queryParameters: _scope(scopedProfile),
+      );
+      final saved = _patchedSession(data, sessionId: sessionId);
+      if (saved['pinned'] != pinned) {
+        throw const FormatException('Gateway returned no confirmed pin state');
+      }
+      final confirmed = await getSession(sessionId, profile: scopedProfile);
+      if (confirmed['id'] != sessionId || confirmed['pinned'] != pinned) {
+        throw const FormatException('Gateway pin read-back did not match');
+      }
+      return pinned;
+    } on DashboardHttpException catch (error) {
+      if (error.statusCode == 404 &&
+          _errorCode(error.body) == 'session_not_found') {
+        throw SessionNotFoundException(sessionId);
+      }
+      if (error.statusCode == 400 &&
+          _errorCode(error.body) == 'unsupported_session_field') {
+        throw const SyncedPinsUnsupportedException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> setSessionArchived({
+    required String sessionId,
+    required bool archived,
+    bool clearPin = false,
+    String? profile,
+  }) async {
+    if (sessionId.trim().isEmpty) {
+      throw ArgumentError.value(sessionId, 'sessionId', 'must not be blank');
+    }
+    final scopedProfile = _profile(profile);
+    var unpin = archived && clearPin;
+    try {
+      final data = await _dashboard.apiPatch(
+        'sessions/${Uri.encodeComponent(sessionId)}',
+        body: {
+          'archived': archived,
+          if (unpin) 'pinned': false,
+        },
+        queryParameters: _scope(scopedProfile),
+      );
+      final saved = _patchedSession(data, sessionId: sessionId);
+      if (saved['archived'] != archived ||
+          (unpin && saved['pinned'] != false)) {
+        throw const FormatException(
+          'Gateway returned no confirmed archive state',
+        );
+      }
+      if (archived && !unpin && saved['pinned'] == true) {
+        // A stale row may have been pinned on Desktop since it was read. Only
+        // a gateway that reports `pinned` accepts the follow-up; a failure
+        // propagates so the caller can retry the idempotent archive.
+        await setSessionPinned(
+          sessionId: sessionId,
+          pinned: false,
+          profile: scopedProfile,
+        );
+        unpin = true;
+      }
+      final confirmed = await getSession(sessionId, profile: scopedProfile);
+      if (confirmed['id'] != sessionId ||
+          confirmed['archived'] != archived ||
+          (unpin && confirmed['pinned'] != false)) {
+        throw const FormatException('Gateway archive read-back did not match');
+      }
+      return archived;
+    } on DashboardHttpException catch (error) {
+      if (error.statusCode == 404 &&
+          _errorCode(error.body) == 'session_not_found') {
+        throw SessionNotFoundException(sessionId);
+      }
       rethrow;
     }
   }

@@ -1,3 +1,37 @@
+/// One category from the gateway's context breakdown.
+class ContextUsageCategory {
+  const ContextUsageCategory({
+    required this.id,
+    required this.label,
+    required this.tokens,
+    this.color,
+  });
+
+  final String id;
+  final String label;
+  final int tokens;
+
+  /// Server-supplied `#RRGGBB` swatch, when present.
+  final String? color;
+
+  static ContextUsageCategory? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final label =
+        (raw['label'] ?? raw['name'] ?? raw['category'] ?? '').toString().trim();
+    final tokensRaw = raw['tokens'] ?? raw['count'] ?? raw['size'];
+    final tokens = tokensRaw is num ? tokensRaw.round() : null;
+    if (label.isEmpty || tokens == null || tokens < 0) return null;
+    return ContextUsageCategory(
+      id: (raw['id'] ?? label).toString(),
+      label: label,
+      tokens: tokens,
+      color: raw['color']?.toString().trim().isEmpty == false
+          ? raw['color'].toString().trim()
+          : null,
+    );
+  }
+}
+
 /// Session-level context window usage parsed from the Gateway breakdown.
 ///
 /// Breakdown shape (server `tui_gateway/methods_session.py`):
@@ -11,11 +45,23 @@ class SessionContext {
   final double percent;
   final String model;
 
+  /// Per-category token split; empty before the live agent builds.
+  final List<ContextUsageCategory> categories;
+
+  /// Server-side estimated total, when the live agent exposes it.
+  final int estimatedTotal;
+
+  /// Whether [used] is an estimate rather than a measured count.
+  final bool estimated;
+
   const SessionContext({
     required this.used,
     required this.max,
     required this.percent,
     required this.model,
+    this.categories = const [],
+    this.estimatedTotal = 0,
+    this.estimated = false,
   });
 
   /// Returns `null` when the breakdown carries no usable data:
@@ -48,11 +94,24 @@ class SessionContext {
     }
     if (used == 0 && percent == 0) return null;
     final model = json['model']?.toString() ?? '';
+    final rawCategories = json['categories'];
+    final categories = rawCategories is List
+        ? rawCategories
+              .map(ContextUsageCategory.fromJson)
+              .whereType<ContextUsageCategory>()
+              .toList(growable: false)
+        : const <ContextUsageCategory>[];
+    final estimatedTotalRaw = json['estimated_total'];
     return SessionContext(
       used: used,
       max: max,
       percent: percent,
       model: model,
+      categories: categories,
+      estimatedTotal: estimatedTotalRaw is num
+          ? estimatedTotalRaw.toInt()
+          : 0,
+      estimated: json['context_estimated'] == true,
     );
   }
 }

@@ -204,4 +204,67 @@ void main() {
       reason: 'the projected tip already represents the pinned root',
     );
   });
+
+  test('migrates device pins only after the server confirms them', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = LocalChatPinStore(prefs, connectionId: 'migrate-ok');
+    await store.setPinned('a', pinned: true);
+    await store.setPinned('b', pinned: true);
+    final patches = <String>[];
+    final pinnedIds = <String>{};
+    final client = ApiClient(
+      baseUrl: 'http://gateway.test',
+      apiKey: 'fixture',
+      httpClient: MockClient((request) async {
+        final id = request.url.pathSegments.last;
+        if (request.method == 'PATCH') {
+          patches.add('$id:${request.body}');
+          pinnedIds.add(id);
+          return http.Response(
+            jsonEncode({'session': {'id': id, 'pinned': true}}),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({
+            'session': _metadata(
+              id,
+              extra: {'pinned': pinnedIds.contains(id)},
+            ),
+          }),
+          200,
+        );
+      }),
+    );
+
+    expect(await migrateLegacyChatPins(client, store), 2);
+    expect(await store.load(), isEmpty);
+    expect(patches, hasLength(2));
+    expect(patches, everyElement(contains('"pinned":true')));
+  });
+
+  test('keeps device pins when the gateway rejects synced pins', () async {
+    final prefs = await SharedPreferences.getInstance();
+    final store = LocalChatPinStore(prefs, connectionId: 'migrate-unsupported');
+    await store.setPinned('a', pinned: true);
+    final client = ApiClient(
+      baseUrl: 'http://gateway.test',
+      apiKey: 'fixture',
+      httpClient: MockClient((request) async {
+        if (request.method == 'PATCH') {
+          return http.Response(
+            jsonEncode({'code': 'unsupported_session_field'}),
+            400,
+          );
+        }
+        return http.Response(
+          jsonEncode({'session': _metadata('a', extra: {'pinned': false})}),
+          200,
+        );
+      }),
+    );
+
+    expect(await migrateLegacyChatPins(client, store), 0);
+    expect(await store.load(), ['a']);
+  });
 }

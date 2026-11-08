@@ -1,8 +1,14 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'connection_manager.dart';
+import 'hermes_rest_client.dart';
 
-/// Device-only chat order. This never writes the Gateway's `pinned` flag.
+/// Device-only pins saved by older app versions.
+///
+/// New pins go through the server `pinned` flag shared with Hermes Desktop.
+/// This store remains so [migrateLegacyChatPins] can move old device pins to
+/// the server, and so backup/restore and connection deletion still handle ids
+/// that have not migrated yet.
 class LocalChatPinStore {
   static const keyPrefix = 'local_chat_pins_v1_';
   static final Map<String, Future<void>> _writes = {};
@@ -70,13 +76,88 @@ class LocalChatPinStore {
   }
 }
 
-/// A compressed chat is listed under its live tip, but a pin may still name
-/// the old root id that was visible when the user pinned it.
+/// Moves legacy device-only pins to the server `pinned` flag.
+///
+/// The server (dashboard/Desktop) is authoritative once it reports `pinned`.
+/// An id leaves the device only after the server confirmed the pin, already
+/// had it, the id no longer exists, or the row is archived/hidden/internal.
+/// Network failures and gateways without synced pins keep the id for a later
+/// attempt; nothing the user pinned is lost.
+final Map<String, Future<int>> _migrations = {};
+
+Future<int> migrateLegacyChatPins(
+  HermesRestClient client,
+  LocalChatPinStore store, {
+  String? profile,
+}) {
+  final existing = _migrations[store._key];
+  if (existing != null) return existing;
+  final migration = _migrateLegacyChatPins(client, store, profile: profile);
+  _migrations[store._key] = migration;
+  migration.whenComplete(() {
+    if (identical(_migrations[store._key], migration)) {
+      _migrations.remove(store._key);
+    }
+  }).ignore();
+  return migration;
+}
+
+Future<int> _migrateLegacyChatPins(
+  HermesRestClient client,
+  LocalChatPinStore store, {
+  String? profile,
+}) async {
+  final ids = await store.load();
+  var migrated = 0;
+  for (final id in ids) {
+    try {
+      final metadata = await client.getSession(id, profile: profile);
+      final retired =
+          metadata['archived'] == true ||
+          metadata['hidden'] == true ||
+          metadata['is_internal_child'] == true;
+      if (!retired && metadata['pinned'] != true) {
+        await client.setSessionPinned(
+          sessionId: id,
+          pinned: true,
+          profile: profile,
+        );
+        migrated++;
+      }
+      await store.removeSession(id);
+    } on SessionNotFoundException {
+      await store.removeSession(id);
+    } on SyncedPinsUnsupportedException {
+      // Every remaining id would fail the same way on this gateway.
+      break;
+    } catch (_) {
+      // Keep this id; the next list load retries it.
+    }
+  }
+  return migrated;
+}
+
 String? localPinIdForSession(Session session, Iterable<String> pinnedIds) {
   for (final id in pinnedIds) {
     if (id == session.id || id == session.lineageRootId) return id;
   }
   return null;
+}
+
+/// Server-pinned chats first, then legacy local pins, then activity order.
+/// Duplicate compression roots/tips collapse to the first row.
+List<Session> orderChatPins(
+  Iterable<Session> sessions,
+  List<String> localPinnedIds,
+) {
+  final ordered = orderLocalPinnedChats(sessions, localPinnedIds);
+  bool pinned(Session session) =>
+      session.pinned ||
+      localPinIdForSession(session, localPinnedIds) != null;
+  return [
+    ...ordered.where(pinned),
+    ...ordered.where((session) => !pinned(session)),
+  ];
 }
 
 /// Apply device order without changing the server's session model or order.

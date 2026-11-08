@@ -13,6 +13,7 @@ import 'package:hermes_android/core/l10n/l10n.dart';
 import 'package:hermes_android/core/screens/chat_screen.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/desktop_gateway_client.dart';
+import 'package:hermes_android/core/services/ws_client.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,6 +49,8 @@ Future<void> _pumpChat(
   required String sessionId,
   Future<String> Function(String command)? slashExec,
   void Function()? onUsageFetch,
+  TestDesktopAsyncEventHook? asyncHook,
+  TestDesktopConnectionHook? connectionHook,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -83,11 +86,22 @@ Future<void> _pumpChat(
           return _breakdown();
         },
         testSlashExec: slashExec,
+        testDesktopAsyncEventHook: asyncHook,
+        testDesktopConnectionHook: connectionHook,
       ),
     ),
   );
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 100));
+}
+
+Future<void> _openCompressMenu(WidgetTester tester) async {
+  await tester.tap(find.byTooltip('Chat actions'));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
+  await tester.tap(find.byKey(const Key('chat-compress-menu-item')));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 300));
 }
 
 void main() {
@@ -110,9 +124,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const Key('compress-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await _openCompressMenu(tester);
 
     expect(find.byType(AlertDialog), findsOneWidget);
     expect(
@@ -151,9 +163,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const Key('compress-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await _openCompressMenu(tester);
     await tester.tap(find.text('Dismiss'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -170,9 +180,7 @@ void main() {
           throw const SlashExecFailure('Session is busy running a turn'),
     );
 
-    await tester.tap(find.byKey(const Key('compress-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await _openCompressMenu(tester);
     await tester.tap(find.byKey(const Key('compress-confirm')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
@@ -184,6 +192,97 @@ void main() {
       reason: 'the refusal must reach the user, not vanish',
     );
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a gateway compression status drives the bar and send lock', (
+    tester,
+  ) async {
+    expect(
+      DesktopGatewayClient.shouldBridgeAsyncEvent('status.update'),
+      isTrue,
+      reason: 'the screen only receives status.update through this gate',
+    );
+    final asyncHook = TestDesktopAsyncEventHook();
+    await _pumpChat(
+      tester,
+      sessionId: 'compress-remote',
+      slashExec: (_) async => '',
+      asyncHook: asyncHook,
+    );
+
+    asyncHook.handler?.call(
+      StreamEvent(
+        type: 'status.update',
+        data: {'kind': 'compressing', 'text': '⠋ compressing 8 messages…'},
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-turn-status')),
+        matching: find.text('Compressing context…'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send))
+          .onPressed,
+      isNull,
+    );
+
+    asyncHook.handler?.call(
+      StreamEvent(
+        type: 'status.update',
+        data: {'kind': 'status', 'text': 'ready'},
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byKey(const Key('chat-turn-status')), findsNothing);
+    expect(
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send))
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('a reconnect clears a remote compression lock', (tester) async {
+    final asyncHook = TestDesktopAsyncEventHook();
+    final connectionHook = TestDesktopConnectionHook();
+    await _pumpChat(
+      tester,
+      sessionId: 'compress-reconnect',
+      slashExec: (_) async => '',
+      asyncHook: asyncHook,
+      connectionHook: connectionHook,
+    );
+
+    asyncHook.handler?.call(
+      StreamEvent(
+        type: 'status.update',
+        data: {'kind': 'compressing', 'text': '⠋ compressing 8 messages…'},
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('chat-turn-status')), findsOneWidget);
+
+    connectionHook.handler?.call(DesktopConnectionState.reconnecting);
+    await tester.pump();
+
+    expect(
+      find.byKey(const Key('chat-turn-status')),
+      findsNothing,
+      reason: 'a socket drop must not leave the composer locked forever',
+    );
+    expect(
+      tester
+          .widget<IconButton>(find.widgetWithIcon(IconButton, Icons.send))
+          .onPressed,
+      isNotNull,
+    );
   });
 
   testWidgets('the button spins and refuses a second tap while compressing', (
@@ -200,28 +299,48 @@ void main() {
       },
     );
 
-    await tester.tap(find.byKey(const Key('compress-button')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await _openCompressMenu(tester);
     await tester.tap(find.byKey(const Key('compress-confirm')));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    final button = tester.widget<IconButton>(
-      find.byKey(const Key('compress-button')),
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('chat-turn-status')),
+        matching: find.text('Compressing context…'),
+      ),
+      findsOneWidget,
+      reason: 'the in-flight compaction needs its own status bar',
+    );
+    final sendButton = tester.widget<IconButton>(
+      find.widgetWithIcon(IconButton, Icons.send),
     );
     expect(
-      button.onPressed,
+      sendButton.onPressed,
       isNull,
+      reason: 'a prompt must not be sent into a transcript being rewritten',
+    );
+
+    await tester.tap(find.byTooltip('Chat actions'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final item = tester.widget<PopupMenuItem<String>>(
+      find.byKey(const Key('chat-compress-menu-item')),
+    );
+    expect(
+      item.enabled,
+      isFalse,
       reason: 'a compaction in flight must not be started twice',
     );
     expect(
       find.descendant(
-        of: find.byKey(const Key('compress-button')),
+        of: find.byKey(const Key('chat-compress-menu-item')),
         matching: find.byType(CircularProgressIndicator),
       ),
       findsOneWidget,
     );
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pump();
 
     gate.complete('done');
     await tester.pump();
@@ -229,9 +348,12 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
 
     expect(calls, 1);
-    final settled = tester.widget<IconButton>(
-      find.byKey(const Key('compress-button')),
+    await tester.tap(find.byTooltip('Chat actions'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    final settled = tester.widget<PopupMenuItem<String>>(
+      find.byKey(const Key('chat-compress-menu-item')),
     );
-    expect(settled.onPressed, isNotNull);
+    expect(settled.enabled, isTrue);
   });
 }

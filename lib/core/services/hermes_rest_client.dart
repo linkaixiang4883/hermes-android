@@ -8,6 +8,26 @@ class SessionListPage {
   const SessionListPage({required this.sessions, required this.hasMore});
 }
 
+/// The exact stored session no longer exists on the gateway.
+class SessionNotFoundException implements Exception {
+  const SessionNotFoundException(this.sessionId);
+
+  final String sessionId;
+
+  @override
+  String toString() => 'Session not found: $sessionId';
+}
+
+/// The gateway predates server-synced pins and rejects `pinned` in a PATCH.
+/// Callers must keep the device-only pin and offer a retry only after an
+/// upgrade, never pretend the server accepted it.
+class SyncedPinsUnsupportedException implements Exception {
+  const SyncedPinsUnsupportedException();
+
+  @override
+  String toString() => 'Gateway does not support server-synced chat pins';
+}
+
 /// The REST surface a chat screen needs, independent of which Hermes origin
 /// serves it.
 ///
@@ -48,6 +68,27 @@ abstract class HermesRestClient {
   });
 
   Future<void> deleteSession(String sessionId, {String? profile});
+
+  /// Persists the server-owned pin flag shared with Hermes Desktop.
+  ///
+  /// Implementations must verify both the PATCH response and an exact-id
+  /// read-back before returning true. Throws [SyncedPinsUnsupportedException]
+  /// when the gateway rejects the `pinned` field.
+  Future<bool> setSessionPinned({
+    required String sessionId,
+    required bool pinned,
+    String? profile,
+  });
+
+  /// Persists the server-owned archive flag. Archiving with [clearPin] also
+  /// unpins, so the chat cannot remain in another client's Pinned section.
+  Future<bool> setSessionArchived({
+    required String sessionId,
+    required bool archived,
+    bool clearPin = false,
+    String? profile,
+  });
+
 
   Future<Map<String, dynamic>> getModelInfo();
 

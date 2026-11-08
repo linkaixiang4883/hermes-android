@@ -2,6 +2,8 @@
 
 本仓库 fork 自 upstream（rusty4444/hermes-android），维护本地 overlay：中文体验增强 + 若干上游未覆盖的修复。**2026-10-05 起 i18n 采用上游官方体系（10 语种）**，协议侧与 Hermes 服务端（0.21.x）对齐。以下内容供任何会话在本目录工作时自动加载。
 
+**当前发布线**：`3.2.5+3000`（tag `v3.2.5`，`V3`）；`V3-dev` 是 3.x 开发分支。CI base `REQUIRED_BASE_VERSION_CODE=3000`。
+
 ## 本地化基础设施（2026-10-05 起 = 上游官方体系）
 
 - `l10n.yaml` — **上游的** gen-l10n 配置（arb-dir `lib/l10n`，生成文件同目录，**必须提交**，CI analyze 用 `--no-pub`）
@@ -36,7 +38,7 @@
 
 | overlay | 位置 | 备注 |
 |---|---|---|
-| 用量条 | `chat_screen`（`_contextUsage`/`_refreshContextUsage`/`_hintLabel`/`_showUsageDialog`/`usage-hint-bar` UI）+ `desktop_gateway_client.getContextUsage`（`session.context_breakdown`）+ `connection_manager`（`onUsage` REST 流尾回退）+ 模型 `session_context.dart`/`turn_usage.dart` + 4 key（`usage_title`/`usage_bar_summary`/`usage_this_turn`/`usage_model_name`） | 不持久化；刷新点：init / 回合提交成功 / 流尾 / `message.complete` |
+| 用量条 / 上下文面板 | `chat_screen`（`_contextUsage`/`_refreshContextUsage` + `ContextUsageBar`）+ `context_usage_bar.dart`（细 gauge + 分类 bottom sheet）+ `session_context.dart`（used/max/percent/model/categories/estimated）+ `desktop_gateway_client.getContextUsage`（`session.context_breakdown`）+ `connection_manager`（`onUsage` REST 流尾回退）+ `turn_usage.dart` + l10n `context_usage_*`/`usage_*` | 旧 V3 归档的 `ContextUsageBar` 形态（分类明细）；不持久化；刷新点 init / 回合提交成功 / 流尾 / `message.complete`；无上下文数据时隐藏，turn-only 保留轻量 fallback |
 | 思考块防覆盖 | `gateway_insight.isAnswerPreview` + `chat_screen` replace 前守卫 + `test/chat_reasoning_replace_test.dart` | 上游至今未修（v2.1.12 复检：模型文件 0 改动、测试仍钉 replace） |
 | TTS 语言跟随 | `tts_voice_config.dart` + `chat_screen._readAssistantText`（`TtsVoiceConfig.apply(appLanguageCode:)`） | 上游无 `TtsVoiceConfig` |
 | STT 键盘引导 | `voice_composer_controller`（`_hasReceivedResult` + `l10n` 注入）+ key `speech_recognition_use_keyboard`/`dictation_ready` | 上游 controller 无本地化 |
@@ -44,31 +46,44 @@
 | clarify 双-pop 守卫 | `gateway_clarify_dialog.dart`（自 pop 前查 `ModalRoute.isCurrent`）+ `test/gateway_clarify_dialog_test.dart`（`2081bb6`） | 上游 v2.1.12 竞态（本仓 QA 实测、上游未修）：`clarify.lock` → 合成 `clarify.remaining` → reconcile 先 pop 对话框、其自 pop 再弹一次 → **弹掉聊天页**；审批无此隐患（应答路径无合成事件） |
 | 重连续接 + 实时跟随 | `ws_client`（seq 门/补发/`onReplayTruncated`）+ `desktop_gateway_client`（`rotateTicket` 复用/多路监听/`ensureSession(refresh:)`/`LiveTurnProjection`/`addReplayTruncatedListener`）+ `gateway_client_registry.dart`（应用级共享，main.dart 下发）+ `chat_screen`（跟随态/`_localSubmitActive`/`_acceptFollowStreamFrame`/`_reconcileFollowAfterTranscriptReplace`）+ 1 key（`live_turn_following`） | 机制全图与坑：技能 `hermes-android-client → references/connection-persistence.md` §6-§11；**硬不变量见下节**；真机 QA 已过（2026-10-18） |
 | 审批卡回合终帧清场（App 侧） | `chat_screen`（`_clearTurnEndBlockingPrompts` + 两处终帧钩子 + `_approvalTurnEndDismissed` + `_expireSensitivePromptById`）+ `test/chat_turn_notification_wiring_test.dart`（+3） | 上游缺口（`4db6cd5`）：某客户端应答后其它端**不发撤销帧**；桌面端回合结束自清（窗口=剩余回合时长）、手机端此前无对等机制；服务端不补（update 会覆盖，用户决议 2026-10-18），纯 App 侧自愈；全档见技能 `hermes-android-client → references/server-requests-0.21.3.md`「跨客户端撤卡缺口」节 |
-| MEDIA 卡保存到下载 + APK 安装/通知（App 侧） | `media_artifact_card`（下载按钮/非图片行点按 = 保存）+ `media_download_saver`（channel `.../downloads`，返回 `{filename, install}`）+ `isAndroidPackageFile`（`media_tags`）+ `MainActivity`（MediaStore API 29+；APK = cache 副本 + FileProvider 起系统安装器，**未授权时打开"安装未知应用"设置页**；原生通知 `hermes_media_downloads`，APK 通知带"安装"动作；日志 tag `HermesDownloads`）+ FileProvider/`REQUEST_INSTALL_PACKAGES` + `test/media_artifact_card_test`/`media_tags_test`（+5） | 上游卡只"下载→分享面板"（`d4e13bc`→`fcef7ce`→`c8a0547`）；文件落系统 Downloads 并发完成通知；**APK 存完即弹安装、未授权先开设置页、通知内可再点安装**；通知权限仅 Android 13+（首次保存时请求）；<29 回退分享；细节见技能 `pc-to-phone-media-delivery.md` 新增节 |
+| MEDIA 卡保存到下载 + 完成通知（App 侧） | `media_artifact_card`（下载按钮/非图片行点按 = 保存）+ `media_download_saver`（channel `.../downloads`，返回 `{filename, install}`）+ `MainActivity`（MediaStore API 29+；API ≤28 写 `Environment.DIRECTORY_DOWNLOADS` + `WRITE_EXTERNAL_STORAGE` 运行时请求 + MediaScanner；原生通知 `hermes_media_downloads`；日志 tag `HermesDownloads`）+ FileProvider/`REQUEST_INSTALL_PACKAGES` + `test/media_artifact_card_test`/`media_tags_test` | 上游卡只"下载→分享面板"（`d4e13bc`→`fcef7ce`→`c8a0547`）；文件落系统 Downloads 并发完成通知；**2026-11-09 B1：聊天附件（含 `.apk`）只保存，不自动弹安装器**；**API 28 不再回退分享**（权限拒绝才分享）；原生安装器代码仅为未来自更新保留、当前无聊天调用；通知权限仅 Android 13+；细节见技能 `pc-to-phone-media-delivery.md` |
 | YOLO 模式按钮（会话内） | `chat_screen`（AppBar `chat-yolo-button`、确认框 `yolo-confirm`、顶部 `yolo-banner`、`_toggleYolo`）+ `desktop_gateway_client.setSessionYolo`/`sessionYoloFor`（状态取自 resume 的 `info.yolo`）+ `ws_client.setSessionYolo`（`config.set{key:'yolo',value:'on'/'off',scope:'session'}`）+ 7 l10n key + `test/chat_yolo_test.dart`（+2）/`desktop_gateway_cwd_binding_test`（+1） | 服务端 `_set_yolo`：session scope 只翻本会话；返回值是**服务端 OR 结果**（`approvals.mode=off` 或 `_YOLO_MODE_FROZEN` 也会显示 on，session 关不掉全局）；桌面 Shift+Tab 同语义 |
-| 上下文压缩按钮（App 侧） | `chat_screen`（usage-hint-bar 内 `compress-button` + 确认框 `compress-confirm` + `_runCompress`）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ 4 l10n key + `test/chat_compress_test.dart`（+4） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；手机端**首个 slash 命令**；细节见技能 `references/slash-commands.md` 落地记录 |
+| 上下文压缩（App 侧） | `chat_screen`（右上角菜单 `chat-compress-menu-item` + 确认框 `compress-confirm` + `_runCompress` + 压缩中 `chat-turn-status` bar + 发送按钮锁定）+ `desktop_gateway_client.slashExec`（10 分钟超时；错误带服务端原文）+ `desktop_gateway_client._asyncEventTypes`（含 `status.update`）+ 5 l10n key + `test/chat_compress_test.dart`（+6） | 旧压缩按钮 9 月回退的四死因按现服务端复核已消（`3342f57`）：`/compress` 经 `slash.exec→command.dispatch` **同步执行**（无 45s worker 超时）、busy=4009 错误、成功后 resume 重绑 + 重拉历史 + 刷新用量；**压缩事件**：服务端 `status.update` 为 `compressing`（手动）/`compacting`（自动），结束 `ready`（`kind=status,text=ready`）或 `compacted`；**必须留在 `_asyncEventTypes` 白名单**（否则 async bridge 在进入 ChatScreen 前丢弃）；断线/任何终帧清 `_remoteCompressing`，防止压缩锁永久卡住；本地点击仍靠 `_compressing`；手机端**首个 slash 命令**；细节见技能 `references/context-usage-panel.md` |
 | 更新检查（参考上游 2.1.20） | `app_update_service.dart`（GitHub release 服务、12h 节流/ETag/skip/later）+ `update_available_dialog.dart` + `settings_screen` 的 About 卡（手动检查/启动开关/错误态仍可达）+ `workspace_screen` 普通启动提示 + `config_backup_service` 两项偏好 + 10 个 l10n key + `test/{app_update_service,update_available_dialog,settings_update_controls,workspace_update_prompt}_test.dart` | **更新源只指 fork `linkaixiang4883/hermes-android`**，不指 `rusty4444`（否则会引导装 stock v3.2.5）；启动/分享/Quick Chat 分流；`Later` 不写 skip，`Skip` 按版本压；上游代码只作行为参考，服务/测试用我们自己的依赖注入与 dashboard-only 连接 |
 | 紧凑聊天密度（参考上游 2.1.22） | `chat_density_preference.dart`（`ChatDensity`/`ChatDensityStore`/`chatDensitySelection`）+ `chat_density_settings_card.dart` + `settings_screen` 外观节 + `chat_screen`（state/监听/列表 padding/`MessageBubble.density`）+ `config_backup_service` + 8 个 l10n key + `test/chat_density_*`（+22） | 默认 `comfortable` 与现有布局逐像素一致；`compact` 只改气泡 margin/padding/radius/maxWidth/标签和列表底部 padding，**不动 live-follow/内容/MEDIA/长按**；紧凑仍用 `Semantics` 保留发送者；`listEndPadding` 属于 `ChatScreen` 的 ListView，不是气泡 |
+| 服务端置顶 + 归档（dashboard/desktop parity） | `hermes_rest_client.dart`（`setSessionPinned`/`setSessionArchived` + `pinKnown`/能力异常）+ `dashboard_rest_client.dart`（9119 PATCH + 精确回读）+ `connection_manager.dart`（`ApiClient` legacy 实现 + `DashboardClient.apiPatch`）+ `local_chat_pin_store.dart`（迁移）+ `workspace_sessions_screen`/`session_list_screen`/`workspace_screen` + `session_search_hit.dart`（搜索结果 pin 继承）+ 10 个 l10n key + 15 条测试 | **desktop 连接只走 `DashboardRestClient`**；PATCH 响应与 GET 回读都必须匹配；旧网关 400 `unsupported_session_field` 保留本地 pin；archive 时 `clearPin`；本地 pin 迁移成功后才删除；搜索接口不带 `pinned`，按 session id 从已加载列表继承，未知保持不可操作 |
+| 消息时间戳 | `utils/message_time.dart`（epoch 秒/毫秒 + created_at 解析）、`chat_screen`（历史行读取、乐观发送本地时间、pending assistant 不显示）、`MessageBubble.timestamp`（footer + `message-timestamp` key） + `test/message_time_test.dart`/`chat_density_bubble_test`（+4） | 只展示已确认时间；无 timestamp 的旧数据不伪造；assistant 在 `_gateway_pending_response` 未完成时不显示；时间格式走 `MaterialLocalizations` + 系统 12/24 小时偏好 |
+| Assets 预览（3.0.1，初版） | `asset_preview_sheet.dart`（视频/Office 共享弹窗、下载/分享）、`office_text_extractor.dart`（DOCX/XLSX/PPTX 隔离 isolate + ZIP/XML/文本上限；**B1 加 16MB 输入上限 + 分块/ZIP 解压硬上限**）、`media_artifact_card`（视频/Office 点按打开）、`chat_screen` 内联文件链接；`video_player`/`archive`/`xml` 依赖 + 5 条解析测试 | 视频是 desktop parity；Office 文本预览是作者 App 独有增强（desktop 无 Office 解析）；**真机 QA 2026-11-08 用户确认通过**；**More → Assets 仍 unavailable**（无服务端权威索引）；不支持/损坏/旧二进制 Office 保留 Download/Share；不新增服务端路由 |
 
 **已知未尽**：overlay 新增 key（原有 8 条 + 本次更新/密度 18 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1753**（2026-11-07 V3 UI 壳迁移后；此前 1575）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1804**（2026-11-09 WS ticket/幽灵审批/usage 竞态后；此前 1803）。
 **真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `9e80e14e58d5291be8a7da276812e355a5b17162b5ba9b5c45fb2f782479238f`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
 ## V3 UI 壳迁移（2026-11-07，V3 / V3-dev）
 
-**决议（2026-11-07 晚更新）**：`V2-dev` 已升格为 **`V3`（3.0.0 发布线）**；`V3-dev` 从 `V3` 重新拉出作为 3.x 开发分支；旧 V3-dev 归档为 `V3-dev-legacy`（tag `archive/v3-dev-2026-11-07`）。V2 保留为 2.1.33 稳定线。消息/传输/审批/转写继续用 V2 内核；旧 V3-dev 不 merge、不推送。
+**决议（2026-11-07 晚更新）**：`V2-dev` 已升格为 **`V3`（初始 3.0.0；当前 3.2.5 发布线）**；`V3-dev` 从 `V3` 重新拉出作为 3.x 开发分支；旧 V3-dev **本地分支已删除**，仅保留归档 tag `archive/v3-dev-2026-11-07`。V2 保留为 2.1.33 稳定线。消息/传输/审批/转写继续用 V2 内核；旧 V3-dev 不 merge、不推送。
 
 | 已落地 | 位置 | 说明 |
 |---|---|---|
 | 10 套配色 + 独立明暗 + 选择器 + 备份 | `theme/hermes_theme.dart`、`services/theme_preference.dart`、`widgets/theme_palette_picker.dart`、`main.dart` | palette 持久化 `theme_palette`；`theme_mode` 沿用；恢复备份刷新 app |
 | 5 目的地导航 | `widgets/hermes_shell.dart`、`workspace_screen` | Chats / Crons / Projects / Activity / More；Chats 默认；Home 移除；宽屏 rail 保留 |
-| 设置页结构 | `settings_screen.dart` | Appearance 在前；模型失败只显示错误卡；外观/文字/密度/Verbose 始终可达；保留我们的 Model/TTS/STT/备份/更新检查 |
+| 设置页结构 | `settings_screen.dart` | Appearance 在前；模型失败只显示错误卡；外观/文字/密度/Verbose 始终可达；保留我们的 Model/TTS/STT/备份/更新检查；**2026-11-09 审计修复**：默认模型保存检查 `ok/confirm_required`，昂贵模型先确认再用 `confirm_expensive_model:true` 重试，不再假报成功 |
 | Quiet transcript | `utils/chat_display_items.dart`、`chat_screen`、`gateway_activity_card` | verbose=false 时隐藏工具/推理/子代理/notice 卡；保留人/助理正文、MEDIA、审批；当前工具仍可用状态条呈现 |
 | Crons 目的地 | `workspace_sessions_screen`（`crons: true`）、`workspace_screen` | Cron 运行按 source/id 过滤进独立会话浏览器；All/Recent/Archived 复用现有扫描/分页 |
+| 模型选择器搜索（3.2.1） | `chat_screen` 的 `_ChatModelPickerSheet` | 按 model/provider 过滤；隐藏选中项保留选择；Apply 才写网关；小屏/键盘/横屏固定操作区；8 条 picker 测试 |
+| Crons Upcoming + History（3.2.4） | `cron_upcoming_pane.dart`、`crons_pane.dart`、`utils/cron_schedule.dart`；`workspace_screen` Crons 目的地；`workspace_sessions_screen` 分页 | Upcoming 读 dashboard `/api/cron/jobs`，显示 enabled/schedule/next run/时区/deliver；History 复用 cron 运行会话浏览器；管理器打开 `CronScreen`；API-only 明确提示需 dashboard；**2026-11-09 审计修复**：ListView 加 `AlwaysScrollableScrollPhysics`，过滤/短列表 post-frame 自动补页（上限 20），不再因内容不超屏而永远只显示首页；不碰消息内核 |
+| Fallback model chains（3.2.2） | `models/fallback_config.dart`、`widgets/fallback_models.dart`、`settings_screen`、`DashboardClient.getFallbackConfig/setFallbackProviders` | 编辑 `fallback_providers` 有序链；未知路由 metadata / legacy `fallback_model` 只读保留；保存后精确回读；仅 profile 配置，不碰聊天传输；8 条测试 |
+| IME viewport（3.2.3） | `WindowViewport.kt`、`MainActivity`（resume/new-intent）、`workspace_screen` 外层 Scaffold | 键盘生命周期后重新派发真实 insets；外层 Scaffold 不参与 resize，由嵌套 HermesShell 统一负责；1 条 workspace 回归 |
+| 推理状态条（上游 45e6139） | `chat_screen` reasoning 分支 + composer 状态条（key `chat-turn-status`） | `reasoning.delta` 期间显示「推理」，不是工具调用事件；上游 `45e6139`（upstream-v3.0.0/3.0.0-rc.2 起）把 `_gatewayTurnStatus` 从 null 改为 `kind: reasoning`；工具卡本身不新增事件 |
 
 **禁止**：V3 的 `chat_screen.dart`、`NormalGatewayChatOwner`、receipts、event gate、quiet/verbose 状态机、`session.steer` 不进入本线。
+**开发线进度（2026-11-07）**：`V3-dev` 在 `v3.0.0` 后已落服务端 pin/archive（`172beb0` + `fa689a7`，门禁 **1797**），经典 `SessionListScreen` 归档菜单已补（`6faac5b`）。聊天视觉复核：`MessageBubble`、`chat_context_header.dart`、`gateway_activity_card.dart` 与 V3.0.0 基线一致；`chat_screen.dart` 已叠加模型搜索/推理状态等 overlay，不再做整文件哈希比较；消息时间戳已落地；3.0.1 Assets 初版（MEDIA/内联视频 + Office 文本预览）已落地，More → Assets 仍未启用；3.2.1 模型选择器搜索已落地（搜索/选中项保留/Apply 语义 + 键盘布局，真机 QA 通过）；3.2.4 Crons Upcoming/History 已落地（dashboard `/api/cron/jobs`、显式时区、History 复用运行浏览器，真机 QA 通过）；3.2.2 fallback model chains 已落地（`fallback_providers` 有序编辑/精确回读，legacy 只读，真机 QA 通过）；3.2.3 IME viewport 已落地（resume/new-intent 重派发真实 insets，外层 Scaffold 不再重复 resize）；搜索结果 pin 继承已补齐（Desktop 同款按 session id 合并）；推理状态条已补齐（上游 45e6139，`reasoning.delta` 时显示「推理」）；旧 V3 的 `ContextUsageBar` + 分类 sheet + 右上角压缩菜单已移植（1797）。
 
-**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条、Crons 目的地的 All/Recent/Archived 与空态；`flutter analyze` 0 + `flutter test` **1753**。
+
+**QA 构建注意**：`--target=test_driver/app.dart` 会调用 `enableFlutterDriverExtension()` 并注册 `TestTextInput`，软键盘不会弹出（输入框可聚焦但无 IME）。**键盘/输入法验收必须用普通 `lib/main.dart` 构建**；test_driver 构建只用于 driver 点击/输入/截图自动化。
+
+**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条、Crons 目的地的 All/Recent/Archived 与空态；当前门禁 `flutter analyze` 0 + `flutter test` **1804**（WS ticket/幽灵审批/usage 竞态后）。**2026-11-08 用户确认**：正常构建 30009 软键盘正常；build 30010 的 usage 分类面板与右上角压缩菜单测试通过；压缩中状态条/发送锁定由单测覆盖，未执行真机实际压缩（会重写会话）。**2026-11-09 审计 smoke（build 30011/30012，test_driver）**：build 30011 已打开历史会话确认 usage bar 显示 `上下文 24%` / `~238k / 1.0M`；Crons 目的地的 Upcoming/History 与 More 入口可达。build 30012 打开 Quick Chat 已显示 calm notice「此服务器不提供后台恢复——聊天实时运行」，不再出现 failure banner。**2026-11-09 用户真机确认**：压缩中状态条可见（发送按钮未点击）；正常包软键盘正常；Quick Chat 发送正常、测试通过；审批无新问题；设置页按用户决定跳过。
+**3.0.0 debug 真机 QA（2026-11-07）**：`flutter run` + `test_driver/app.dart`，MI 8 上显示 `3.0.0-dev` / versionCode `30002`；5 个导航、10 个 palette（Blue 已落 `theme_palette=blue`）、Settings Appearance 置顶、Quiet 无推理卡且工具状态条可见、Crons 三滤镜空态、`get_runtime_errors` 无错误。MIUI 拒绝 `.dev` 安装，临时把 debug `applicationIdSuffix` 置空并用 `--build-number=30002` 覆盖 release；**已还原 `.dev`，未提交该临时改动**。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
 
@@ -92,7 +107,7 @@
 > 计划：`.hermes/plans/2026-10-22_164019-bot-mode-approvals-activity-apk.md`。每包完成即更新本节；门禁基线随包递增。
 
 **进度**
-- [x] **P0 profile 维度**（`bfa87f4`，1410 测试）：`Session.profile`（null=连接默认）；`DesktopGatewayClient._sessionProfiles`（按 mobile id 记），`session.resume/create` 与 REST `/messages` 带 `profile`；`_rebindStoredSessions` 重连沿用。**决定**：不做复合映射键——对外监听 API 仍以 `Session.id` 为键，profile 只作为 per-session 事实随绑定传递（runtime id 全局唯一，反向映射无歧义）。
+- [x] **P0 profile 维度**（`bfa87f4`，1410 测试）：`Session.profile`（null=连接默认）；`DesktopGatewayClient._sessionProfiles`（按 mobile id 记），`session.resume/create` 与 REST `/messages` 带 `profile`；`_rebindStoredSessions` 重连沿用。**2026-11-09 审计修复**：`_callSessionScoped` / `_connect` / `_resumeOrCreateSingle` 均按 `_sessionProfiles[mobileId]` 兜底，绑定缺失时不会把 Bot/非默认 profile 会话 create 到默认 profile；回归 `desktop_gateway_cwd_binding_test`。**决定**：不做复合映射键——对外监听 API 仍以 `Session.id` 为键，profile 只作为 per-session 事实随绑定传递（runtime id 全局唯一，反向映射无歧义）。
 - [x] **P1 Bots 名册 + 单聊**（`bf461eb`，1414 测试）：More → Bots 页（`bots_screen.dart`，5s 轮询 `profiles.list`）；点 bot → `session.list{title:'Bot Chat',include_hidden:true}` → 无则 `session.create{title,hidden,idempotency_key}` → **重查收养**；`Session.profile` 全链（P0）让其聊天落在该 profile。入口放在 More（非 Chats 分段——体积考虑，后续可调）
 - [x] **P1B 群组房间**（`059290a`，+33 测试）：`group_rooms_client.dart`（groups.* 全套 RPC + 容错模型）；`group_rooms_screen`（5s 列表 + 创建，`seatable_profiles` 选成员）；`group_room_screen`（`state` 取游标 → 2s `groups.log{since_seq}` 增量；user/member/turn/room 事件渲染；发送单飞 + event_id 落盘重试；approve/retry/stop/rename/disband）；入口 = Bots 页 AppBar「群组」；`DesktopGatewayClient` 仅加 `callControl()`。
 - [x] **桌面本地群组只读镜像**（`a4a5460`，1481 测试）：desktop 把 legacy 群组压进 **default profile 的 `ui_meta['hermes-bots-groups']`**（源码注释明确「so mobile can show the same messages」）；`GroupRoomsClient.legacyGroups()` 调 `profiles.list{include_sessions:false}` 解析 version 3 快照（`rooms`/`deleted`/`log.from`），群组页新增「桌面本地群组（只读）」段与只读房间（帖子式、无输入框、顶部迁移提示）；镜像只在首次进入与下拉刷新时读（体积大、5s 轮询只拉 hosted rooms）。迁移动作仍是在桌面点「Start gateway group」（旧历史不迁移）。
@@ -104,6 +119,11 @@
 - [x] **Activity 静默更新**（`d6cfdb3`，1483 测试）：此前 `ActivityPane` 只在首次进入/下拉刷新/从行返回时重读，活动页是快照。现 `ObservedTurnStore` 改 `ChangeNotifier`——**只在行可见字段（state/summary/title/mobile id）变化时通知**（流式 delta 只更新时间，不触发）；`ActivityPane.liveUpdates` 接 merge(observed, `client.pendingPrompts`)，变化后 **300ms 防抖**重读，读中变更排队补读，前后台 `resumed` 也重读；Activity 与 Home Inbox 共用同一信号。
 - [x] **P2 审批/完成通知中央化**（`aa97c1a`，1421）：`pendingPrompts` 全会话接纳（未映射也登记；不显示才回 `4404`，绝不 `-32601`）；clarify 全锁 `4404`；同会话并发审批排队；`respondToPendingPrompt` 应用级应答；`LiveSessionWatcher`（5s `session.active_list` + `session.activate{omit_messages}`）；`PromptNotifier`/`TurnCompletionNotifier` 消费全局事件；`ChatVisibility` 抑制前台会话；ChatScreen 不再自己发审批/完成通知。
 - [x] **P2-6 FGS 保活**（`9e6cd23`，+10 测试）：`HermesConnectionService`（`remoteMessaging`；SDK 29–33 退 `dataSync`），常驻通知 channel `hermes_connection`；`KeepAliveController` 默认开、设置页开关、无连接即停（main 连接删除回调已接）。
+- [x] **LiveSessionWatcher 重连重置**（2026-11-09 审计修复）：`workspace_screen` 订阅 `DesktopGatewayClient.addConnectionListener`，任何非 connected 状态调用 `resetAttachments()`；此前方法零调用者，WS 重连后 `_attached` 仍保留旧 socket，非 idle 会话被跳过，后台审批/clarify/完成通知静默丢失。回归 `test/live_session_watcher_test.dart`。
+- [x] **WS ticket / 幽灵审批 / usage 竞态**（2026-11-09 审计修复）：`_openSocket` 的 `mintWebSocketTicket()` 异常现在先 `disconnected` + `_scheduleReconnect()` 再抛出，不再永久停在“连接中”；`close()` 清 `_serverRequestRegisteredAt` 并 `_publishPendingPrompts()`，关闭连接后不再留下无法应答的 Activity/通知审批；`_ensureDesktopSession` 成功后补一次 `_refreshContextUsage()`，空闲会话首开不再因绑定竞态不显示 usage bar。回归 `desktop_gateway_cwd_binding_test`。
+- [x] **B1 安全修复（2026-11-09）**：聊天 `.apk` 只保存不自动安装（`media_artifact_card` 固定 `installAfterSave:false`）；Office 输入 16MB 上限 + `_readEntry` 用 bounded `OutputStream` 解压（stream + 20MB/entry 硬上限，header 伪造不再能绕过）；`MainActivity` 下载线程整体 try/catch，异常回 `result.error` 而不是杀进程；Dart channel 在 release 加 60s timeout。用户 CA/明文策略按用户决定暂不做（默认局域网 HTTP 仍可用）。 **API 28 下载回归**（用户报告“下载变分享”）：`MediaStore.Downloads` 仅 API 29+，MI 8 在 API 28 走 `Environment.DIRECTORY_DOWNLOADS` 直接写公共目录；`WRITE_EXTERNAL_STORAGE`（maxSdk 28）首次保存时运行时请求，拒绝才回退分享；`MainActivity` 用 pending 保存 + `onRequestPermissionsResult` 续跑。
+- [x] **B2 稳定性修复（2026-11-09）**：Crons History 纳入内层 `HermesPaneVisibility`；legacy 连接不再启动 5s watcher；列表刷新失败在已有数据上显示 stale banner；`matches` 加 placeholder metadata 并修正调用顺序；设置页 `unknown`/语音性别改 l10n；Crons History 空态改用 `no_cron_runs_match`，不再显示“对话”。`SessionListScreen` 死代码与全局用户 CA/明文加固仍留待后续。
+- [x] **Turn recovery stock-gateway fallback（QA 发现）**：`chat_screen._initializeChat` 对所有连接允许一次 legacy fallback；dashboard 连接走自身 `DesktopGatewayClient.prompt.submit`（不是 8642），服务端不支持 `turn_recovery` 时显示“此服务器不提供后台恢复——聊天实时运行”，Quick Chat 可发送。build 30012 真机已确认提示从 failure banner 变为 calm notice。
 - [x] **P3 Activity**（`d99a4b9`，+6 测试）：`ObservedTurnStore`（全量扇出帧 → running/completed/failed，100 上限、持久化）+ `buildObservedActivityFeed`（stock 网关回落源 + `pendingPrompts` 待处理组）；journal 有数据时只读 journal（二选一）。
 - [x] **P4 APK 自删**（`edd0027`）：安装启动落盘 `install_cleanup_v1`；下次启动版本号变大才删 MediaStore 行+缓存 APK，否则只清 ≥7 天缓存副本。
 - [x] **P4B 通知卡治理**（`482d9a2`，+5 测试）：review.summary 合并一张可关闭复盘卡、background 最多 2 张、去进程级 static 缓存、review 不发系统通知。
@@ -256,9 +276,8 @@
 |---|---|---|---|
 | `main` | **上游镜像**（= rusty4444/main） | fork/main 仅作镜像 | **只允许快进**：`git switch main && git merge --ff-only upstream/main`；禁止手改、禁止在其上开发 |
 | `V2` | **2.x 稳定版**（2.1.33，历史线） | `fork/V2` 已推 | 冻结；不再加新功能，未经用户许可不得改写 |
-| `V3` | **3.0.0 发布线**（UI 壳 + V2 消息内核） | 推 `fork/V3`（经用户许可） | 只接受 `V3-dev` 的 squash，历史线性；受保护 |
+| `V3` | **3.2.5 发布线**（UI 壳 + V2 消息内核） | 推 `fork/V3`（经用户许可） | 只接受 `V3-dev` 的 squash，历史线性；受保护 |
 | `V3-dev` | **3.x 开发分支** | **永不推远端** | 日常提交，WIP 不限；每功能一条提交 |
-| `V3-dev-legacy` | 旧 V3 实验线归档 | **永不推远端** | 只读；不 merge、不改写 |
 
 **一次功能的标准动作**
 
@@ -267,7 +286,7 @@
 3. `git switch V3` → `git merge --squash V3-dev` → 一条功能级 commit → 经许可后 `git push fork V3`
 4. `git switch V3-dev && git reset --hard V3` 回到同一基点（第 3 步前先验 `git diff V3 V3-dev` 为空）
 
-**版本号**：只以 tag 标记，且**只在合入发布线之后**打（当前 `V3` → `git tag v3.0.0`；后续 `v3.x.y` → `git push fork V3 --tags`）；开发过程不打 tag。`pre-*` / `archive/*` 是本地检查点，不推送。上游同名 `v3.0.0` tag 已归档为 `upstream-v3.0.0`，本地 `v3.0.0` 指本 fork 的发布提交。
+**版本号**：只以 tag 标记，且**只在合入发布线之后**打（当前 `V3` → `git tag v3.2.5`；后续 `v3.x.y` → `git push fork V3 --tags`）；开发过程不打 tag。`pre-*` / `archive/*` 是本地检查点，不推送。上游同名 `v3.0.0` tag 已归档为 `upstream-v3.0.0`，上游 `v3.2.5` 已归档为 `upstream-v3.2.5`；本地 `v3.0.0`/`v3.2.5` 指本 fork 的发布提交。
 
 **换行符**：根 `.gitattributes` 统一（`* text=auto eol=lf`；二进制 `binary`；`*.bat/*.cmd/*.ps1` 强制 CRLF）。改换行策略前先 `git ls-files --eol` 看索引侧 `i/` 列，禁止制造跨平台无意义 diff。
 

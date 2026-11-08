@@ -3,6 +3,9 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
     <!-- The optional foreground service that keeps the gateway socket alive.
          Both types are declared: remoteMessaging is the real one (API 34+),
          dataSync is the pre-34 fallback the service requests at runtime. -->

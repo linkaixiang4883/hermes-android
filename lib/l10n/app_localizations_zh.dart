@@ -913,7 +913,7 @@ class AppLocalizationsZh extends AppLocalizations {
       '请确保网关 API Server 正在运行\n(hermes gateway status)';
 
   @override
-  String matches(Object assigned, Object name) {
+  String matches(String name, String assigned) {
     return '匹配项 $name · $assigned';
   }
 
@@ -2627,6 +2627,152 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get crons => '定时任务';
+
+  @override
+  String get pin_chat => '置顶聊天';
+
+  @override
+  String get unpin_chat => '取消置顶聊天';
+
+  @override
+  String get could_not_update_chat_pin => '无法更新聊天置顶';
+
+  @override
+  String get chat_pin_server_unsupported => '此网关不支持同步置顶，已仅在本机置顶。';
+
+  @override
+  String get pinned_chats => '已置顶';
+
+  @override
+  String get archive_chat => '归档聊天';
+
+  @override
+  String get unarchive_chat => '取消归档聊天';
+
+  @override
+  String get could_not_update_chat_archive => '无法更新聊天归档';
+
+  @override
+  String get crons_upcoming => '即将运行';
+
+  @override
+  String get crons_history => '历史';
+
+  @override
+  String get cron_no_next_run => '未安排下次运行';
+
+  @override
+  String get cron_timezone_unknown => '时区未知';
+
+  @override
+  String get cron_needs_dashboard => '定时任务需要 Dashboard 连接。';
+
+  @override
+  String get cron_upcoming_empty => '没有定时任务。';
+
+  @override
+  String get cron_open_manager => '打开定时任务管理器';
+
+  @override
+  String get cron_status_enabled => '已启用';
+
+  @override
+  String get cron_status_paused => '已暂停';
+
+  @override
+  String cron_deliver_to(String target) {
+    return '投递到：$target';
+  }
+
+  @override
+  String get fallback_title => '备用模型';
+
+  @override
+  String get fallback_notice => '主模型不可用时按顺序尝试。更改只作用于当前配置档案；请显式保存完整列表。';
+
+  @override
+  String get fallback_unavailable => '备用模型设置不可用或无效。请检查连接、当前配置档案和 host 版本后重试。';
+
+  @override
+  String get fallback_discovery_unavailable =>
+      'provider 发现不可用。现有条目会保留；重试后可选择 provider 和模型。';
+
+  @override
+  String get fallback_empty => '备用列表中没有条目。';
+
+  @override
+  String get fallback_incomplete => '请为每个条目选择 provider 和模型，或保存前删除不完整的条目。';
+
+  @override
+  String get fallback_add => '添加备用模型';
+
+  @override
+  String get fallback_save => '保存备用列表';
+
+  @override
+  String get fallback_save_failed => '无法确认备用列表已保存。草稿已保留；请重试保存或刷新以重新加载 host 设置。';
+
+  @override
+  String get fallback_saved => '备用列表已保存并验证。';
+
+  @override
+  String get fallback_legacy_title => '旧版备用项（只读）';
+
+  @override
+  String get fallback_legacy_notice =>
+      'host 还会在此列表之后使用 fallback_model，并跳过重复路由。即使上方列表为空，这些旧条目也会保留；请到 host 上编辑。';
+
+  @override
+  String fallback_priority(String position) {
+    return '优先级 $position';
+  }
+
+  @override
+  String get fallback_move_up => '上移';
+
+  @override
+  String get fallback_move_down => '下移';
+
+  @override
+  String get fallback_routing_read_only =>
+      '路由详情或未列出的 provider 会被保留。请到 host 上编辑该 provider/模型；仍可调整顺序或删除。';
+
+  @override
+  String get context_usage_title => '上下文占用';
+
+  @override
+  String context_usage_percent(int percent) {
+    return '上下文 $percent%';
+  }
+
+  @override
+  String context_usage_tokens(String used, String max) {
+    return '$used / $max';
+  }
+
+  @override
+  String get context_usage_no_breakdown => '此会话暂无分类占用明细。';
+
+  @override
+  String get context_usage_estimated => '估算';
+
+  @override
+  String get compress_in_progress => '正在压缩上下文…';
+
+  @override
+  String get could_not_refresh_conversations => '无法刷新对话，正在显示上次结果';
+
+  @override
+  String get unknown => '未知';
+
+  @override
+  String get voice_gender_male => '(男)';
+
+  @override
+  String get voice_gender_female => '(女)';
+
+  @override
+  String get no_cron_runs_match => '没有与此视图匹配的 Cron 运行';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -3538,7 +3684,7 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
       '请确保网关 API Server 正在运行\n(hermes gateway status)';
 
   @override
-  String matches(Object assigned, Object name) {
+  String matches(String name, String assigned) {
     return '匹配项 $name · $assigned';
   }
 
@@ -5252,4 +5398,150 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get crons => '定时任务';
+
+  @override
+  String get pin_chat => '置顶聊天';
+
+  @override
+  String get unpin_chat => '取消置顶聊天';
+
+  @override
+  String get could_not_update_chat_pin => '无法更新聊天置顶';
+
+  @override
+  String get chat_pin_server_unsupported => '此网关不支持同步置顶，已仅在本机置顶。';
+
+  @override
+  String get pinned_chats => '已置顶';
+
+  @override
+  String get archive_chat => '归档聊天';
+
+  @override
+  String get unarchive_chat => '取消归档聊天';
+
+  @override
+  String get could_not_update_chat_archive => '无法更新聊天归档';
+
+  @override
+  String get crons_upcoming => '即将运行';
+
+  @override
+  String get crons_history => '历史';
+
+  @override
+  String get cron_no_next_run => '未安排下次运行';
+
+  @override
+  String get cron_timezone_unknown => '时区未知';
+
+  @override
+  String get cron_needs_dashboard => '定时任务需要 Dashboard 连接。';
+
+  @override
+  String get cron_upcoming_empty => '没有定时任务。';
+
+  @override
+  String get cron_open_manager => '打开定时任务管理器';
+
+  @override
+  String get cron_status_enabled => '已启用';
+
+  @override
+  String get cron_status_paused => '已暂停';
+
+  @override
+  String cron_deliver_to(String target) {
+    return '投递到：$target';
+  }
+
+  @override
+  String get fallback_title => '备用模型';
+
+  @override
+  String get fallback_notice => '主模型不可用时按顺序尝试。更改只作用于当前配置档案；请显式保存完整列表。';
+
+  @override
+  String get fallback_unavailable => '备用模型设置不可用或无效。请检查连接、当前配置档案和 host 版本后重试。';
+
+  @override
+  String get fallback_discovery_unavailable =>
+      'provider 发现不可用。现有条目会保留；重试后可选择 provider 和模型。';
+
+  @override
+  String get fallback_empty => '备用列表中没有条目。';
+
+  @override
+  String get fallback_incomplete => '请为每个条目选择 provider 和模型，或保存前删除不完整的条目。';
+
+  @override
+  String get fallback_add => '添加备用模型';
+
+  @override
+  String get fallback_save => '保存备用列表';
+
+  @override
+  String get fallback_save_failed => '无法确认备用列表已保存。草稿已保留；请重试保存或刷新以重新加载 host 设置。';
+
+  @override
+  String get fallback_saved => '备用列表已保存并验证。';
+
+  @override
+  String get fallback_legacy_title => '旧版备用项（只读）';
+
+  @override
+  String get fallback_legacy_notice =>
+      'host 还会在此列表之后使用 fallback_model，并跳过重复路由。即使上方列表为空，这些旧条目也会保留；请到 host 上编辑。';
+
+  @override
+  String fallback_priority(String position) {
+    return '优先级 $position';
+  }
+
+  @override
+  String get fallback_move_up => '上移';
+
+  @override
+  String get fallback_move_down => '下移';
+
+  @override
+  String get fallback_routing_read_only =>
+      '路由详情或未列出的 provider 会被保留。请到 host 上编辑该 provider/模型；仍可调整顺序或删除。';
+
+  @override
+  String get context_usage_title => '上下文占用';
+
+  @override
+  String context_usage_percent(int percent) {
+    return '上下文 $percent%';
+  }
+
+  @override
+  String context_usage_tokens(String used, String max) {
+    return '$used / $max';
+  }
+
+  @override
+  String get context_usage_no_breakdown => '此会话暂无分类占用明细。';
+
+  @override
+  String get context_usage_estimated => '估算';
+
+  @override
+  String get compress_in_progress => '正在压缩上下文…';
+
+  @override
+  String get could_not_refresh_conversations => '无法刷新对话，正在显示上次结果';
+
+  @override
+  String get unknown => '未知';
+
+  @override
+  String get voice_gender_male => '(男)';
+
+  @override
+  String get voice_gender_female => '(女)';
+
+  @override
+  String get no_cron_runs_match => '没有与此视图匹配的 Cron 运行';
 }

@@ -24,12 +24,19 @@ class MediaDownloadSaver {
     bool installAfterSave = false,
   }) async {
     try {
-      final raw = await channel.invokeMethod<dynamic>('saveToDownloads', {
+      var request = channel.invokeMethod<dynamic>('saveToDownloads', {
         'bytes': bytes,
         'filename': filename,
         'mimeType': mimeType,
         'installAfterSave': installAfterSave,
       });
+      // The platform thread catches its own failures, but a wedged MethodChannel
+      // must not leave the card spinning forever. Skip the timer in debug/test
+      // builds (the fake channel never answers); release gets the guard.
+      if (const bool.fromEnvironment('dart.vm.product')) {
+        request = request.timeout(const Duration(seconds: 60));
+      }
+      final raw = await request;
       if (raw is String) {
         // Older platform builds answered with the saved name only.
         return MediaDownloadSaveResult(filename: raw, installStatus: 'none');

@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:hermes_android/core/services/connection_manager.dart';
 import 'package:hermes_android/core/services/dashboard_rest_client.dart';
+import 'package:hermes_android/core/services/hermes_rest_client.dart';
 
 DashboardRestClient _client(MockClient httpClient, {String? profile = 'sol'}) {
   return DashboardRestClient(
@@ -174,5 +175,104 @@ void main() {
       ),
       throwsA(isA<UnsupportedError>()),
     );
+  });
+
+  test('pins through dashboard PATCH and verifies an exact read-back', () async {
+    final requests = <String>[];
+    final client = _client(
+      MockClient((request) async {
+        requests.add('${request.method} ${request.url.path}?${request.url.query}');
+        if (request.method == 'PATCH') {
+          expect(request.url.path, '/api/sessions/s1');
+          expect(request.url.queryParameters['profile'], 'sol');
+          expect(jsonDecode(request.body), {'pinned': true});
+          return http.Response(
+            jsonEncode({
+              'session': {'id': 's1', 'title': 'One', 'pinned': true},
+            }),
+            200,
+          );
+        }
+        expect(request.url.path, '/api/sessions/s1');
+        expect(request.url.queryParameters['profile'], 'sol');
+        return http.Response(
+          jsonEncode({'id': 's1', 'title': 'One', 'pinned': true}),
+          200,
+        );
+      }),
+    );
+
+    expect(
+      await client.setSessionPinned(sessionId: 's1', pinned: true),
+      isTrue,
+    );
+    expect(requests, hasLength(2));
+    expect(requests.first, startsWith('PATCH /api/sessions/s1'));
+  });
+
+  test('does not fake a pin when the PATCH response disagrees', () async {
+    final client = _client(
+      MockClient((request) async {
+        if (request.method == 'PATCH') {
+          return http.Response(
+            jsonEncode({
+              'session': {'id': 's1', 'pinned': false},
+            }),
+            200,
+          );
+        }
+        return http.Response(jsonEncode({'id': 's1', 'pinned': false}), 200);
+      }),
+    );
+
+    expect(
+      () => client.setSessionPinned(sessionId: 's1', pinned: true),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('maps unsupported pin PATCH to SyncedPinsUnsupportedException', () async {
+    final client = _client(
+      MockClient((request) async => http.Response(
+        jsonEncode({'code': 'unsupported_session_field'}),
+        400,
+      )),
+    );
+
+    expect(
+      () => client.setSessionPinned(sessionId: 's1', pinned: true),
+      throwsA(isA<SyncedPinsUnsupportedException>()),
+    );
+  });
+
+  test('archives with pinned:false and verifies the read-back', () async {
+    final bodies = <Map<String, dynamic>>[];
+    final client = _client(
+      MockClient((request) async {
+        if (request.method == 'PATCH') {
+          bodies.add(Map<String, dynamic>.from(jsonDecode(request.body) as Map));
+          return http.Response(
+            jsonEncode({
+              'session': {'id': 's1', 'archived': true, 'pinned': false},
+            }),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode({'id': 's1', 'archived': true, 'pinned': false}),
+          200,
+        );
+      }),
+    );
+
+    expect(
+      await client.setSessionArchived(
+        sessionId: 's1',
+        archived: true,
+        clearPin: true,
+      ),
+      isTrue,
+    );
+    expect(bodies.single, {'archived': true, 'pinned': false});
   });
 }
