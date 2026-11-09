@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../models/live_work.dart';
 import '../models/session.dart';
 import '../services/hermes_rest_client.dart';
 import '../services/local_chat_pin_store.dart';
@@ -209,6 +210,11 @@ class WorkspaceSessionsData {
   /// chip then degrades to quick-chat-only rather than lying.
   final List<Session> archivedSessions;
 
+  /// Best-effort stored-session-id → live-work counts from `subagent.roster`.
+  /// Empty when the dashboard/gateway cannot answer; no badge is better than a
+  /// stale one.
+  final Map<String, LiveWorkCounts> liveWork;
+
   /// Best-effort session id → project label mapping.
   ///
   /// Built from the server `projects.tree` preview rows; a conversation whose
@@ -227,6 +233,7 @@ class WorkspaceSessionsData {
       claimedSessionIds: claimedSessionIds,
       archivedQuickChatIds: archivedQuickChatIds,
       archivedSessions: archivedSessions,
+      liveWork: liveWork,
       projectLabels: projectLabels,
       projectsKnown: projectsKnown,
     );
@@ -237,6 +244,7 @@ class WorkspaceSessionsData {
     this.claimedSessionIds = const {},
     this.archivedQuickChatIds = const {},
     this.archivedSessions = const [],
+    this.liveWork = const {},
     this.projectLabels = const {},
     this.projectsKnown = true,
   });
@@ -951,6 +959,7 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
   Widget _buildSessionRow(Session session, WorkspaceSessionsData data) {
     final tokens = HermesTokens.of(context);
     final projectLabel = data.projectLabels[session.id];
+    final liveWork = data.liveWork[session.id];
     final locallyPinned = localPinIdForSession(session, _pinnedIds) != null;
     final serverPinAvailable = widget.onSetPinned != null && session.pinKnown;
     final pinned = session.pinned || locallyPinned;
@@ -1014,6 +1023,38 @@ class _WorkspaceSessionsScreenState extends State<WorkspaceSessionsScreen>
                       _MetaChip(
                         label: context.l10n.unassigned,
                         icon: Icons.inbox_outlined,
+                      ),
+                    if (liveWork != null && liveWork.hasWork)
+                      Tooltip(
+                        message: context.l10n.live_work_badge_tooltip,
+                        child: Container(
+                          key: const Key('session-live-work-badge'),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: tokens.accent.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.bolt_outlined,
+                                size: 12,
+                                color: tokens.accent,
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                '${liveWork.subagents + liveWork.background}',
+                                style: tokens.typography.label.copyWith(
+                                  color: tokens.accent,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     Text(
                       _relativeTime(_now, session.lastActive),

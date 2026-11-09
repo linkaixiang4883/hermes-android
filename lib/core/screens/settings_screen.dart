@@ -635,7 +635,7 @@ class _AboutCardState extends State<_AboutCard> {
   late final AppUpdateService _service;
   String _version = '';
   bool _checking = false;
-  bool _checkOnLaunch = true;
+  bool _checkOnLaunch = false;
   String? _updateStatus;
 
   @override

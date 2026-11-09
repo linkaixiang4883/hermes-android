@@ -1,6 +1,9 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hermes_android/core/models/gateway_activity.dart';
 import 'package:hermes_android/core/models/gateway_insight.dart';
+import 'package:hermes_android/core/models/message_attachment.dart';
 import 'package:hermes_android/core/utils/chat_display_items.dart';
 
 GatewayToolActivity _tool(String name) =>
@@ -106,6 +109,47 @@ void main() {
         (items.single as Map<String, dynamic>)['_display_content'],
         'answer',
       );
+    });
+
+    test('keeps a pure-image user row with its parsed attachment', () {
+      final items = buildChatDisplayItems(
+        messages: [
+          {'role': 'user', 'content': '@image:/tmp/photo.png'},
+          {'role': 'assistant', 'content': 'nice'},
+        ],
+      );
+
+      expect(items, hasLength(2));
+      final user = items.first as Map<String, dynamic>;
+      expect(user['_display_content'], '');
+      final attachments = user['_display_attachments'] as List<dynamic>;
+      expect(attachments, hasLength(1));
+      expect(
+        (attachments.single as MessageAttachmentRef).path,
+        '/tmp/photo.png',
+      );
+    });
+
+    test('preserves an optimistic attachment snapshot on a user row', () {
+      final snapshot = MessageAttachmentRef(
+        kind: MessageAttachmentKind.image,
+        path: 'photo.jpg',
+        label: 'photo.jpg',
+        bytes: Uint8List.fromList([1, 2, 3]),
+      );
+      final items = buildChatDisplayItems(
+        messages: [
+          {
+            'role': 'user',
+            'content': 'look',
+            '_display_attachments': [snapshot],
+          },
+        ],
+      );
+
+      final user = items.single as Map<String, dynamic>;
+      expect(user['_display_content'], 'look');
+      expect(user['_display_attachments'], [same(snapshot)]);
     });
 
     test('replaces a tool result message with the matching activity card', () {

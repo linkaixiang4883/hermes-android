@@ -270,7 +270,7 @@ class AppUpdateService {
   }
 
   Future<bool> checkOnLaunchEnabled() async =>
-      (await _prefs).getBool(checkOnLaunchKey) ?? true;
+      (await _prefs).getBool(checkOnLaunchKey) ?? false;
 
   Future<void> setCheckOnLaunchEnabled(bool enabled) async {
     final preferences = await _prefs;

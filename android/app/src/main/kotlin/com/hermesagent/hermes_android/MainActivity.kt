@@ -34,7 +34,13 @@ class MainActivity : FlutterActivity() {
     /// A MediaStore row this app wrote, kept as both the display name the
     /// caller reports back and the uri whose row is deleted once the APK's
     /// install lands on a later launch.
-    private data class SavedDownload(val filename: String, val uri: String)
+    private data class SavedDownload(
+        val filename: String,
+        val uri: String,
+        /// Public Downloads path on releases before scoped storage, where the
+        /// MediaStore row is not addressable for cleanup.
+        val filePath: String? = null,
+    )
 
     private data class PendingDownload(
         val filename: String,
@@ -221,7 +227,7 @@ class MainActivity : FlutterActivity() {
                     if (installStatus == "launched" && installIntent != null) {
                         try {
                             startActivity(installIntent)
-                            rememberInstallCleanup(pending.filename, saved?.uri)
+                            saved?.let { rememberInstallCleanup(it) }
                         } catch (e: Exception) {
                             Log.w(TAG, "installer launch failed", e)
                             installStatus = "failed"
@@ -278,8 +284,9 @@ class MainActivity : FlutterActivity() {
     /// the installer intent is handed off: the install replaces this process,
     /// so nothing here can wait for a result. A commit (not apply) keeps the
     /// record on disk even if the process is killed seconds later.
-    private fun rememberInstallCleanup(filename: String, downloadsUri: String?) {
+    private fun rememberInstallCleanup(saved: SavedDownload) {
         try {
+            val filename = saved.filename
             val versionCode = currentVersionCode()
             if (versionCode <= 0L) {
                 Log.w(TAG, "install cleanup skipped: version code unavailable")
@@ -287,7 +294,8 @@ class MainActivity : FlutterActivity() {
             }
             val payload = JSONObject().apply {
                 put("versionCodeAtSave", versionCode)
-                put("downloadsUri", downloadsUri.orEmpty())
+                put("downloadsUri", saved.uri)
+                put("downloadsPath", saved.filePath.orEmpty())
                 put("cachePath", installCacheFile(filename).absolutePath)
                 put("filename", filename)
                 put("savedAt", System.currentTimeMillis())
@@ -296,7 +304,7 @@ class MainActivity : FlutterActivity() {
             Log.i(
                 TAG,
                 "install cleanup armed filename=$filename versionCode=$versionCode " +
-                    "uri=$downloadsUri committed=$committed",
+                    "uri=${saved.uri} path=${saved.filePath} committed=$committed",
             )
         } catch (e: Exception) {
             Log.w(TAG, "install cleanup could not be armed", e)
@@ -319,11 +327,13 @@ class MainActivity : FlutterActivity() {
             }
             val versionAtSave = state.optLong("versionCodeAtSave", -1L)
             val downloadsUri = state.optString("downloadsUri").takeIf { it.isNotEmpty() }
+            val downloadsPath = state.optString("downloadsPath").takeIf { it.isNotEmpty() }
             val cachePath = state.optString("cachePath").takeIf { it.isNotEmpty() }
             val filename = state.optString("filename")
             val current = currentVersionCode()
             if (versionAtSave > 0L && current > versionAtSave) {
                 if (downloadsUri != null) deleteDownloadsRow(downloadsUri)
+                if (downloadsPath != null) deleteDownloadsFile(downloadsPath)
                 if (cachePath != null) {
                     val cacheFile = File(cachePath)
                     Log.i(TAG, "install cleanup: cache file ${cacheFile.name} deleted=${cacheFile.delete()}")
@@ -356,6 +366,18 @@ class MainActivity : FlutterActivity() {
             Log.i(TAG, "install cleanup: downloads row $downloadsUri deleted=$deleted")
         } catch (e: Exception) {
             Log.w(TAG, "install cleanup: deleting $downloadsUri failed", e)
+        }
+    }
+
+    /// Deletes the public Downloads file on releases before scoped storage.
+    /// Those releases have no addressable MediaStore row for this app's file.
+    private fun deleteDownloadsFile(path: String) {
+        try {
+            val file = File(path)
+            val deleted = file.delete()
+            Log.i(TAG, "install cleanup: downloads file ${file.name} deleted=$deleted")
+        } catch (e: Exception) {
+            Log.w(TAG, "install cleanup: deleting $path failed", e)
         }
     }
 
@@ -518,7 +540,7 @@ class MainActivity : FlutterActivity() {
                     arrayOf(mimeType ?: "application/octet-stream"),
                     null,
                 )
-                SavedDownload(target.name, "")
+                SavedDownload(target.name, "", target.absolutePath)
             } catch (e: Exception) {
                 runCatching { target.delete() }
                 throw e

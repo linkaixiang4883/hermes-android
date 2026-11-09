@@ -3,6 +3,7 @@
 // GET /api/sessions/{id}/messages.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,6 +29,7 @@ import '../services/gateway_turn_application_controller.dart';
 import '../services/gateway_turn_coordinator.dart';
 import '../services/gateway_turn_recovery.dart';
 import '../services/gateway_turn_ui_projection.dart';
+import '../services/live_work_store.dart';
 import '../services/remote_files_client.dart';
 import '../services/tts_voice_config.dart';
 import '../services/turn_notification_service.dart';
@@ -42,6 +44,7 @@ import '../models/gateway_clarify.dart';
 import '../models/gateway_insight.dart';
 import '../models/gateway_sensitive_prompt.dart';
 import '../models/gateway_turn_contract.dart';
+import '../models/message_attachment.dart';
 import '../models/projects_tree_overview.dart';
 import '../models/session_context.dart';
 import '../models/turn_usage.dart';
@@ -63,7 +66,9 @@ import '../widgets/gateway_approval_dialog.dart';
 import '../widgets/gateway_clarify_dialog.dart';
 import '../widgets/gateway_insight_card.dart';
 import '../widgets/gateway_sensitive_prompt_dialog.dart';
+import '../widgets/live_work_status_stack.dart';
 import '../widgets/media_artifact_card.dart';
+import '../widgets/message_attachment_row.dart';
 import '../widgets/voice_composer_controls.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -770,6 +775,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   late final Future<void> _sessionModelRestore;
   DesktopGatewayClient? _desktopGateway;
 
+  /// Session-level live work (subagents + background processes) shown above
+  /// the composer. Null on legacy/REST-only connections.
+  LiveWorkStore? _liveWorkStore;
+
   /// Tokens for the two listeners this route attached to [_desktopGateway].
   ///
   /// The Phase 2B connection is shared across the app, so this route must
@@ -1069,6 +1078,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             shared ?? DesktopGatewayClient.fromConnection(widget.connection);
         _desktopGateway = gateway;
         _ownsClient = shared == null;
+        _liveWorkStore =
+            LiveWorkStore(
+                loadSubagents: () => gateway.listLiveSubagents(
+                  sessionId: widget.session.id,
+                  profile: widget.session.profile,
+                  workingDirectory: widget.projectWorkingDirectory,
+                ),
+                loadProcesses: () => gateway.listLiveProcesses(
+                  sessionId: widget.session.id,
+                  profile: widget.session.profile,
+                  workingDirectory: widget.projectWorkingDirectory,
+                ),
+              )
+              ..addListener(_onLiveWorkChanged);
         // Register the Project folder before ANY RPC can create the session:
         // a draft's first send may be the creation point, and a create without
         // the cwd files the chat outside its Project.
@@ -1113,7 +1136,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         widget.testDesktopGatewayObserver?.call(gateway);
         // Entering the chat asks for the CURRENT snapshot: the binding this
         // client already holds may predate the turn the user came back for.
-        unawaited(_ensureDesktopSession(refresh: true));
+        unawaited(
+          _ensureDesktopSession(refresh: true).then(
+            (_) {
+              if (mounted && !widget.session.isLocalDraft) {
+                _liveWorkStore?.start();
+              }
+            },
+            onError: (_) {},
+          ),
+        );
       } on ArgumentError {
         // The regular mobile chat remains usable; selection surfaces the
         // actionable configuration error when Desktop attachments are needed.
@@ -1263,6 +1295,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     for (final timer in _notificationTimers.values) {
       timer.cancel();
     }
+    final liveWorkStore = _liveWorkStore;
+    if (liveWorkStore != null) {
+      liveWorkStore
+        ..removeListener(_onLiveWorkChanged)
+        ..dispose();
+      _liveWorkStore = null;
+    }
     _releaseClientAfterStreamSettles();
     if (!identical(_restClient, _client)) _restClient.close();
     unawaited(
@@ -1369,6 +1408,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         state == AppLifecycleState.hidden ||
         state == AppLifecycleState.detached) {
       _appInBackground = true;
+      _liveWorkStore?.setForeground(false);
       // Persist the draft on the way out: a process kill must not lose it.
       unawaited(
         ComposerDraftStore.save(
@@ -1383,6 +1423,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       }
     } else if (state == AppLifecycleState.resumed) {
       _appInBackground = false;
+      _liveWorkStore?.setForeground(true);
       // Do NOT cancel every notification here: this used to wipe pending
       // approval/input notifications that belong to another session (the
       // PromptNotifier de-duplicates by id and never reposts them). Completed
@@ -1556,6 +1597,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  void _onLiveWorkChanged() {
+    if (mounted) setState(() {});
+  }
+
   /// Desktop gateway connection-state transitions.
   ///
   /// A deliberate connection switch or a dropped socket detaches the WS
@@ -1589,6 +1634,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ),
         );
       }
+    }
+    if (state != DesktopConnectionState.connected) {
+      _liveWorkStore?.clear();
     }
     if (state != DesktopConnectionState.connected) _pauseReattachRetry();
     setState(() {
@@ -3220,6 +3268,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     AttachmentDraft draft,
     String dataUrl,
   ) async {
+    if (draft.isImage) {
+      try {
+        final image = await desktopGateway.attachImage(
+          sessionId: widget.session.id,
+          name: draft.name,
+          dataUrl: dataUrl,
+          workingDirectory: widget.projectWorkingDirectory,
+        );
+        return AttachmentUploadReceipt(
+          refText: '',
+          remotePath: image.path,
+        );
+      } on JsonRpcError catch (error) {
+        // An older gateway may not implement image.attach_bytes. Keep the
+        // legacy file reference as the honest fallback; authority errors
+        // (invalid params, storage failures) must surface instead.
+        if (error.code != -32601) rethrow;
+      }
+    }
     final attachment = await desktopGateway.attachFile(
       sessionId: widget.session.id,
       name: draft.name,
@@ -3230,6 +3297,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       refText: attachment.refText,
       atlasIntakeAccepted: attachment.atlasIntakeAccepted,
     );
+  }
+
+  /// Captures display refs before the upload service deletes its cache files.
+  Future<List<MessageAttachmentRef>> _snapshotDisplayAttachments(
+    List<AttachmentDraft> drafts,
+  ) async {
+    final refs = <MessageAttachmentRef>[];
+    for (final draft in drafts) {
+      if (draft.isImage) {
+        Uint8List? bytes;
+        try {
+          if (File(draft.cachedPath).existsSync()) {
+            bytes = await _attachmentDraftService.readBytes(draft);
+          }
+        } catch (_) {
+          // The display snapshot is cosmetic: a failed read must not reject
+          // the prompt before the upload path gets its chance.
+        }
+        refs.add(
+          MessageAttachmentRef(
+            kind: MessageAttachmentKind.image,
+            path: draft.name,
+            label: draft.name,
+            bytes: bytes,
+            isLocal: true,
+          ),
+        );
+      } else {
+        refs.add(
+          MessageAttachmentRef(
+            kind: MessageAttachmentKind.file,
+            path: draft.name,
+            label: draft.name,
+            isLocal: true,
+          ),
+        );
+      }
+    }
+    return refs;
   }
 
   Future<void> _retryAttachment(AttachmentDraft draft) async {
@@ -3773,6 +3879,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _activeResponseTransport = _ResponseTransport.desktop;
     var turnAdded = false;
     var promptSubmitted = false;
+    var displayAttachments = const <MessageAttachmentRef>[];
 
     setState(() {
       _sending = true;
@@ -3783,6 +3890,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
 
     try {
+      displayAttachments = await _snapshotDisplayAttachments(attachments);
       if (desktopGateway != null) {
         await _applySessionModelOverride(desktopGateway);
       }
@@ -3832,16 +3940,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             text,
             refTexts.join('\n'),
           ].where((part) => part.trim().isNotEmpty).join('\n\n');
-          final attachmentLabels = attachments
-              .map(
-                (attachment) =>
-                    '[${context.l10n.attached_file}: ${attachment.name}]',
-              )
-              .join('\n');
-          final localContent = [
-            text,
-            attachmentLabels,
-          ].where((part) => part.trim().isNotEmpty).join('\n\n');
+          final imageAttachments = [
+            for (final draft in attachments)
+              if (draft.isImage && draft.remotePath?.isNotEmpty == true)
+                {'path': draft.remotePath!, 'mime': draft.mediaType},
+          ];
           _clearComposerForSend();
           _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
           setState(() {
@@ -3853,7 +3956,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             _attachmentDrafts.clear();
             _messages.add({
               'role': 'user',
-              'content': localContent,
+              'content': text,
+              if (displayAttachments.isNotEmpty)
+                '_display_attachments': displayAttachments,
               'timestamp': _messageTimestampNow(),
             });
             _messages.add({
@@ -3877,6 +3982,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             promptSubmitted = true;
             if (mounted && responseGeneration == _responseGeneration) {
               _legacyDesktopPromptSubmitted = true;
+              _liveWorkStore?.start();
             }
           }
 
@@ -3892,6 +3998,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               await desktopGateway!.submitPrompt(
                 sessionId: widget.session.id,
                 text: prompt,
+                attachments: imageAttachments,
                 onEvent: onEvent,
                 onSent: markPromptSent,
                 workingDirectory: widget.projectWorkingDirectory,
@@ -3978,6 +4085,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _activeResponseTransport = _ResponseTransport.desktop;
     final staged = <GatewayTurnAttachmentReceipt>[];
     var attachmentCacheReleased = false;
+    var displayAttachments = const <MessageAttachmentRef>[];
 
     void releaseAcceptedAttachmentCache(GatewayTurnRecoveryState state) {
       if (attachmentCacheReleased ||
@@ -4004,6 +4112,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
 
     try {
+      displayAttachments = await _snapshotDisplayAttachments(attachments);
       for (var index = 0; index < attachments.length; index++) {
         final draft = attachments[index];
         setState(() {
@@ -4057,15 +4166,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       return;
     }
 
-    final attachmentLabels = attachments
-        .map(
-          (attachment) => '[${context.l10n.attached_file}: ${attachment.name}]',
-        )
-        .join('\n');
-    final localContent = [
-      text,
-      attachmentLabels,
-    ].where((part) => part.trim().isNotEmpty).join('\n\n');
     _clearComposerForSend();
     _scrollCoordinator.beginStreaming(isNearEnd: _isNearEnd());
     setState(() {
@@ -4080,7 +4180,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _attachmentDrafts.clear();
       _messages.add({
         'role': 'user',
-        'content': localContent,
+        'content': text,
+        if (displayAttachments.isNotEmpty)
+          '_display_attachments': displayAttachments,
         'timestamp': _messageTimestampNow(),
       });
       _messages.add({
@@ -4101,6 +4203,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
       releaseAcceptedAttachmentCache(state);
       if (!mounted || responseGeneration != _responseGeneration) return;
+      _liveWorkStore?.start();
       _applyGatewayTurnState(state);
       unawaited(_refreshContextUsage());
     } catch (error) {
@@ -4143,6 +4246,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleDesktopGatewayEvent(StreamEvent event, int responseGeneration) {
     if (!mounted || responseGeneration != _responseGeneration) return;
+    _liveWorkStore?.noteGatewayEvent(event.type, event.data);
     if (_gatewayTerminalEventTypes.contains(event.type)) {
       // The turn is over whichever lane carried the frame: a blocking card
       // parked for it can never be answered again, so clear it the way a
@@ -4323,6 +4427,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _handleDesktopAsyncEvent(String mobileSessionId, StreamEvent event) {
     if (!mounted || mobileSessionId != widget.session.id) return;
+    _liveWorkStore?.noteGatewayEvent(event.type, event.data);
     if (event.type == 'status.update' && _handleCompressionStatusEvent(event)) {
       return;
     }
@@ -5673,6 +5778,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (_liveWorkStore != null)
+                      LiveWorkStatusStack(store: _liveWorkStore!),
                     if (_compressionActive ||
                         (_gatewayTurnStatus != null &&
                             (_sending || _streaming)))
@@ -6092,6 +6199,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   stripToolResultText(messageContentToText(msg['content']));
               final isUser = role == 'user';
               final timestamp = messageTimestamp(msg);
+              final attachments =
+                  (msg['_display_attachments'] as List<dynamic>? ?? const [])
+                      .whereType<MessageAttachmentRef>()
+                      .toList(growable: false);
 
               return MessageBubble(
                 content: content,
@@ -6099,20 +6210,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 verbose: _verboseMode,
                 density: _chatDensity,
                 metadata: msg,
+                attachments: attachments,
                 timestamp: isUser || msg['_gateway_pending_response'] != true
                     ? timestamp
                     : null,
                 mediaReferencesFinal: msg['_gateway_pending_response'] != true,
-                mediaFilesClient: isUser
-                    ? null
-                    : () =>
-                          widget.testMediaFilesClient?.call(
-                            _storedSessionKey,
-                          ) ??
-                          RemoteFilesClient.fromConnection(
-                            widget.connection,
-                            sessionId: _storedSessionKey,
-                          ),
+                mediaFilesClient: () =>
+                    widget.testMediaFilesClient?.call(_storedSessionKey) ??
+                    RemoteFilesClient.fromConnection(
+                      widget.connection,
+                      sessionId: _storedSessionKey,
+                    ),
                 onReadAloud: isUser
                     ? null
                     : () => _readAssistantText(content, announce: true),
@@ -6161,6 +6269,7 @@ class MessageBubble extends StatelessWidget {
   final Future<void> Function()? onRetry;
   final bool mediaReferencesFinal;
   final DateTime? timestamp;
+  final List<MessageAttachmentRef> attachments;
 
   /// Gateway files client factory for `MEDIA:` artifact cards. Assistant
   /// bubbles without it render `MEDIA:` tags as prose (e.g. transcript views
@@ -6181,6 +6290,7 @@ class MessageBubble extends StatelessWidget {
     this.mediaFilesClient,
     this.mediaReferencesFinal = true,
     this.timestamp,
+    this.attachments = const [],
   });
 
   Future<void> _copyMessage(BuildContext context) async {
@@ -6312,6 +6422,7 @@ class MessageBubble extends StatelessWidget {
     bool isUser,
     Color assistantTextColor,
   ) {
+    if (content.trim().isEmpty) return const [];
     final styleSheet = _messageStyleSheet(
       theme,
       isUser: isUser,
@@ -6513,6 +6624,10 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
+    final rawMediaClient = mediaFilesClient?.call();
+    final attachmentMediaClient = rawMediaClient is RemoteMediaDataSource
+        ? rawMediaClient as RemoteMediaDataSource
+        : null;
 
     // Bubble colors
     const userBubbleColor = hermesUserMessageBubbleBackground;
@@ -6612,6 +6727,13 @@ class MessageBubble extends StatelessWidget {
             // MEDIA: — the contract is assistant-side delivery, and quoted
             // tags in a prompt must stay verbatim.
             ..._renderContent(context, theme, isUser, assistantTextColor),
+            if (attachments.isNotEmpty)
+              MessageAttachmentRow(
+                attachments: attachments,
+                filesClient: attachmentMediaClient is RemoteMediaDataSource
+                    ? attachmentMediaClient
+                    : null,
+              ),
             if (timestamp case final time?) ...[
               SizedBox(height: density.timestampGap),
               Align(

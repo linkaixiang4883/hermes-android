@@ -907,5 +907,36 @@
   "unknown": "unknown",
   "voice_gender_male": "(male)",
   "voice_gender_female": "(female)",
-  "no_cron_runs_match": "No cron runs match this view"
+  "no_cron_runs_match": "No cron runs match this view",
+  "attachments_more": "+{count} more",
+  "attachment_image_load_failed": "Image unavailable",
+  "attachment_image_label": "Image",
+  "attachment_file_label": "File",
+  "live_work_summary": "Live work · {subagents} agents · {background} tasks",
+  "live_work_more": "+{count} more",
+  "live_work_badge_tooltip": "Live work",
+  "@attachments_more": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "@live_work_summary": {
+    "placeholders": {
+      "subagents": {
+        "type": "int"
+      },
+      "background": {
+        "type": "int"
+      }
+    }
+  },
+  "@live_work_more": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
 }

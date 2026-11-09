@@ -57,7 +57,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool(AppUpdateService.checkOnLaunchKey), isFalse);
+    expect(prefs.getBool(AppUpdateService.checkOnLaunchKey), isTrue);
   });
 
   testWidgets('manual check shows a newer release and can skip it', (

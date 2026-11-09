@@ -337,6 +337,8 @@ void main() {
   });
 
   group('launch prompt policy', () {
+    setUp(() => AppUpdateService().setCheckOnLaunchEnabled(true));
+
     test('prompts when a newer release is published', () async {
       final service = AppUpdateService(
         client: MockClient(
@@ -440,11 +442,11 @@ void main() {
         isFalse,
       );
     });
-    test('launch checks are on until the user turns them off', () async {
+    test('launch checks are off until the user turns them on', () async {
       final service = AppUpdateService();
-      expect(await service.checkOnLaunchEnabled(), isTrue);
-      await service.setCheckOnLaunchEnabled(false);
       expect(await service.checkOnLaunchEnabled(), isFalse);
+      await service.setCheckOnLaunchEnabled(true);
+      expect(await service.checkOnLaunchEnabled(), isTrue);
     });
 
     test('skip bookkeeping normalises and clears', () async {

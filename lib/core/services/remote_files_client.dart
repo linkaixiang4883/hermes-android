@@ -77,7 +77,15 @@ abstract class RemoteFilesDataSource {
   Future<RemoteFileDownload> download(String path);
 }
 
-class RemoteFilesClient implements RemoteFilesDataSource {
+/// Optional companion for clients that can read gateway-local chat media.
+///
+/// Kept separate from [RemoteFilesDataSource] so existing test doubles and
+/// legacy file-only clients do not need a new implementation.
+abstract class RemoteMediaDataSource {
+  Future<String> readMediaDataUrl(String path);
+}
+
+class RemoteFilesClient implements RemoteFilesDataSource, RemoteMediaDataSource {
   final DashboardClient dashboard;
   final String? profile;
   final String? sessionId;
@@ -179,6 +187,19 @@ class RemoteFilesClient implements RemoteFilesDataSource {
       filename: match?.group(1)?.trim() ?? path.split('/').last,
       bytes: response.bodyBytes,
     );
+  }
+
+  @override
+  Future<String> readMediaDataUrl(String path) async {
+    final data = await dashboard.apiGet(
+      'media',
+      queryParameters: _scopedQuery({'path': path}),
+    );
+    final dataUrl = data['data_url']?.toString() ?? '';
+    if (dataUrl.isEmpty) {
+      throw Exception('Gateway returned no image data');
+    }
+    return dataUrl;
   }
 
   void close() => dashboard.close();

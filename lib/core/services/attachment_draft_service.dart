@@ -48,10 +48,12 @@ typedef AttachmentPromptSubmit = Future<void> Function(List<String> refTexts);
 
 class AttachmentUploadReceipt {
   final String refText;
+  final String? remotePath;
   final bool? atlasIntakeAccepted;
 
   const AttachmentUploadReceipt({
     required this.refText,
+    this.remotePath,
     this.atlasIntakeAccepted,
   });
 }
@@ -90,7 +92,13 @@ class AttachmentDraftSendCoordinator {
         .whereType<String>()
         .where((ref) => ref.isNotEmpty)
         .toList(growable: false);
-    if (refs.length != snapshot.length) {
+    final missing = snapshot.where(
+      (draft) => draft.isImage
+          ? (draft.remotePath?.isNotEmpty != true &&
+              draft.refText?.isNotEmpty != true)
+          : (draft.refText?.isNotEmpty != true),
+    );
+    if (missing.isNotEmpty) {
       throw const AttachmentDraftException(
         'Every attachment must have a gateway reference before prompt submit.',
       );
@@ -358,6 +366,14 @@ class AttachmentDraftService {
     }
   }
 
+  /// Reads one draft's bytes for a local display snapshot before upload.
+  ///
+  /// The upload path deletes [AttachmentDraft.cachedPath] after success, so a
+  /// caller that wants an optimistic thumbnail must capture these bytes first.
+  Future<Uint8List> readBytes(AttachmentDraft draft) {
+    return File(draft.cachedPath).readAsBytes();
+  }
+
   Future<List<AttachmentUploadReceipt>> uploadSequential({
     required Iterable<AttachmentDraft> drafts,
     required AttachmentUploadCallback upload,
@@ -368,10 +384,12 @@ class AttachmentDraftService {
     final receipts = <AttachmentUploadReceipt>[];
     for (final draft in snapshot) {
       if (draft.status == AttachmentDraftStatus.attached &&
-          draft.refText?.isNotEmpty == true) {
+          (draft.refText?.isNotEmpty == true ||
+              (draft.isImage && draft.remotePath?.isNotEmpty == true))) {
         receipts.add(
           AttachmentUploadReceipt(
-            refText: draft.refText!,
+            refText: draft.refText ?? '',
+            remotePath: draft.remotePath,
             atlasIntakeAccepted: draft.atlasIntakeAccepted,
           ),
         );
@@ -415,6 +433,7 @@ class AttachmentDraftService {
       draft
         ..status = AttachmentDraftStatus.attached
         ..refText = receipt.refText
+        ..remotePath = receipt.remotePath
         ..atlasIntakeAccepted = receipt.atlasIntakeAccepted;
       dataUrl = null;
       await removeCachedFile(draft);

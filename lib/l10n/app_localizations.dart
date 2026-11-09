@@ -4881,6 +4881,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No cron runs match this view'**
   String get no_cron_runs_match;
+
+  /// No description provided for @attachments_more.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String attachments_more(int count);
+
+  /// No description provided for @attachment_image_load_failed.
+  ///
+  /// In en, this message translates to:
+  /// **'Image unavailable'**
+  String get attachment_image_load_failed;
+
+  /// No description provided for @attachment_image_label.
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get attachment_image_label;
+
+  /// No description provided for @attachment_file_label.
+  ///
+  /// In en, this message translates to:
+  /// **'File'**
+  String get attachment_file_label;
+
+  /// No description provided for @live_work_summary.
+  ///
+  /// In en, this message translates to:
+  /// **'Live work · {subagents} agents · {background} tasks'**
+  String live_work_summary(int subagents, int background);
+
+  /// No description provided for @live_work_more.
+  ///
+  /// In en, this message translates to:
+  /// **'+{count} more'**
+  String live_work_more(int count);
+
+  /// No description provided for @live_work_badge_tooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Live work'**
+  String get live_work_badge_tooltip;
 }
 
 class _AppLocalizationsDelegate

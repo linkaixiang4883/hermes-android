@@ -17,6 +17,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../models/attachment_draft.dart';
 import '../models/hermes_project.dart';
+import '../models/live_work.dart';
 import '../models/projects_tree_overview.dart';
 import '../services/android_share_intent_service.dart';
 import '../services/app_update_service.dart';
@@ -1467,14 +1468,68 @@ class _WorkspaceScreenState extends State<WorkspaceScreen> {
     }
 
     _chatProjectLabels = Map.unmodifiable(projectLabels);
+    Map<String, LiveWorkCounts> liveWork = const {};
+    try {
+      liveWork = await _loadLiveWorkRoster(
+        sessions,
+      ).timeout(const Duration(seconds: 5));
+    } catch (_) {
+      // Badges are additive; the chat list must load without them.
+    }
     return WorkspaceSessionsData(
       sessions: sessions,
       claimedSessionIds: Set.unmodifiable(claimed),
       archivedQuickChatIds: Set.unmodifiable(archived),
       archivedSessions: List.unmodifiable(archivedSessions),
+      liveWork: Map.unmodifiable(liveWork),
       projectLabels: _chatProjectLabels,
       projectsKnown: projectsKnown,
     );
+  }
+
+  /// Reads `subagent.roster` for the profiles represented in [sessions].
+  ///
+  /// The roster is profile-scoped, not session-scoped. Grouping first prevents
+  /// a Bot/profile session's counts from leaking into the default profile and
+  /// keeps one roster call per profile instead of one per row.
+  Future<Map<String, LiveWorkCounts>> _loadLiveWorkRoster(
+    List<Session> sessions,
+  ) async {
+    if (sessions.isEmpty) return const {};
+    final gateway =
+        _ownedGateway ??
+        widget.gatewayRegistry?.existingFor(widget.connection.id);
+    if (gateway == null) return const {};
+
+    final profiles = <String>{};
+    for (final session in sessions) {
+      final profile = session.profile?.trim();
+      if (profile != null && profile.isNotEmpty) {
+        profiles.add(profile);
+      }
+    }
+    final effectiveProfiles = profiles.isEmpty
+        ? <String?>{widget.connection.gatewayProfile}
+        : profiles.cast<String?>();
+
+    final merged = <String, LiveWorkCounts>{};
+    for (final profile in effectiveProfiles) {
+      try {
+        final counts = await gateway.liveWorkRoster(profile: profile);
+        for (final entry in counts.entries) {
+          final previous = merged[entry.key];
+          merged[entry.key] = previous == null
+              ? entry.value
+              : LiveWorkCounts(
+                  subagents: previous.subagents + entry.value.subagents,
+                  background: previous.background + entry.value.background,
+                );
+        }
+      } catch (_) {
+        // An older gateway without subagent.roster simply has no badges.
+      }
+    }
+    return merged;
   }
 
   void _openWorkspaceSessionView(WorkspaceSessionView view) {

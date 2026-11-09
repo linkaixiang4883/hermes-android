@@ -86,14 +86,14 @@ void main() {
     expect(find.text('Saved to Downloads'), findsOneWidget);
   });
 
-  testWidgets('an APK save never asks the platform to install it', (
+  testWidgets('an APK save asks the platform to install it', (
     tester,
   ) async {
     const apkRef = MediaTagRef(path: '/srv/data/release.apk');
     final calls = <MethodCall>[];
     mockDownloadsChannel((call) async {
       calls.add(call);
-      return {'filename': 'release.apk', 'install': 'none'};
+      return {'filename': 'release.apk', 'install': 'launched'};
     });
 
     await tester.pumpWidget(
@@ -119,10 +119,13 @@ void main() {
     expect(args['filename'], 'release.apk');
     expect(
       args['installAfterSave'],
-      isFalse,
-      reason: 'a chat attachment must only be saved, never auto-installed',
+      isTrue,
+      reason: 'an APK attachment opens the system installer after saving',
     );
-    expect(find.text('Saved to Downloads'), findsOneWidget);
+    expect(
+      find.text('Saved to Downloads — opening the installer…'),
+      findsOneWidget,
+    );
   });
 
   testWidgets(

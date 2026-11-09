@@ -4,6 +4,31 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [3.2.5] - 2026-11-10
+
+Fork build `3.2.5+3001`: same user-visible version as the upstream baseline,
+with an independently incremented Android versionCode. The matching upstream
+baseline is `v3.2.5` at commit `899f504`.
+
+### Added
+
+- Desktop-parity image attachments: `image.attach_bytes` staging followed by
+  `prompt.submit.attachments: [{path, mime}]` delivery; user bubbles render
+  thumbnails/file chips, and history restores `@image:`/image parts.
+- Live Work visibility: session subagents and background processes in a
+  collapsible composer stack, plus `subagent.roster` badges in the chat list.
+- APK attachments restore the system install prompt; non-APK media remains
+  download-only.
+
+### Changed
+
+- Android versionCode base is `3001` (arm64 effective `30012`); the app's
+  versionName remains `3.2.5`. A same-versionName build is installed manually
+  and then participates in the normal update flow for later versions.
+- `install_cleanup_v1` removes the saved APK from Downloads and the installer
+  cache after the next launch confirms the upgrade; Android 9 also deletes the
+  exact public Downloads path.
+
 ## [3.0.0] - 2026-11-07
 
 V3 release line: the V3.0.0 UI shell on the V2 desktop-gateway transport. The

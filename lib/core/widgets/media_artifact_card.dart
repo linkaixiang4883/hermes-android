@@ -126,10 +126,12 @@ class _MediaArtifactCardState extends State<MediaArtifactCard> {
   Future<void> _saveToDownloads() async {
     final bytes = await _ensureBytes();
     if (bytes == null || !mounted) return;
-    // Chat attachments are downloads, not an install channel: an APK from a
-    // model response must never hand the system installer a package the app
-    // did not author. The user can still open it from Downloads.
-    const installAfterSave = false;
+    // APK attachments are the one deliberate install path: the card hands the
+    // package to the system installer. Other media stay downloads only.
+    final installAfterSave = isAndroidPackageFile(
+      widget.ref.filename,
+      _mime,
+    );
     final l10n = context.l10n;
     try {
       final result = await MediaDownloadSaver.save(

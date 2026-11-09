@@ -2878,4 +2878,31 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get no_cron_runs_match => 'No cron runs match this view';
+
+  @override
+  String attachments_more(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String get attachment_image_load_failed => 'Image unavailable';
+
+  @override
+  String get attachment_image_label => 'Image';
+
+  @override
+  String get attachment_file_label => 'File';
+
+  @override
+  String live_work_summary(int subagents, int background) {
+    return 'Live work · $subagents agents · $background tasks';
+  }
+
+  @override
+  String live_work_more(int count) {
+    return '+$count more';
+  }
+
+  @override
+  String get live_work_badge_tooltip => 'Live work';
 }

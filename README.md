@@ -1,4 +1,4 @@
-# Hermes Android — v3.0.0
+# Hermes Android — v3.2.5
 
 Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — chat with your Hermes sessions from a phone or tablet over local Wi-Fi or a private Tailscale network.
 
@@ -14,10 +14,10 @@ Android client for [Hermes Agent](https://hermes-agent.nousresearch.com/) — ch
 
 ## Current release
 
-- Version: **3.0.0** (build 3000)
+- Version: **3.2.5** (build 3001)
 - Package: `com.hermesagent.hermes_android`
 - Recommended APK for modern phones: ARM64 release build from the
-  [Releases](https://github.com/rusty4444/hermes-android/releases) page.
+  [Releases](https://github.com/linkaixiang4883/hermes-android/releases) page.
 - Production builds are signed with a private release keystore. Debug APKs
   signed with the Android debug certificate remain available for testing
   under the `com.hermesagent.hermes_android.dev` package ID.
@@ -650,7 +650,7 @@ cp build/app/outputs/flutter-apk/app-*-release.apk release-apks/
 block in `android/app/build.gradle.kts` derives per-ABI codes as
 `base * 10 + ABI code` (armeabi-v7a = 1, arm64-v8a = 2, x86_64 = 3), so the
 codes stay ordered armeabi-v7a < arm64-v8a < x86_64 as fdroiddata requires.
-For v3.0.0, base `3000` therefore produces codes `30001`/`30002`/`30003`.
+For v3.2.5, base `3001` therefore produces codes `30011`/`30012`/`30013`.
 CI reads the completed arm64 APK with `aapt` and fails if that relationship
 drifts. Release-floor checks continue to apply to the base value and must not
 be weakened to rely on the ABI code.

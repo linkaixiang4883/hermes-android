@@ -39,7 +39,11 @@ Future<void> pumpLaunch(
   Future<String?> Function()? installedVersion,
   AndroidSharePayload? sharedPayload,
   bool quickChat = false,
+  bool enableLaunchCheck = true,
 }) async {
+  if (enableLaunchCheck) {
+    await service.setCheckOnLaunchEnabled(true);
+  }
   tester.view.physicalSize = const Size(400, 900);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -211,6 +215,25 @@ void main() {
 
     expect(find.text('Current task'), findsOneWidget);
     expect(find.text('Update available'), findsNothing);
+  });
+
+  testWidgets('launch checks are off by default', (tester) async {
+    var calls = 0;
+    final service = AppUpdateService(
+      client: MockClient((request) async {
+        calls += 1;
+        return http.Response(_releaseJson('v2.1.20'), 200);
+      }),
+    );
+
+    await pumpLaunch(
+      tester,
+      service: service,
+      enableLaunchCheck: false,
+    );
+
+    expect(find.text('Update available'), findsNothing);
+    expect(calls, 0);
   });
 
   testWidgets('a failing service never interrupts the launch', (tester) async {

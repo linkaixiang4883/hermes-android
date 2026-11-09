@@ -145,6 +145,18 @@ class RemoteFileAttachment {
   });
 }
 
+/// Gateway-side image reference returned by `image.attach_bytes`.
+///
+/// This is staging, not delivery: the returned [path] must be included in the
+/// following `prompt.submit` as `attachments: [{path, mime}]`.
+class RemoteImageAttachment {
+  final String name;
+  final String path;
+  final String? mime;
+
+  const RemoteImageAttachment({required this.name, required this.path, this.mime});
+}
+
 /// Both identities minted by the stock Hermes `session.create` contract.
 ///
 /// The runtime id addresses calls on the current socket. The stored id is the
@@ -1278,6 +1290,7 @@ class WsClient {
     required String sessionId,
     required StreamCallback onEvent,
     void Function()? onSent,
+    List<Map<String, String>> attachments = const [],
     Duration timeout = const Duration(minutes: 10),
   }) async {
     final completion = Completer<void>();
@@ -1332,6 +1345,7 @@ class WsClient {
       final response = await send('prompt.submit', {
         'session_id': sessionId,
         'text': message,
+        if (attachments.isNotEmpty) 'attachments': attachments,
       }, onSent: onSent);
       final error = response['error'];
       if (error != null) {
@@ -1598,6 +1612,48 @@ class WsClient {
   Future<String> sendMessage(String message) async {
     throw UnsupportedError(
       'Use sendMessageStreaming with a gateway session ID instead.',
+    );
+  }
+
+  /// Stages one image through the stock authority `image.attach_bytes` RPC.
+  ///
+  /// The response only names a staged file. Delivery happens on the following
+  /// `prompt.submit` via `attachments: [{path, mime}]`; this method must not be
+  /// treated as "the model received the image".
+  Future<RemoteImageAttachment> attachImageBytes({
+    required String sessionId,
+    required String dataUrl,
+    String? filename,
+  }) async {
+    final comma = dataUrl.indexOf(',');
+    final contentBase64 = comma >= 0 ? dataUrl.substring(comma + 1) : dataUrl;
+    final params = <String, dynamic>{
+      'session_id': sessionId,
+      'content_base64': contentBase64,
+      if (filename != null && filename.trim().isNotEmpty)
+        'filename': filename.trim(),
+    };
+    final response = await send('image.attach_bytes', params);
+    final error = response['error'];
+    if (error != null) {
+      throw _gatewayResponseError(
+        'image.attach_bytes',
+        error,
+        fallbackMessage: 'Unknown error',
+      );
+    }
+    final result = response['result'];
+    if (result is! Map<String, dynamic> || result['attached'] != true) {
+      throw JsonRpcError('image.attach_bytes', 'Gateway did not attach the image');
+    }
+    final path = result['path']?.toString() ?? '';
+    if (path.isEmpty) {
+      throw JsonRpcError('image.attach_bytes', 'Gateway returned no image path');
+    }
+    return RemoteImageAttachment(
+      name: result['name']?.toString() ?? filename ?? path.split('/').last,
+      path: path,
+      mime: result['mime']?.toString(),
     );
   }
 

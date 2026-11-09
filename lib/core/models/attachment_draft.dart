@@ -20,6 +20,7 @@ class AttachmentDraft {
 
   AttachmentDraftStatus status;
   String? refText;
+  String? remotePath;
   String? error;
   bool? atlasIntakeAccepted;
 
@@ -34,6 +35,7 @@ class AttachmentDraft {
     this.sanitized = false,
     this.status = AttachmentDraftStatus.ready,
     this.refText,
+    this.remotePath,
     this.error,
     this.atlasIntakeAccepted,
   });

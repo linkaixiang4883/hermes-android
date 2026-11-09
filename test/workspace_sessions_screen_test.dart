@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hermes_android/core/models/live_work.dart';
 import 'package:hermes_android/core/models/session.dart';
 import 'package:hermes_android/core/screens/workspace_sessions_screen.dart';
 import 'package:hermes_android/core/theme/hermes_theme.dart';
@@ -829,6 +830,56 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
     await tester.pump();
     expect(loads, 2);
+  });
+
+  testWidgets('marks a session with live work from the roster', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: hermesTheme(Brightness.dark),
+        home: WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          load: () async => WorkspaceSessionsData(
+            sessions: [_session('live-1', 'Working chat')],
+            liveWork: const {
+              'live-1': LiveWorkCounts(subagents: 1, background: 2),
+            },
+          ),
+          onOpenSession: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('session-live-work-badge')), findsOneWidget);
+    expect(find.text('3'), findsOneWidget);
+  });
+
+  testWidgets('does not mark sessions absent from the roster', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: hermesTheme(Brightness.dark),
+        home: WorkspaceSessionsScreen(
+          title: 'Chats',
+          view: WorkspaceSessionView.all,
+          load: () async => WorkspaceSessionsData(
+            sessions: [_session('idle-1', 'Idle chat')],
+          ),
+          onOpenSession: (_) {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('session-live-work-badge')), findsNothing);
   });
 
   group('filterCronChats', () {

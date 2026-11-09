@@ -2773,6 +2773,33 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get no_cron_runs_match => '没有与此视图匹配的 Cron 运行';
+
+  @override
+  String attachments_more(int count) {
+    return '还有 $count 个';
+  }
+
+  @override
+  String get attachment_image_load_failed => '图片不可用';
+
+  @override
+  String get attachment_image_label => '图片';
+
+  @override
+  String get attachment_file_label => '文件';
+
+  @override
+  String live_work_summary(int subagents, int background) {
+    return '活跃工作 · $subagents 个子智能体 · $background 个后台任务';
+  }
+
+  @override
+  String live_work_more(int count) {
+    return '还有 $count 项';
+  }
+
+  @override
+  String get live_work_badge_tooltip => '活跃工作';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5544,4 +5571,31 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get no_cron_runs_match => '没有与此视图匹配的 Cron 运行';
+
+  @override
+  String attachments_more(int count) {
+    return '还有 $count 个';
+  }
+
+  @override
+  String get attachment_image_load_failed => '图片不可用';
+
+  @override
+  String get attachment_image_label => '图片';
+
+  @override
+  String get attachment_file_label => '文件';
+
+  @override
+  String live_work_summary(int subagents, int background) {
+    return '活跃工作 · $subagents 个子智能体 · $background 个后台任务';
+  }
+
+  @override
+  String live_work_more(int count) {
+    return '还有 $count 项';
+  }
+
+  @override
+  String get live_work_badge_tooltip => '活跃工作';
 }

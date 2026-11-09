@@ -5,6 +5,7 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 
 import '../models/bot_profile.dart';
+import '../models/live_work.dart';
 import '../models/pending_prompt.dart';
 
 import 'capability_registry.dart';
@@ -1538,11 +1539,34 @@ class DesktopGatewayClient {
     );
   }
 
+  /// Stages an image through `image.attach_bytes`.
+  ///
+  /// The returned path is only a staging reference. Callers must pass it in
+  /// the following [submitPrompt] `attachments` list; otherwise the image never
+  /// reaches the model.
+  Future<RemoteImageAttachment> attachImage({
+    required String sessionId,
+    required String name,
+    required String dataUrl,
+    String? workingDirectory,
+  }) async {
+    return _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.attachImageBytes(
+        sessionId: gateway.sessionId,
+        dataUrl: dataUrl,
+        filename: name,
+      ),
+      workingDirectory: workingDirectory,
+    );
+  }
+
   Future<void> submitPrompt({
     required String sessionId,
     required String text,
     required StreamCallback onEvent,
     required void Function() onSent,
+    List<Map<String, String>> attachments = const [],
     String? workingDirectory,
   }) async {
     await _callSessionScoped(
@@ -1552,6 +1576,7 @@ class DesktopGatewayClient {
         sessionId: gateway.sessionId,
         onEvent: onEvent,
         onSent: onSent,
+        attachments: attachments,
       ),
       // Creation can happen on the FIRST SEND rather than at screen entry
       // (a draft whose ensure was skipped). Without the cwd here the session
@@ -2380,6 +2405,92 @@ class DesktopGatewayClient {
       unawaited(closing.then<void>((_) {}, onError: (_, _) {}));
     }
     _dashboard.close();
+  }
+
+  /// Lists subagents currently attached to [sessionId].
+  ///
+  /// `delegations` is intentionally not exposed: the authority always returns
+  /// an empty list and the desktop status stack does not render it.
+  Future<List<LiveSubagent>> listLiveSubagents({
+    required String sessionId,
+    String? profile,
+    String? workingDirectory,
+  }) async {
+    final response = await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.send('subagent.list', {
+        'session_id': gateway.sessionId,
+      }),
+      workingDirectory: workingDirectory,
+      profile: profile,
+    );
+    final result = _rpcResult('subagent.list', response);
+    return (result['subagents'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(LiveSubagent.fromJson)
+        .where((item) => item.id.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  /// Lists the caller session's background processes.
+  ///
+  /// `processes[].session_id` is a process id. It is mapped to
+  /// [LiveProcess.processId] so callers cannot use it as a chat id.
+  Future<List<LiveProcess>> listLiveProcesses({
+    required String sessionId,
+    String? profile,
+    String? workingDirectory,
+  }) async {
+    final response = await _callSessionScoped(
+      sessionId,
+      (gateway) => gateway.client.send('process.list', {
+        'session_id': gateway.sessionId,
+      }),
+      workingDirectory: workingDirectory,
+      profile: profile,
+    );
+    final result = _rpcResult('process.list', response);
+    return (result['processes'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .map(LiveProcess.fromJson)
+        .where((item) => item.processId.isNotEmpty)
+        .toList(growable: false);
+  }
+
+  /// Reads the profile-wide live-work roster for session-list badges.
+  ///
+  /// This is `ProfileParams`, not a session-scoped call: it deliberately never
+  /// resumes or creates a session just to answer "does this chat have work?".
+  Future<Map<String, LiveWorkCounts>> liveWorkRoster({String? profile}) async {
+    final params = <String, dynamic>{
+      if (profile != null && profile.trim().isNotEmpty) 'profile': profile.trim(),
+    };
+    final response = await callControl('subagent.roster', params);
+    final result = _rpcResult('subagent.roster', response);
+    final counts = <String, LiveWorkCounts>{};
+    for (final row in (result['sessions'] as List<dynamic>? ?? const [])
+        .whereType<Map<String, dynamic>>()) {
+      final sessionId = row['session_id']?.toString().trim() ?? '';
+      if (sessionId.isEmpty) continue;
+      counts[sessionId] = LiveWorkCounts.fromJson(row);
+    }
+    return counts;
+  }
+
+  Map<String, dynamic> _rpcResult(
+    String method,
+    Map<String, dynamic> response,
+  ) {
+    final error = response['error'];
+    if (error is Map) {
+      throw JsonRpcError.fromGateway(
+        method,
+        error,
+        fallbackMessage: 'Gateway $method failed',
+      );
+    }
+    final result = response['result'];
+    return result is Map<String, dynamic> ? result : const {};
   }
 
   /// Sends one control-plane JSON-RPC call over the shared socket.

@@ -790,5 +790,12 @@
   "unknown": "未知",
   "voice_gender_male": "(男)",
   "voice_gender_female": "(女)",
-  "no_cron_runs_match": "没有与此视图匹配的 Cron 运行"
+  "no_cron_runs_match": "没有与此视图匹配的 Cron 运行",
+  "attachments_more": "还有 {count} 个",
+  "attachment_image_load_failed": "图片不可用",
+  "attachment_image_label": "图片",
+  "attachment_file_label": "文件",
+  "live_work_summary": "活跃工作 · {subagents} 个子智能体 · {background} 个后台任务",
+  "live_work_more": "还有 {count} 项",
+  "live_work_badge_tooltip": "活跃工作"
 }

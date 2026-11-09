@@ -383,6 +383,36 @@ void main() {
       },
     );
 
+    test('accepts an image staged by path without a text ref', () async {
+      final image = await cachedDraft(
+        'photo.png',
+        kind: AttachmentDraftKind.image,
+      );
+      var submittedRefs = <String>[];
+      var promptCalls = 0;
+      final coordinator = AttachmentDraftSendCoordinator(service);
+
+      await coordinator.uploadThenSubmit(
+        drafts: [image],
+        upload: ({required draft, required dataUrl}) async {
+          expect(draft.isImage, isTrue);
+          return const AttachmentUploadReceipt(
+            refText: '',
+            remotePath: '/gateway/cache/images/photo.png',
+          );
+        },
+        submitPrompt: (refs) async {
+          promptCalls++;
+          submittedRefs = refs;
+        },
+      );
+
+      expect(promptCalls, 1);
+      expect(submittedRefs, isEmpty);
+      expect(image.remotePath, '/gateway/cache/images/photo.png');
+      expect(image.status, AttachmentDraftStatus.attached);
+    });
+
     test('upload failure keeps selection and cache for retry', () async {
       final first = await cachedDraft('failed.txt');
       final second = await cachedDraft('waiting.txt');

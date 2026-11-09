@@ -1,5 +1,6 @@
 import '../models/gateway_activity.dart';
 import '../models/gateway_insight.dart';
+import '../models/message_attachment.dart';
 import 'message_content.dart';
 
 /// Assistant reasoning rendered as its own collapsible item in the chat list.
@@ -75,9 +76,22 @@ List<dynamic> buildChatDisplayItems({
     if (role != 'user' && role != 'assistant') continue;
 
     final content = stripToolResultText(messageContentToText(msg['content']));
+    final extracted = role == 'user'
+        ? extractAttachmentContent(msg['content'])
+        : null;
+    final displayContent = extracted?.text ?? content;
+    final attachments = <MessageAttachmentRef>[
+      ..._metadataAttachments(msg),
+      ...?extracted?.attachments,
+    ];
+    final uniqueAttachments = _dedupeAttachments(attachments);
     final reasoning = msg['_gateway_reasoning']?.toString() ?? '';
     final hasReasoning = role == 'assistant' && reasoning.trim().isNotEmpty;
-    if (content.isEmpty && !hasReasoning) continue;
+    if (displayContent.isEmpty &&
+        uniqueAttachments.isEmpty &&
+        !hasReasoning) {
+      continue;
+    }
 
     flushToolGroup();
 
@@ -90,12 +104,16 @@ List<dynamic> buildChatDisplayItems({
         ),
       );
     }
-    if (content.isNotEmpty) {
-      if (role == 'user') lastUserPrompt = content;
+    if (displayContent.isNotEmpty || uniqueAttachments.isNotEmpty) {
+      if (role == 'user' && displayContent.isNotEmpty) {
+        lastUserPrompt = displayContent;
+      }
       displayItems.add({
         ...msg,
         'role': role,
-        '_display_content': content,
+        '_display_content': displayContent,
+        if (role == 'user' && uniqueAttachments.isNotEmpty)
+          '_display_attachments': uniqueAttachments,
         if (role == 'assistant' && lastUserPrompt != null)
           '_retry_prompt': lastUserPrompt,
       });
@@ -112,4 +130,22 @@ List<dynamic> buildChatDisplayItems({
   if (showActivity) displayItems.addAll(notices);
 
   return displayItems;
+}
+
+List<MessageAttachmentRef> _metadataAttachments(Map<String, dynamic> msg) {
+  final raw = msg['_display_attachments'];
+  if (raw is! List) return const [];
+  return raw.whereType<MessageAttachmentRef>().toList(growable: false);
+}
+
+List<MessageAttachmentRef> _dedupeAttachments(
+  List<MessageAttachmentRef> attachments,
+) {
+  final seen = <String>{};
+  final result = <MessageAttachmentRef>[];
+  for (final attachment in attachments) {
+    final key = '${attachment.kind.name}\u0000${attachment.path}';
+    if (seen.add(key)) result.add(attachment);
+  }
+  return result;
 }
