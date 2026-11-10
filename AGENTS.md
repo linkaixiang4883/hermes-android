@@ -2,11 +2,11 @@
 
 本仓库 fork 自 upstream（rusty4444/hermes-android），维护本地 overlay：中文体验增强 + 若干上游未覆盖的修复。**2026-10-05 起 i18n 采用上游官方体系（10 语种）**，协议侧与 Hermes 服务端（0.21.x）对齐。以下内容供任何会话在本目录工作时自动加载。
 
-**当前发布线**：`3.2.7+3002`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3002`。
+**当前发布线**：`3.2.7+3003`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3003`。
 
 **版本号规则（2026-11-10 用户决议）**：
 - `versionName` 对齐上游 `3.2.7`；不要为了区分而占用 V4，也不要改回低于已安装包的 V2.x。
-- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002`；arm64 有效 code = `base*10+2`（当前 `30022`）。
+- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002`；arm64 有效 code = `base*10+2`（当前 `30032`）。
 - `versionCode` 负责 Android 安装/升级顺序，也是 `install_cleanup_v1` 判断安装成功的信号；`versionName` 负责 App 内更新检查。**同 versionName + 更高 versionCode 可以手动覆盖安装并触发清理，但 App 内不会提示更新**；需要提示时必须提升 versionName。勿为了区分而占用 V4。
 - 上游基线不写进 `versionName`：发布 commit 写 `Upstream-Base: v3.2.7` / `Upstream-Commit: 43eebf7`，本文件和 `CHANGELOG.md` 同步记录；不要用带预发布后缀的版本名。
 - 改 versionCode 必须同步 `.github/workflows/release.yml`、`.github/workflows/pr-quality.yml` 的 `REQUIRED_BASE_VERSION_CODE`、`test/release_identity_test.dart`、README/CHANGELOG；不要只改 `pubspec.yaml`。
@@ -325,7 +325,7 @@ git merge upstream/main
 - merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照；**本地检查点、不推送、不是版本 tag**）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（**当前要求 base=3002**，`pubspec.yaml` 为 `3.2.7+3002`；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
+- CI 另有 versionCode 门禁（**当前要求 base=3003**，`pubspec.yaml` 为 `3.2.7+3003`；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）

@@ -6,6 +6,17 @@ versions prior to 1.0.7 are in the **What's new** sections of the [README](READM
 
 ## [3.2.7] - 2026-11-10
 
+### Build 3003
+
+- Android versionCode base is `3003` (arm64 effective `30032`).
+- Fixed the slash-command double-send guard and routed typed `/compress` /
+  `/compact` through the existing compaction lifecycle.
+- Hardened the gated updater: candidate and installed signers must match,
+  native ABI/minSdk checks were added, and startup no longer validates a
+  leftover APK while the production gate is off.
+- Kept `View release` available during download and corrected the fork install
+  link.
+
 Fork build `3.2.7+3002`: this port aligns the user-visible version with upstream
 `v3.2.7` (commit `43eebf7`) while keeping the fork's Android versionCode line.
 
