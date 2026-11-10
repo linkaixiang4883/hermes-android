@@ -4413,6 +4413,12 @@ abstract class AppLocalizations {
   /// **'Paused after the message limit'**
   String get group_paused;
 
+  /// No description provided for @group_paused_rounds.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused after the round limit'**
+  String get group_paused_rounds;
+
   /// No description provided for @group_continue.
   ///
   /// In en, this message translates to:

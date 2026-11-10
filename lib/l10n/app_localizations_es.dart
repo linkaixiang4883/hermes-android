@@ -2612,6 +2612,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get group_paused => 'Paused after the message limit';
 
   @override
+  String get group_paused_rounds => 'Paused after the round limit';
+
+  @override
   String get group_continue => 'Continue';
 
   @override

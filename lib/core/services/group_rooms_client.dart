@@ -425,6 +425,7 @@ class RoomDriverStatus {
   final List<PendingRoomAction> pendingActions;
   final List<Map<String, dynamic>> peerRoutes;
   final List<RoomMemberActivity> memberActivity;
+  final int maxContinues;
 
   const RoomDriverStatus({
     this.running = false,
@@ -434,6 +435,7 @@ class RoomDriverStatus {
     this.pendingActions = const [],
     this.peerRoutes = const [],
     this.memberActivity = const [],
+    this.maxContinues = 0,
   });
 
   factory RoomDriverStatus.fromJson(Map<String, dynamic> json) {
@@ -451,6 +453,7 @@ class RoomDriverStatus {
         for (final row in _objects(json['member_activity']))
           RoomMemberActivity.fromJson(row),
       ],
+      maxContinues: _integer(json['max_continues']),
     );
   }
 
@@ -586,6 +589,9 @@ class GroupEvent {
 
   /// `payload.status`, e.g. `bounded` on a `room.activity` event.
   final String status;
+
+  /// `payload.reason_code`, e.g. `max_rounds` / `max_messages`.
+  final String reasonCode;
   final double ts;
 
   /// The untouched event, so nothing the server sends is lost.
@@ -599,6 +605,7 @@ class GroupEvent {
     this.attachments = const [],
     this.discussionEventId = '',
     this.status = '',
+    this.reasonCode = '',
     this.ts = 0,
     this.raw = const {},
   });
@@ -616,6 +623,7 @@ class GroupEvent {
         payload['discussion_event_id'] ?? json['discussion_event_id'],
       ).trim(),
       status: _text(payload['status']).trim(),
+      reasonCode: _text(payload['reason_code']).trim(),
       ts: rawTs == null ? 0 : _double(rawTs),
       raw: json,
     );
@@ -914,21 +922,19 @@ class GroupRoomsClient {
 
   /// `groups.retry` — re-runs a failed member task.
   ///
-  /// [memberId] and [executionGeneration] are optional only so older callers
-  /// keep compiling; the canonical gateway wants both, and the screen passes
-  /// them verbatim from the driver's action.
+  /// The canonical gateway wants the exact member/task/generation tuple; a
+  /// missing generation would let a reused task id retry the wrong attempt.
   Future<void> retry({
     required String roomId,
     required String taskId,
-    String memberId = '',
-    String executionGeneration = '',
+    required String memberId,
+    required String executionGeneration,
   }) async {
     await _request('groups.retry', {
       'room_id': roomId,
-      if (taskId.isNotEmpty) 'task_id': taskId,
-      if (memberId.isNotEmpty) 'member_id': memberId,
-      if (executionGeneration.isNotEmpty)
-        'execution_generation': _requiredGeneration(executionGeneration),
+      'task_id': taskId,
+      'member_id': memberId,
+      'execution_generation': _requiredGeneration(executionGeneration),
     });
   }
 

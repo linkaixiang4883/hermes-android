@@ -370,6 +370,7 @@ void main() {
               },
             ],
             'peer_routes': [],
+            'max_continues': 5,
           },
         }),
       ]);
@@ -388,6 +389,7 @@ void main() {
       expect(activity.roundIndex, 0);
       expect(activity.tool, 'terminal');
       expect(activity.startedAt, 1761000000.0);
+      expect(state.driverStatus.maxContinues, 5);
     });
 
     test('routing falls back to everyone when the server omits it', () async {
@@ -551,10 +553,15 @@ void main() {
       final event = GroupEvent.fromJson({
         'seq': 3,
         'kind': GroupEvent.roomActivity,
-        'payload': {'status': 'bounded', 'discussion_event_id': 'disc-1'},
+        'payload': {
+          'status': 'bounded',
+          'reason_code': 'max_rounds',
+          'discussion_event_id': 'disc-1',
+        },
       });
 
       expect(event.status, 'bounded');
+      expect(event.reasonCode, 'max_rounds');
       expect(event.isBounded, isTrue);
       expect(event.discussionEventId, 'disc-1');
     });
@@ -762,7 +769,12 @@ void main() {
       ]);
       final client = GroupRoomsClient(rpc.call);
 
-      await client.retry(roomId: 'room-1', taskId: 'task-7');
+      await client.retry(
+        roomId: 'room-1',
+        taskId: 'task-7',
+        memberId: 'research',
+        executionGeneration: '7',
+      );
       await client.stop('room-1');
       await client.rename(roomId: 'room-1', name: 'Launch v2', eventId: 'e-1');
       await client.disband('room-1');
@@ -773,7 +785,12 @@ void main() {
         'groups.rename',
         'groups.disband',
       ]);
-      expect(rpc.calls[0].params, {'room_id': 'room-1', 'task_id': 'task-7'});
+      expect(rpc.calls[0].params, {
+        'room_id': 'room-1',
+        'task_id': 'task-7',
+        'member_id': 'research',
+        'execution_generation': 7,
+      });
       expect(rpc.calls[1].params, {'room_id': 'room-1'});
       expect(rpc.calls[2].params, {
         'room_id': 'room-1',

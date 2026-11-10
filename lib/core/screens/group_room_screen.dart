@@ -746,7 +746,7 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final driver = _driver;
-    final bounded = _latestBoundedEvent();
+    final bounded = _latestBoundedEvent(driver);
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -811,6 +811,7 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
           if (driver != null) _buildMemberActivity(context, driver),
           if (bounded != null && _offers('groups.continue'))
             _BoundedBanner(
+              reasonCode: bounded.reasonCode,
               busy: _continuing,
               onContinue: () => unawaited(_runContinue(bounded)),
             ),
@@ -860,14 +861,21 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
     );
   }
 
-  GroupEvent? _latestBoundedEvent() {
+  GroupEvent? _latestBoundedEvent(RoomDriverStatus? driver) {
     final latest = <String, GroupEvent>{};
+    final grants = <String, int>{};
     for (final event in _events) {
       final discussionId = event.discussionEventId;
       if (discussionId.isEmpty) continue;
       if (event.isBounded) latest[discussionId] = event;
-      if (event.kind == GroupEvent.roomContinued) latest.remove(discussionId);
-      if (event.kind == GroupEvent.roomStopRequested) latest.clear();
+      if (event.kind == GroupEvent.roomContinued) {
+        grants[discussionId] = (grants[discussionId] ?? 0) + 1;
+        latest.remove(discussionId);
+      }
+      if (event.kind == GroupEvent.roomStopRequested) {
+        latest.clear();
+        grants.clear();
+      }
       if (event.isUserMessage) {
         final threadId = _threadId(event);
         if (threadId.isNotEmpty) {
@@ -876,6 +884,12 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
           );
         }
       }
+    }
+    final maxContinues = driver?.maxContinues ?? 0;
+    if (maxContinues > 0) {
+      latest.removeWhere(
+        (discussionId, _) => (grants[discussionId] ?? 0) >= maxContinues,
+      );
     }
     if (latest.isEmpty) return null;
     return latest.values.reduce((a, b) => a.seq >= b.seq ? a : b);
@@ -1451,10 +1465,12 @@ class _SystemLine extends StatelessWidget {
 /// continue until the human explicitly asks. Only the newest bounded event is
 /// shown; a later `room.continued` clears it.
 class _BoundedBanner extends StatelessWidget {
+  final String reasonCode;
   final bool busy;
   final VoidCallback onContinue;
 
   const _BoundedBanner({
+    required this.reasonCode,
     required this.busy,
     required this.onContinue,
   });
@@ -1479,7 +1495,9 @@ class _BoundedBanner extends StatelessWidget {
             const SizedBox(width: HermesSpacing.sm),
             Expanded(
               child: Text(
-                context.l10n.group_paused,
+                reasonCode == 'max_rounds'
+                    ? context.l10n.group_paused_rounds
+                    : context.l10n.group_paused,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onTertiaryContainer,
                 ),

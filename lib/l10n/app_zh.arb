@@ -713,6 +713,7 @@
   "group_legacy_section": "桌面本地群组（只读）",
   "group_legacy_banner": "这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。",
   "group_paused": "达到消息上限，讨论已暂停",
+  "group_paused_rounds": "达到轮次上限，讨论已暂停",
   "group_continue": "继续",
   "group_discard": "丢弃",
   "group_discard_confirm": "丢弃这个待处理回合？已产生的副作用不会撤销。",

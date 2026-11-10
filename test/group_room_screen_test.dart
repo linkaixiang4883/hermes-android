@@ -83,6 +83,8 @@ Future<void> _pump(
   GroupApprovalAction? approval,
   GroupRetryAction? retry,
   GroupCapabilities? capabilities,
+  GroupCapabilities? seededCapabilities,
+  GroupRoomsClient? rooms,
   GroupContinueAction? continueDiscussion,
   GroupDiscardAction? discard,
   GroupRoomAction? stop,
@@ -99,6 +101,8 @@ Future<void> _pump(
       home: GroupRoomScreen(
         connection: _connection(),
         room: room ?? _room(),
+        rooms: rooms,
+        capabilities: seededCapabilities,
         pendingStore: store ?? MemoryGroupPendingSendStore(),
         pollInterval: const Duration(hours: 1),
         testStateLoader: stateLoader,
@@ -594,5 +598,151 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('group-continue')), findsNothing);
+  });
+
+  testWidgets('the round-limit pause uses the round copy', (tester) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(
+        methods: ['groups.continue'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([
+        const GroupEvent(
+          seq: 1,
+          kind: GroupEvent.roomActivity,
+          status: 'bounded',
+          reasonCode: 'max_rounds',
+          discussionEventId: 'disc-1',
+        ),
+      ]),
+    );
+
+    expect(find.text('Paused after the round limit'), findsOneWidget);
+  });
+
+  testWidgets('the banner disappears after the continue budget is spent', (
+    tester,
+  ) async {
+    final events = <GroupEvent>[
+      const GroupEvent(
+        seq: 1,
+        kind: GroupEvent.roomActivity,
+        status: 'bounded',
+        discussionEventId: 'disc-1',
+      ),
+      for (var i = 0; i < 5; i++)
+        GroupEvent(
+          seq: 2 + i,
+          kind: GroupEvent.roomContinued,
+          discussionEventId: 'disc-1',
+        ),
+    ];
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(
+        methods: ['groups.continue'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true, maxContinues: 5),
+      ),
+      logLoader: (_) async => _page(events),
+    );
+
+    expect(find.byKey(const ValueKey('group-continue')), findsNothing);
+  });
+
+  testWidgets('capabilities without continue/discard hide both actions', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(methodsKnown: true),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(
+          running: true,
+          pendingActions: [
+            PendingRoomAction(
+              kind: PendingRoomAction.kindDiscard,
+              memberId: 'research',
+              taskId: 'task-9',
+              executionGeneration: '4',
+            ),
+          ],
+        ),
+      ),
+      logLoader: (_) async => _page([
+        const GroupEvent(
+          seq: 1,
+          kind: GroupEvent.roomActivity,
+          status: 'bounded',
+          discussionEventId: 'disc-1',
+        ),
+      ]),
+    );
+
+    expect(find.byKey(const ValueKey('group-continue')), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Discard'), findsNothing);
+  });
+
+  testWidgets('a host-seeded capability enables Continue without a read', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      seededCapabilities: const GroupCapabilities(
+        methods: ['groups.continue'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([
+        const GroupEvent(
+          seq: 1,
+          kind: GroupEvent.roomActivity,
+          status: 'bounded',
+          discussionEventId: 'disc-1',
+        ),
+      ]),
+    );
+
+    expect(find.byKey(const ValueKey('group-continue')), findsOneWidget);
+  });
+
+  testWidgets('stopping mints a fresh cancel id for the wire', (tester) async {
+    final calls = <({String method, Map<String, dynamic> params})>[];
+    final rooms = GroupRoomsClient((method, params) async {
+      calls.add((method: method, params: params));
+      return {'result': <String, dynamic>{}};
+    });
+    await _pump(
+      tester,
+      rooms: rooms,
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([]),
+    );
+
+    await tester.tap(find.byIcon(Icons.more_vert));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Stop'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Stop'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    final stop = calls.singleWhere((call) => call.method == 'groups.stop');
+    expect(stop.params['cancel_id'], isNotEmpty);
   });
 }

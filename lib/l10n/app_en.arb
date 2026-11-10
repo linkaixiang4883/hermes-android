@@ -782,6 +782,7 @@
   "group_legacy_section": "Desktop-local groups (read-only)",
   "group_legacy_banner": "Mirrored from Desktop's local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.",
   "group_paused": "Paused after the message limit",
+  "group_paused_rounds": "Paused after the round limit",
   "group_continue": "Continue",
   "group_discard": "Discard",
   "group_discard_confirm": "Discard this pending turn? Side effects are not undone.",

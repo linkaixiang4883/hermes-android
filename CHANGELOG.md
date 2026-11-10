@@ -6,6 +6,15 @@ versions prior to 1.0.7 are in the **What's new** sections of the [README](READM
 
 ## [3.2.7] - 2026-11-10
 
+### Build 3005
+
+- Android versionCode base is `3005` (arm64 effective `30052`).
+- Closed the final v0.23.1 group-chat review gaps: bounded pause now honours
+  `max_continues` and `reason_code`; `groups.retry` requires the exact
+  member/generation tuple; capability seeding, cancel-id minting, and negative
+  capability gating have direct tests.
+- Tests: 1861 passing; analyze clean.
+
 ### Build 3004
 
 - Android versionCode base is `3004` (arm64 effective `30042`).

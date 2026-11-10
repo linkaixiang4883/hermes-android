@@ -2522,6 +2522,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get group_paused => '达到消息上限，讨论已暂停';
 
   @override
+  String get group_paused_rounds => '达到轮次上限，讨论已暂停';
+
+  @override
   String get group_continue => '继续';
 
   @override
@@ -5421,6 +5424,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get group_paused => '达到消息上限，讨论已暂停';
+
+  @override
+  String get group_paused_rounds => '达到轮次上限，讨论已暂停';
 
   @override
   String get group_continue => '继续';
