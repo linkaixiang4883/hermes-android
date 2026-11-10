@@ -717,6 +717,11 @@
   "yolo_banner": "YOLO 模式：本会话的工具审批已跳过",
   "approval_no_longer_active": "该审批已失效。",
   "update_available": "有可用更新",
+  "update_now": "立即更新",
+  "update_install": "安装更新",
+  "update_downloading": "正在下载并校验更新…",
+  "update_allow_install": "允许 Hermes 安装此更新，然后返回此处点击“安装更新”。",
+  "update_failed": "更新下载、校验或打开失败。请重试或查看发布页。",
   "a_newer_hermes_android_build_is_available_on_github": "GitHub 上有更新的 Hermes Android 版本。",
   "release_notes": "更新说明",
   "view_release": "查看发布",
@@ -797,5 +802,12 @@
   "attachment_file_label": "文件",
   "live_work_summary": "活跃工作 · {subagents} 个子智能体 · {background} 个后台任务",
   "live_work_more": "还有 {count} 项",
-  "live_work_badge_tooltip": "活跃工作"
+  "live_work_badge_tooltip": "活跃工作",
+  "slash_commands": "斜杠命令",
+  "slash_commands_loading": "正在加载命令…",
+  "slash_commands_empty": "没有匹配的命令",
+  "slash_command_output": "命令输出",
+  "slash_command_no_output": "命令已完成，但没有输出。",
+  "slash_command_delivery_unknown": "命令已发送，但没有收到回复。它可能仍在网关运行，草稿已保留。重试前请检查网关状态。",
+  "slash_command_failed": "命令执行失败。"
 }

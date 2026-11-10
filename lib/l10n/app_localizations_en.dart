@@ -2608,6 +2608,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get update_available => 'Update available';
 
   @override
+  String get update_now => 'Update now';
+
+  @override
+  String get update_install => 'Install update';
+
+  @override
+  String get update_downloading => 'Downloading and verifying update…';
+
+  @override
+  String get update_allow_install =>
+      'Allow Hermes to install this update, then return here and tap Install update.';
+
+  @override
+  String get update_failed =>
+      'The update could not be downloaded, verified, or opened. Try again or view the release page.';
+
+  @override
   String get a_newer_hermes_android_build_is_available_on_github =>
       'A newer Hermes Android build is available on GitHub.';
 
@@ -2883,4 +2900,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get live_work_badge_tooltip => 'Live work';
+
+  @override
+  String get slash_commands => 'Slash commands';
+
+  @override
+  String get slash_commands_loading => 'Loading commands…';
+
+  @override
+  String get slash_commands_empty => 'No matching commands';
+
+  @override
+  String get slash_command_output => 'Command output';
+
+  @override
+  String get slash_command_no_output => 'The command completed with no output.';
+
+  @override
+  String get slash_command_delivery_unknown =>
+      'The command was sent but its reply never arrived. It may still be running on the gateway, so your draft was kept. Check the gateway before retrying.';
+
+  @override
+  String get slash_command_failed => 'The command could not be run.';
 }

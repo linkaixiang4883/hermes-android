@@ -2535,6 +2535,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get update_available => '有可用更新';
 
   @override
+  String get update_now => '立即更新';
+
+  @override
+  String get update_install => '安装更新';
+
+  @override
+  String get update_downloading => '正在下载并校验更新…';
+
+  @override
+  String get update_allow_install => '允许 Hermes 安装此更新，然后返回此处点击“安装更新”。';
+
+  @override
+  String get update_failed => '更新下载、校验或打开失败。请重试或查看发布页。';
+
+  @override
   String get a_newer_hermes_android_build_is_available_on_github =>
       'GitHub 上有更新的 Hermes Android 版本。';
 
@@ -2800,6 +2815,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get live_work_badge_tooltip => '活跃工作';
+
+  @override
+  String get slash_commands => '斜杠命令';
+
+  @override
+  String get slash_commands_loading => '正在加载命令…';
+
+  @override
+  String get slash_commands_empty => '没有匹配的命令';
+
+  @override
+  String get slash_command_output => '命令输出';
+
+  @override
+  String get slash_command_no_output => '命令已完成，但没有输出。';
+
+  @override
+  String get slash_command_delivery_unknown =>
+      '命令已发送，但没有收到回复。它可能仍在网关运行，草稿已保留。重试前请检查网关状态。';
+
+  @override
+  String get slash_command_failed => '命令执行失败。';
 }
 
 /// The translations for Chinese, using the Han script (`zh_Hans`).
@@ -5333,6 +5370,21 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get update_available => '有可用更新';
 
   @override
+  String get update_now => '立即更新';
+
+  @override
+  String get update_install => '安装更新';
+
+  @override
+  String get update_downloading => '正在下载并校验更新…';
+
+  @override
+  String get update_allow_install => '允许 Hermes 安装此更新，然后返回此处点击“安装更新”。';
+
+  @override
+  String get update_failed => '更新下载、校验或打开失败。请重试或查看发布页。';
+
+  @override
   String get a_newer_hermes_android_build_is_available_on_github =>
       'GitHub 上有更新的 Hermes Android 版本。';
 
@@ -5598,4 +5650,26 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get live_work_badge_tooltip => '活跃工作';
+
+  @override
+  String get slash_commands => '斜杠命令';
+
+  @override
+  String get slash_commands_loading => '正在加载命令…';
+
+  @override
+  String get slash_commands_empty => '没有匹配的命令';
+
+  @override
+  String get slash_command_output => '命令输出';
+
+  @override
+  String get slash_command_no_output => '命令已完成，但没有输出。';
+
+  @override
+  String get slash_command_delivery_unknown =>
+      '命令已发送，但没有收到回复。它可能仍在网关运行，草稿已保留。重试前请检查网关状态。';
+
+  @override
+  String get slash_command_failed => '命令执行失败。';
 }

@@ -72,6 +72,7 @@ class MainActivity : FlutterActivity() {
     private var initialShareIntent: Intent? = null
     private var initialLaunchAction: String? = null
     private var pendingDownload: PendingDownload? = null
+    private var apkUpdateInstaller: ApkUpdateInstaller? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         initialShareIntent = intent.takeIf(::isShareIntent)
@@ -153,6 +154,16 @@ class MainActivity : FlutterActivity() {
                 }
             }
         }
+        apkUpdateInstaller?.close()
+        apkUpdateInstaller = ApkUpdateInstaller(this, flutterEngine.dartExecutor.binaryMessenger)
+    }
+
+    /// Releases the update channel handler with the engine. The verified file
+    /// itself is left to the native installer/cache cleanup.
+    override fun onDestroy() {
+        apkUpdateInstaller?.close()
+        apkUpdateInstaller = null
+        super.onDestroy()
     }
 
     /// Starts the optional foreground service and reports whether Android

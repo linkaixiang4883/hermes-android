@@ -2,13 +2,13 @@
 
 本仓库 fork 自 upstream（rusty4444/hermes-android），维护本地 overlay：中文体验增强 + 若干上游未覆盖的修复。**2026-10-05 起 i18n 采用上游官方体系（10 语种）**，协议侧与 Hermes 服务端（0.21.x）对齐。以下内容供任何会话在本目录工作时自动加载。
 
-**当前发布线**：`3.2.5+3001`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3001`。
+**当前发布线**：`3.2.7+3002`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3002`。
 
 **版本号规则（2026-11-10 用户决议）**：
-- `versionName` 暂保持 `3.2.5`，与上游基线同名；不要为了区分而占用 V4，也不要改回 V2.2.0（低于已安装 3.2.5，更新检查不会提示）。
-- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002`；arm64 有效 code = `base*10+2`（当前 `30012`）。
-- `versionCode` 负责 Android 安装/升级顺序，也是 `install_cleanup_v1` 判断安装成功的信号；`versionName` 负责 App 内更新检查。**同 versionName + 更高 versionCode 可以手动覆盖安装并触发清理，但 App 内不会提示更新**。
-- 上游基线不写进 `versionName`：发布 commit 写 `Upstream-Base: v3.2.5` / `Upstream-Commit: 899f504`，本文件和 `CHANGELOG.md` 同步记录；不要用 `3.2.5-fork.1` 这类会被比较器当预发布的后缀。
+- `versionName` 对齐上游 `3.2.7`；不要为了区分而占用 V4，也不要改回低于已安装包的 V2.x。
+- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002`；arm64 有效 code = `base*10+2`（当前 `30022`）。
+- `versionCode` 负责 Android 安装/升级顺序，也是 `install_cleanup_v1` 判断安装成功的信号；`versionName` 负责 App 内更新检查。
+- 上游基线不写进 `versionName`：发布 commit 写 `Upstream-Base: v3.2.7` / `Upstream-Commit: 43eebf7`，本文件和 `CHANGELOG.md` 同步记录；不要用带预发布后缀的版本名。
 - 改 versionCode 必须同步 `.github/workflows/release.yml`、`.github/workflows/pr-quality.yml` 的 `REQUIRED_BASE_VERSION_CODE`、`test/release_identity_test.dart`、README/CHANGELOG；不要只改 `pubspec.yaml`。
 
 ## 本地化基础设施（2026-10-05 起 = 上游官方体系）
@@ -63,15 +63,17 @@
 | Assets 预览（3.0.1，初版） | `asset_preview_sheet.dart`（视频/Office 共享弹窗、下载/分享）、`office_text_extractor.dart`（DOCX/XLSX/PPTX 隔离 isolate + ZIP/XML/文本上限；**B1 加 16MB 输入上限 + 分块/ZIP 解压硬上限**）、`media_artifact_card`（视频/Office 点按打开）、`chat_screen` 内联文件链接；`video_player`/`archive`/`xml` 依赖 + 5 条解析测试 | 视频是 desktop parity；Office 文本预览是作者 App 独有增强（desktop 无 Office 解析）；**真机 QA 2026-11-08 用户确认通过**；**More → Assets 仍 unavailable**（无服务端权威索引）；不支持/损坏/旧二进制 Office 保留 Download/Share；不新增服务端路由 |
 
 | 图片附件 desktop parity（2026-11-10） | `models/message_attachment.dart`、`widgets/message_attachment_row.dart`、`utils/chat_display_items.dart`、`services/remote_files_client.dart`（`/api/media`）、`services/ws_client.dart`（`image.attach_bytes` + `prompt.submit.attachments`）、`desktop_gateway_client.attachImage`、`attachment_draft_service`（`remotePath`/`readBytes`）、`chat_screen`（上传前 bytes 快照 + 用户 `/api/media` 通道）+ 8 条测试 | **P0：attach 只是暂存，必须 `prompt.submit.attachments:[{path,mime}]` 才进模型**；`mime` 取本地 `draft.mediaType`，不依赖回执；图片无 `ref_text`，旧网关 -32601 才回退 `file.attach`；历史 `@image:`/image parts 还原为附件行；纯图片无 caption 保留；`/api/media` 仅给 gateway 路径，本地快照不请求网络 |
+| Slash 命令（上游 3.2.6 单特性移植，2026-11-10） | `models/slash_command.dart`、`controllers/slash_command_controller.dart`、`widgets/slash_command_dropdown.dart`/`slash_command_notice_card.dart`、`services/ws_client.dart`（`commands.catalog`/`slash.exec`）、`desktop_gateway_client.fetchSlashCommands/runSlashCommand`、`chat_screen`（composer dropdown + notice）、`services/slash_command_policy.dart`（`mobileBlockedSlashCommands`）+ `test/slash_command_*` | 对齐 desktop 远程网关的 `commands.catalog`；`mobileBlockedSlashCommands` 默认空，一处过滤 UI 与执行；不碰 live-follow/审批/转写；上游完整 test 依赖 `testSlashGateway`，本 fork 以 controller/模型测试与现有 chat 回归为准 |
+| App 内更新安装（上游 3.2.7 单特性移植，2026-11-10） | `services/app_update_policy.dart`（`inAppInstallerEnabled=false`）、`app_update_service.dart`（ABI assets/digest）、`apk_update_installer.dart`、`widgets/update_available_dialog.dart`、Kotlin `ApkUpdateInstaller`/`ApkUpdateTransfer`、`update_provider`/`update_file_paths.xml`、`network_security_config.xml` | **生产默认门控关闭**：启动/点击不下载、不校验、不安装，只保留 View release；GitHub Release 资产仍发布；fork URL/签名/包名/ABI/versionCode 校验；不碰媒体下载 `.downloads` provider |
 | Live Work：后台任务 / 子智能体（2026-11-10） | `models/live_work.dart`、`services/live_work_store.dart`、`widgets/live_work_status_stack.dart`、`desktop_gateway_client.listLiveSubagents/listLiveProcesses/liveWorkRoster`、`chat_screen`（composer 状态栈 + 生命周期/事件）、`workspace_sessions_screen`/`workspace_screen`（`subagent.roster` 10s 计数点）+ 5 条测试 | 只读展示，不碰 Activity 的 `blockedOnly`；`subagent.list` 5s；`process.list` 首轮 probe 后转为事件武装的 5s 安全网（`processes[].session_id` 是进程 id，映射 `processId`）；`subagent.roster` 走 `callControl` 按 profile 分组；仅前台/resumed 轮询；断线清空，避免幽灵任务 |
 
 **已知未尽**：overlay 新增 key（原有 8 条 + 更新/密度 18 条 + 图片/Live Work 7 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1830**（2026-11-10 图片附件 + Live Work 落地后；此前 1805）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1834**（2026-11-10 slash 命令 + 更新安装门控落地后；此前 1830）。
 **真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `9e80e14e58d5291be8a7da276812e355a5b17162b5ba9b5c45fb2f782479238f`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
 ## V3 UI 壳迁移（2026-11-07，V3 / V3-dev）
 
-**决议（2026-11-07 晚更新）**：`V2-dev` 已升格为 **`V3`（初始 3.0.0；当前 3.2.5 发布线）**；`V3-dev` 从 `V3` 重新拉出作为 3.x 开发分支；旧 V3-dev **本地分支已删除**，仅保留归档 tag `archive/v3-dev-2026-11-07`。V2 保留为 2.1.33 稳定线。消息/传输/审批/转写继续用 V2 内核；旧 V3-dev 不 merge、不推送。
+**决议（2026-11-07 晚更新）**：`V2-dev` 已升格为 **`V3`（初始 3.0.0；当前 3.2.7 发布线）**；`V3-dev` 从 `V3` 重新拉出作为 3.x 开发分支；旧 V3-dev **本地分支已删除**，仅保留归档 tag `archive/v3-dev-2026-11-07`。V2 保留为 2.1.33 稳定线。消息/传输/审批/转写继续用 V2 内核；旧 V3-dev 不 merge、不推送。
 
 | 已落地 | 位置 | 说明 |
 |---|---|---|
@@ -92,7 +94,7 @@
 
 **QA 构建注意**：`--target=test_driver/app.dart` 会调用 `enableFlutterDriverExtension()` 并注册 `TestTextInput`，软键盘不会弹出（输入框可聚焦但无 IME）。**键盘/输入法验收必须用普通 `lib/main.dart` 构建**；test_driver 构建只用于 driver 点击/输入/截图自动化。
 
-**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条、Crons 目的地的 All/Recent/Archived 与空态；当前门禁 `flutter analyze` 0 + `flutter test` **1830**（2026-11-10 图片附件 + Live Work 落地后）。**2026-11-08 用户确认**：正常构建 30009 软键盘正常；build 30010 的 usage 分类面板与右上角压缩菜单测试通过；压缩中状态条/发送锁定由单测覆盖，未执行真机实际压缩（会重写会话）。**2026-11-09 审计 smoke（build 30011/30012，test_driver）**：build 30011 已打开历史会话确认 usage bar 显示 `上下文 24%` / `~238k / 1.0M`；Crons 目的地的 Upcoming/History 与 More 入口可达。build 30012 打开 Quick Chat 已显示 calm notice「此服务器不提供后台恢复——聊天实时运行」，不再出现 failure banner。**2026-11-09 用户真机确认**：压缩中状态条可见（发送按钮未点击）；正常包软键盘正常；Quick Chat 发送正常、测试通过；审批无新问题；设置页按用户决定跳过。
+**已做 QA**：MI 8 / Android 9 上验证 5 个底部目的地、10 个 palette（切 Blue 生效并落 `theme_palette=blue`）、设置页 Appearance 置顶、Quiet 聊天无推理卡且有当前工具状态条、Crons 目的地的 All/Recent/Archived 与空态；当前门禁 `flutter analyze` 0 + `flutter test` **1834**（2026-11-10 slash 命令 + 更新安装门控落地后）。**2026-11-08 用户确认**：正常构建 30009 软键盘正常；build 30010 的 usage 分类面板与右上角压缩菜单测试通过；压缩中状态条/发送锁定由单测覆盖，未执行真机实际压缩（会重写会话）。**2026-11-09 审计 smoke（build 30011/30012，test_driver）**：build 30011 已打开历史会话确认 usage bar 显示 `上下文 24%` / `~238k / 1.0M`；Crons 目的地的 Upcoming/History 与 More 入口可达。build 30012 打开 Quick Chat 已显示 calm notice「此服务器不提供后台恢复——聊天实时运行」，不再出现 failure banner。**2026-11-09 用户真机确认**：压缩中状态条可见（发送按钮未点击）；正常包软键盘正常；Quick Chat 发送正常、测试通过；审批无新问题；设置页按用户决定跳过。
 **3.0.0 debug 真机 QA（2026-11-07）**：`flutter run` + `test_driver/app.dart`，MI 8 上显示 `3.0.0-dev` / versionCode `30002`；5 个导航、10 个 palette（Blue 已落 `theme_palette=blue`）、Settings Appearance 置顶、Quiet 无推理卡且工具状态条可见、Crons 三滤镜空态、`get_runtime_errors` 无错误。MIUI 拒绝 `.dev` 安装，临时把 debug `applicationIdSuffix` 置空并用 `--build-number=30002` 覆盖 release；**已还原 `.dev`，未提交该临时改动**。
 
 ## REST 入口按连接类型分流（2026-10-27，`b73671e`）
@@ -286,7 +288,7 @@
 |---|---|---|---|
 | `main` | **上游镜像**（= rusty4444/main） | fork/main 仅作镜像 | **只允许快进**：`git switch main && git merge --ff-only upstream/main`；禁止手改、禁止在其上开发 |
 | `V2` | **2.x 稳定版**（2.1.33，历史线） | `fork/V2` 已推 | 冻结；不再加新功能，未经用户许可不得改写 |
-| `V3` | **3.2.5 发布线**（UI 壳 + V2 消息内核） | 推 `fork/V3`（经用户许可） | 只接受 `V3-dev` 的 squash，历史线性；受保护 |
+| `V3` | **3.2.7 发布线**（UI 壳 + V2 消息内核） | 推 `fork/V3`（经用户许可） | 只接受 `V3-dev` 的 squash，历史线性；受保护 |
 | `V3-dev` | **3.x 开发分支** | **永不推远端** | 日常提交，WIP 不限；每功能一条提交 |
 
 **一次功能的标准动作**
@@ -296,7 +298,7 @@
 3. `git switch V3` → `git merge --squash V3-dev` → 一条功能级 commit → 经许可后 `git push fork V3`
 4. `git switch V3-dev && git reset --hard V3` 回到同一基点（第 3 步前先验 `git diff V3 V3-dev` 为空）
 
-**版本号**：只以 tag 标记，且**只在合入发布线之后**打（当前 `V3` → `git tag v3.2.5`；后续 `v3.x.y` → `git push fork V3 --tags`）；开发过程不打 tag。`pre-*` / `archive/*` 是本地检查点，不推送。上游同名 `v3.0.0` tag 已归档为 `upstream-v3.0.0`，上游 `v3.2.5` 已归档为 `upstream-v3.2.5`；本地 `v3.0.0`/`v3.2.5` 指本 fork 的发布提交。
+**版本号**：只以 tag 标记，且**只在合入发布线之后**打（当前 `V3` → `git tag v3.2.7`；后续 `v3.x.y` → `git push fork V3 --tags`）；开发过程不打 tag。`pre-*` / `archive/*` 是本地检查点，不推送。上游同名 `v3.0.0` tag 已归档为 `upstream-v3.0.0`，上游 `v3.2.5` 已归档为 `upstream-v3.2.5`；本地 `v3.0.0`/`v3.2.7` 指本 fork 的发布提交。
 
 **换行符**：根 `.gitattributes` 统一（`* text=auto eol=lf`；二进制 `binary`；`*.bat/*.cmd/*.ps1` 强制 CRLF）。改换行策略前先 `git ls-files --eol` 看索引侧 `i/` 列，禁止制造跨平台无意义 diff。
 
@@ -323,7 +325,7 @@ git merge upstream/main
 - merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照；**本地检查点、不推送、不是版本 tag**）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（**当前要求 base=3001**，`pubspec.yaml` 为 `3.2.5+3001`；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
+- CI 另有 versionCode 门禁（**当前要求 base=3002**，`pubspec.yaml` 为 `3.2.7+3002`；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）

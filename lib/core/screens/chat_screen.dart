@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../controllers/slash_command_controller.dart';
 import '../controllers/voice_composer_controller.dart';
 import '../services/chat_visibility.dart';
 import '../services/chat_density_preference.dart';
@@ -31,6 +32,7 @@ import '../services/gateway_turn_recovery.dart';
 import '../services/gateway_turn_ui_projection.dart';
 import '../services/live_work_store.dart';
 import '../services/remote_files_client.dart';
+import '../services/slash_command_policy.dart';
 import '../services/tts_voice_config.dart';
 import '../services/turn_notification_service.dart';
 import '../services/notification_prefs.dart';
@@ -47,6 +49,7 @@ import '../models/gateway_turn_contract.dart';
 import '../models/message_attachment.dart';
 import '../models/projects_tree_overview.dart';
 import '../models/session_context.dart';
+import '../models/slash_command.dart';
 import '../models/turn_usage.dart';
 import '../utils/chat_display_items.dart';
 import '../utils/chat_history_scroll.dart';
@@ -69,6 +72,8 @@ import '../widgets/gateway_sensitive_prompt_dialog.dart';
 import '../widgets/live_work_status_stack.dart';
 import '../widgets/media_artifact_card.dart';
 import '../widgets/message_attachment_row.dart';
+import '../widgets/slash_command_dropdown.dart';
+import '../widgets/slash_command_notice_card.dart';
 import '../widgets/voice_composer_controls.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
@@ -826,6 +831,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   // Chat sending state
   final _textController = TextEditingController();
+  late final SlashCommandController _slashController;
+  final List<SlashCommandNotice> _slashNotices = [];
+  bool _preparingSend = false;
   int _composerRevision = 0;
   final _imagePicker = ImagePicker();
   final List<AttachmentDraft> _attachmentDrafts = [];
@@ -988,6 +996,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _yoloKnown = true;
     }
     _textController.addListener(_onComposerChanged);
+    _slashController = SlashCommandController(
+      cacheScope: _connectionIdentity,
+      loadCatalog: () async {
+        final gateway = _desktopGateway;
+        if (gateway == null) {
+          throw StateError('Slash commands need the Desktop gateway');
+        }
+        return gateway.fetchSlashCommands(sessionId: widget.session.id);
+      },
+    )..addListener(_onSlashCommandChanged);
     if (widget.initialComposerText case final shared?) {
       _textController.text = shared;
       _textController.selection = TextSelection.collapsed(
@@ -1189,7 +1207,34 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       '${widget.connection.gatewayPrefix ?? ''}|'
       '${widget.connection.desktopGatewayUrl ?? ''}';
 
-  void _onComposerChanged() => _composerRevision += 1;
+  SlashCommandGateway? get _slashGateway => _desktopGateway;
+
+  bool get _slashCommandsAvailable =>
+      _slashGateway?.slashCommandsSupported ?? false;
+
+  bool get _slashDropdownVisible =>
+      _slashController.isOpen && _slashCommandsAvailable;
+
+  void _onComposerChanged() {
+    _composerRevision += 1;
+    _slashController.updateText(_textController.text);
+  }
+
+  void _onSlashCommandChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _applySlashCommand(SlashCommand command) {
+    _slashController.close();
+    _editComposerAsUser('${command.invocation} ');
+  }
+
+  void _editComposerAsUser(String text) {
+    _textController.value = TextEditingValue(
+      text: text,
+      selection: TextSelection.collapsed(offset: text.length),
+    );
+  }
 
   String get _storedSessionKey =>
       _desktopGateway?.storedSessionKeyFor(widget.session.id) ??
@@ -1370,6 +1415,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         text: _textController.text,
       ),
     );
+    _slashController
+      ..removeListener(_onSlashCommandChanged)
+      ..dispose();
     _textController.dispose();
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
@@ -1614,6 +1662,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (!mounted) return;
     final previousState = _desktopConnectionState;
     final connectionChanged = previousState != state;
+    if (connectionChanged) _slashController.invalidate();
     final lostSubmittedLegacyPrompt =
         previousState == DesktopConnectionState.connected &&
         _legacyDesktopPromptSubmitted &&
@@ -3628,11 +3677,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendMessage({bool speakResponse = false}) async {
     if (_voiceComposer.listening) return;
     if (_compressionActive) return;
-    final text = _textController.text.trim();
+    var text = _textController.text.trim();
     final attachments = List<AttachmentDraft>.from(_attachmentDrafts);
     if (text.isEmpty && attachments.isEmpty) return;
     if (_sending || _streaming || _pendingReattachResync) return;
     if (_transcriptLoadBlocksComposer) return;
+    if (attachments.isEmpty) {
+      final slashPrompt = await _dispatchSlashCommand(text);
+      if (slashPrompt != null) {
+        if (slashPrompt.isEmpty) return;
+        text = slashPrompt;
+      }
+    }
     if (_loading || _error != null) {
       // Remote transports own their session history server-side. Let a prompt
       // proceed independently of a slow or failed visible transcript request.
@@ -3848,6 +3904,110 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _handleSendError(error, removePendingUserMessage: true);
       },
     );
+  }
+
+  static const Set<int> _slashUnsupportedCodes = {-32601, 4001, 4018};
+
+  Future<String?> _dispatchSlashCommand(String text) async {
+    final name = slashCommandName(text);
+    if (name == null) return null;
+    final gateway = _slashGateway;
+    if (gateway == null || !gateway.slashCommandsSupported) return null;
+    if (_sending || _streaming || _preparingSend) return null;
+    if (isMobileSlashCommandBlocked(name)) {
+      _showSlashCommandFailure(context.l10n.slash_command_failed);
+      return '';
+    }
+    _preparingSend = true;
+    final revision = _composerRevision;
+    try {
+      final catalogReady = await _slashController
+          .ensureCatalog()
+          .timeout(const Duration(seconds: 3), onTimeout: () => false);
+      if (!mounted || _sending || _streaming) return null;
+      if (catalogReady && !_slashController.isExecutable(name)) return null;
+
+      var sent = false;
+      final SlashCommandResult result;
+      try {
+        result = await gateway.runSlashCommand(
+          sessionId: widget.session.id,
+          command: text,
+          onSent: () => sent = true,
+        );
+      } on JsonRpcError catch (error) {
+        if (_isSlashUnsupported(error)) return null;
+        if (!sent) return null;
+        if (_isSlashDeliveryUnknown(error)) {
+          _showSlashDeliveryUnknown();
+        } else {
+          _showSlashCommandFailure(error.message);
+        }
+        return '';
+      } on TimeoutException {
+        if (!sent) return null;
+        _showSlashDeliveryUnknown();
+        return '';
+      } catch (_) {
+        if (!sent) return null;
+        _showSlashDeliveryUnknown();
+        return '';
+      }
+      if (!mounted) return '';
+      if (result.isPrefill) {
+        _editComposerAsUser(result.text);
+        return '';
+      }
+      if (result.isPrompt) return result.text;
+      if (_composerRevision == revision && _textController.text.trim() == text) {
+        _clearComposerForSend();
+      }
+      _appendSlashCommandNotice(text, result.text);
+      return '';
+    } catch (_) {
+      return null;
+    } finally {
+      _preparingSend = false;
+    }
+  }
+
+  static bool _isSlashUnsupported(JsonRpcError error) {
+    final reason = error.reason?.toLowerCase() ?? '';
+    return _slashUnsupportedCodes.contains(error.code) ||
+        reason.contains('unsupported');
+  }
+
+  static bool _isSlashDeliveryUnknown(JsonRpcError error) =>
+      error.message == 'Timeout' || error.reason == 'connection_closed';
+
+  void _showSlashDeliveryUnknown() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(context.l10n.slash_command_delivery_unknown)),
+    );
+  }
+
+  void _showSlashCommandFailure(String message) {
+    if (!mounted) return;
+    final text = message.trim();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text.isEmpty ? context.l10n.slash_command_failed : text),
+      ),
+    );
+  }
+
+  void _appendSlashCommandNotice(String command, String output) {
+    final notice = SlashCommandNotice(
+      command: command,
+      output: output,
+      observedAt: DateTime.now().millisecondsSinceEpoch,
+    );
+    setState(() {
+      _slashNotices.add(notice);
+      if (_slashNotices.length > 20) _slashNotices.removeAt(0);
+    });
+    _scheduleStreamingFollow();
   }
 
   Future<void> _sendDesktopGatewayMessage({
@@ -5695,28 +5855,45 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 ),
               Expanded(
                 child: LayoutBuilder(
-                  builder: (context, viewport) => Column(
-                    children: [
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Positioned.fill(child: _buildBody()),
-                            if (_endAffordanceController.isVisible)
-                              Positioned(
-                                right: 12,
-                                bottom: 12,
-                                child: ChatEndAffordance(
-                                  newMessageCount:
-                                      _endAffordanceController.newMessageCount,
-                                  onPressed: _goToEnd,
+                  builder: (context, viewport) {
+                    final slashOpen = _slashDropdownVisible;
+                    final slashMax = (viewport.maxHeight * 0.4)
+                        .clamp(0.0, 180.0)
+                        .toDouble();
+                    final slashHeight = slashOpen ? slashMax : 0.0;
+                    return Column(
+                      children: [
+                        Expanded(
+                          child: Stack(
+                            children: [
+                              Positioned.fill(child: _buildBody()),
+                              if (_endAffordanceController.isVisible)
+                                Positioned(
+                                  right: 12,
+                                  bottom: 12,
+                                  child: ChatEndAffordance(
+                                    newMessageCount:
+                                        _endAffordanceController.newMessageCount,
+                                    onPressed: _goToEnd,
+                                  ),
                                 ),
-                              ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      _buildInputBar(availableHeight: viewport.maxHeight),
-                    ],
-                  ),
+                        if (slashOpen)
+                          ConstrainedBox(
+                            constraints: BoxConstraints(maxHeight: slashHeight),
+                            child: SlashCommandDropdown(
+                              controller: _slashController,
+                              onSelected: _applySlashCommand,
+                            ),
+                          ),
+                        _buildInputBar(
+                          availableHeight: viewport.maxHeight - slashHeight,
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ],
@@ -6142,14 +6319,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       );
     }
 
-    final displayMessages = buildChatDisplayItems(
-      messages: _messages,
-      toolActivities: _toolActivities,
-      subagentActivities: _subagentActivities,
-      notices: _gatewayNotices,
-      verbose: _verboseMode,
-      quiet: true,
-    );
+    final displayMessages = <dynamic>[
+      ...buildChatDisplayItems(
+        messages: _messages,
+        toolActivities: _toolActivities,
+        subagentActivities: _subagentActivities,
+        notices: _gatewayNotices,
+        verbose: _verboseMode,
+        quiet: true,
+      ),
+      ..._slashNotices,
+    ];
 
     return Listener(
       onPointerDown: (_) => _transcriptPointerDown = true,
@@ -6183,6 +6363,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   text: item.text,
                   initiallyExpanded: item.initiallyExpanded,
                   identity: item.identity,
+                );
+              }
+              if (item is SlashCommandNotice) {
+                return SlashCommandNoticeCard(
+                  key: ValueKey<String>('slash-command-notice-${item.identity}'),
+                  command: item.command,
+                  output: item.output,
                 );
               }
               if (item is GatewayNotice) {

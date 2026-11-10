@@ -4,6 +4,30 @@ All notable changes to this project are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html). Release notes for
 versions prior to 1.0.7 are in the **What's new** sections of the [README](README.md).
 
+## [3.2.7] - 2026-11-10
+
+Fork build `3.2.7+3002`: this port aligns the user-visible version with upstream
+`v3.2.7` (commit `43eebf7`) while keeping the fork's Android versionCode line.
+
+### Added
+
+- Slash-command catalogue and composer autocomplete backed by the desktop
+  remote gateway's `commands.catalog`.
+- `slash.exec` command results as local notice cards; `/compress` keeps its
+  existing one-tap menu and only executes once.
+- `mobileBlockedSlashCommands` policy hook for commands that are not practical
+  on a phone.
+- GitHub Release update-asset parsing with ABI selection, size and SHA-256
+  metadata, plus a private `update_provider` and native verification installer.
+
+### Changed
+
+- **In-app installer is production-gated off** (`AppUpdatePolicy.inAppInstallerEnabled
+  = false`). Startup and taps only offer `View release`; no download, signature
+  check, permission prompt, or install intent runs until the constant is
+  explicitly enabled.
+- Android versionCode base is `3002` (arm64 effective `30022`).
+
 ## [3.2.5] - 2026-11-10
 
 Fork build `3.2.5+3001`: same user-visible version as the upstream baseline,

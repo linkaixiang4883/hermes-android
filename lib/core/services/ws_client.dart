@@ -9,6 +9,8 @@ import 'dart:convert';
 
 import 'package:web_socket_channel/io.dart';
 
+import '../models/slash_command.dart';
+
 Object? _deepFreezeJson(Object? value) {
   if (value is Map) {
     final copy = <String, dynamic>{};
@@ -1198,6 +1200,43 @@ class WsClient {
         // Stream observers run only after internal completion and cleanup.
       }
     }
+  }
+
+  /// Reads the gateway's slash-command catalogue for [sessionId], or the
+  /// profile default when the session is not bound yet.
+  Future<SlashCommandCatalog> commandsCatalog(String? sessionId) async {
+    final response = await send('commands.catalog', {'session_id': ?sessionId});
+    final error = response['error'];
+    if (error != null) {
+      throw _gatewayResponseError(
+        'commands.catalog',
+        error,
+        fallbackMessage: 'Gateway command catalogue failed',
+      );
+    }
+    return SlashCommandCatalog.fromResult(response['result']);
+  }
+
+  /// Runs one slash command server-side. Never retried: the server owns the
+  /// effects. [onSent] fires after the request is written.
+  Future<SlashCommandResult> slashExec(
+    String sessionId,
+    String command, {
+    void Function()? onSent,
+  }) async {
+    final response = await send('slash.exec', {
+      'session_id': sessionId,
+      'command': command,
+    }, onSent: onSent);
+    final error = response['error'];
+    if (error != null) {
+      throw _gatewayResponseError(
+        'slash.exec',
+        error,
+        fallbackMessage: 'Gateway slash command failed',
+      );
+    }
+    return SlashCommandResult.fromResult(response['result']);
   }
 
   /// Send a JSON-RPC method call and wait for response.

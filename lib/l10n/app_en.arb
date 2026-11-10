@@ -786,6 +786,11 @@
   "yolo_banner": "YOLO mode: tool approvals are skipped in this chat",
   "approval_no_longer_active": "This approval is no longer active.",
   "update_available": "Update available",
+  "update_now": "Update now",
+  "update_install": "Install update",
+  "update_downloading": "Downloading and verifying update…",
+  "update_allow_install": "Allow Hermes to install this update, then return here and tap Install update.",
+  "update_failed": "The update could not be downloaded, verified, or opened. Try again or view the release page.",
   "a_newer_hermes_android_build_is_available_on_github": "A newer Hermes Android build is available on GitHub.",
   "release_notes": "Release notes",
   "view_release": "View release",
@@ -938,5 +943,12 @@
         "type": "int"
       }
     }
-  }
+  },
+  "slash_commands": "Slash commands",
+  "slash_commands_loading": "Loading commands…",
+  "slash_commands_empty": "No matching commands",
+  "slash_command_output": "Command output",
+  "slash_command_no_output": "The command completed with no output.",
+  "slash_command_delivery_unknown": "The command was sent but its reply never arrived. It may still be running on the gateway, so your draft was kept. Check the gateway before retrying.",
+  "slash_command_failed": "The command could not be run."
 }

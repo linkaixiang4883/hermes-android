@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart' show ValueNotifier, visibleForTesting;
 import '../models/bot_profile.dart';
 import '../models/live_work.dart';
 import '../models/pending_prompt.dart';
+import '../models/slash_command.dart';
 
 import 'capability_registry.dart';
 import 'connection_manager.dart';
@@ -68,7 +69,7 @@ class PendingPromptEvent {
   final StreamEvent event;
 }
 
-class DesktopGatewayClient {
+class DesktopGatewayClient implements SlashCommandGateway {
   static int _nextServerRequestNamespace = 1;
 
   final int _serverRequestNamespace = _nextServerRequestNamespace++;
@@ -2258,6 +2259,38 @@ class DesktopGatewayClient {
     } catch (_) {
       return null;
     }
+  }
+
+  /// Whether the connected Desktop gateway can serve slash-command RPCs.
+  @override
+  bool get slashCommandsSupported => _ws?.isConnected == true;
+
+  /// Reads the catalogue for [sessionId]; an unbound session still gets the
+  /// profile catalogue.
+  @override
+  Future<SlashCommandCatalog> fetchSlashCommands({String? sessionId}) async {
+    final client = _ws;
+    if (client == null || !client.isConnected) {
+      throw StateError('The Desktop gateway is no longer connected');
+    }
+    final gatewaySessionId = sessionId == null ? null : _gatewaySessionIds[sessionId];
+    return client.commandsCatalog(gatewaySessionId);
+  }
+
+  /// Runs a command only against the currently bound live session. [onSent]
+  /// distinguishes "never written" from "delivery unknown".
+  @override
+  Future<SlashCommandResult> runSlashCommand({
+    required String sessionId,
+    required String command,
+    void Function()? onSent,
+  }) async {
+    final gatewaySessionId = _gatewaySessionIds[sessionId];
+    final client = _ws;
+    if (gatewaySessionId == null || client == null || !client.isConnected) {
+      throw StateError('The Desktop gateway session is no longer connected');
+    }
+    return client.slashExec(gatewaySessionId, command, onSent: onSent);
   }
 
   /// Runs one slash command against the session's slash worker.
