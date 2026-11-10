@@ -175,11 +175,10 @@ class _UpdateAvailableDialogState extends State<UpdateAvailableDialog> {
                 Navigator.of(context).pop(UpdatePromptAction.skipVersion),
             child: Text(l10n.skip_this_version),
           ),
-        if (!_downloading)
-          TextButton(
-            onPressed: _openingInstaller ? null : () => _openRelease(context),
-            child: Text(l10n.view_release),
-          ),
+        TextButton(
+          onPressed: _openingInstaller ? null : () => _openRelease(context),
+          child: Text(l10n.view_release),
+        ),
         if (widget.installerEnabled && _apk != null)
           FilledButton(
             onPressed: _downloading || _openingInstaller ? null : _update,

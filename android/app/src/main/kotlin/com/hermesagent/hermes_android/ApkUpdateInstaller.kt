@@ -18,13 +18,15 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.util.Collections
 import java.util.Locale
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.TimeUnit
+import java.util.zip.ZipFile
 
-// Same public release certificate as scripts/verify_release_apks.py.
-private const val PRODUCTION_SIGNER_SHA256 = "475baf431b16d050c8f658ac838783b273f7c10bba06ed1d16bb0a4239f592fb"
+// Candidate and installed packages must share the same signing identity. The
+// fork is locally debug-signed; do not pin the upstream author's certificate.
 private fun ByteArray.sha256Hex(): String = MessageDigest.getInstance("SHA-256")
     .digest(this).joinToString("") { "%02x".format(it.toInt() and 0xff) }
 
@@ -48,18 +50,6 @@ class ApkUpdateInstaller(
     private var readySource: ApkUpdateSource? = null
 
     init {
-        val initGeneration = synchronized(lock) { generation }
-        worker.execute {
-            if (prepared.isFile && runCatching { validateArchive(prepared) }.isFailure) {
-                synchronized(lock) {
-                    if (generation == initGeneration && !downloading) {
-                        prepared.delete()
-                        ready = null
-                        readySource = null
-                    }
-                }
-            }
-        }
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
                 "canUpdate" -> result.success(canUpdate())
@@ -253,7 +243,7 @@ class ApkUpdateInstaller(
     private fun canUpdate(): Boolean = runCatching {
         if (context.packageName != "com.hermesagent.hermes_android") return@runCatching false
         val info = context.packageManager.getPackageInfo(context.packageName, signingFlags())
-        signerDigests(info) == setOf(PRODUCTION_SIGNER_SHA256)
+        signerDigests(info).isNotEmpty()
     }.getOrDefault(false)
 
     @Suppress("DEPRECATION")
@@ -265,12 +255,29 @@ class ApkUpdateInstaller(
         val candidate = requireNotNull(manager.getPackageArchiveInfo(file.absolutePath, signingFlags()))
         check(candidate.packageName == context.packageName)
         val installed = manager.getPackageInfo(context.packageName, signingFlags())
-        check(signerDigests(candidate) == setOf(PRODUCTION_SIGNER_SHA256))
-        check(signerDigests(candidate) == signerDigests(installed))
+        val candidateSigners = signerDigests(candidate)
+        check(candidateSigners.isNotEmpty())
+        check(candidateSigners == signerDigests(installed))
+        if (Build.VERSION.SDK_INT >= 24) {
+            val candidateMinSdk = candidate.applicationInfo?.minSdkVersion
+            check(candidateMinSdk != null && candidateMinSdk <= Build.VERSION.SDK_INT)
+        }
+        check(archiveAbis(file).any { it in Build.SUPPORTED_ABIS })
         val candidateCode = if (Build.VERSION.SDK_INT >= 28) candidate.longVersionCode else candidate.versionCode.toLong()
         val installedCode = if (Build.VERSION.SDK_INT >= 28) installed.longVersionCode else installed.versionCode.toLong()
         check(candidateCode > installedCode)
     }
+
+    private fun archiveAbis(file: File): Set<String> = runCatching {
+        ZipFile(file).use { zip ->
+            Collections.list(zip.entries())
+                .mapNotNull { entry ->
+                    Regex("^lib/([^/]+)/").find(entry.name)?.groupValues?.get(1)
+                }
+                .filter { it in Build.SUPPORTED_ABIS }
+                .toSet()
+        }
+    }.getOrDefault(emptySet())
 
     private fun install(result: MethodChannel.Result) {
         val (file, source, current) = synchronized(lock) {

@@ -240,7 +240,8 @@ class AppUpdateService {
     _preferences = preferences;
   }
 
-  /// The upstream project whose releases the app follows.
+  /// The fork whose releases the app follows. Never point this at the upstream
+  /// author: that would install a stock build with a different signer.
   static const releasesApiUrl =
       'https://api.github.com/repos/linkaixiang4883/hermes-android/releases/latest';
 

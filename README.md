@@ -347,7 +347,7 @@ Hermes Agent docs: <https://hermes-agent.nousresearch.com/docs>
 ### Install the APK
 
 Download the latest APK from this repository's
-[GitHub Releases](https://github.com/rusty4444/hermes-android/releases) page.
+[GitHub Releases](https://github.com/linkaixiang4883/hermes-android/releases) page.
 
 For most Android phones, install the ARM64 APK:
 

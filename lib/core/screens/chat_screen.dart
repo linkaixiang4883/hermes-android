@@ -3680,7 +3680,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     var text = _textController.text.trim();
     final attachments = List<AttachmentDraft>.from(_attachmentDrafts);
     if (text.isEmpty && attachments.isEmpty) return;
-    if (_sending || _streaming || _pendingReattachResync) return;
+    if (_sending || _streaming || _pendingReattachResync || _preparingSend) {
+      return;
+    }
     if (_transcriptLoadBlocksComposer) return;
     if (attachments.isEmpty) {
       final slashPrompt = await _dispatchSlashCommand(text);
@@ -3916,6 +3918,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (_sending || _streaming || _preparingSend) return null;
     if (isMobileSlashCommandBlocked(name)) {
       _showSlashCommandFailure(context.l10n.slash_command_failed);
+      return '';
+    }
+    final bareName = name.toLowerCase();
+    if (bareName == 'compress' || bareName == 'compact') {
+      // Reuse the established compaction lifecycle: re-bind, re-read the
+      // transcript and refresh the usage bar after the server rewrites it.
+      await _runCompress();
       return '';
     }
     _preparingSend = true;
@@ -6183,7 +6192,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         enabled:
                             !_transcriptLoadBlocksComposer &&
                             !_streaming &&
-                            !_pendingReattachResync,
+                            !_pendingReattachResync &&
+                            !_preparingSend,
                         onSubmitted: (_) => _sendMessage(),
                       ),
                     ),
@@ -6264,6 +6274,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                       _sending ||
                                       _compressionActive ||
                                       _pendingReattachResync ||
+                                      _preparingSend ||
                                       _voiceComposer.listening
                                   ? null
                                   : _sendMessage,
