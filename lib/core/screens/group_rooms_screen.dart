@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 
 import 'package:hermes_android/core/l10n/l10n.dart';
 
+import '../models/bot_profile.dart';
 import '../models/legacy_group_chat.dart';
 import '../services/connection_manager.dart';
 import '../services/desktop_gateway_client.dart';
@@ -23,6 +24,10 @@ typedef GroupRoomsLoader = Future<GroupRoomPage> Function();
 
 /// Reads the seating roster (`capabilities.seatable_profiles`).
 typedef GroupCapabilitiesLoader = Future<GroupCapabilities> Function();
+
+/// Reads the gateway's bot profiles when capabilities did not advertise a
+/// roster — an older gateway still has bots, just no `seatable_profiles`.
+typedef GroupProfilesLoader = Future<List<BotProfile>> Function();
 
 /// Reads Desktop's mirror of its local (legacy) group chats.
 typedef LegacyGroupsLoader = Future<List<LegacyGroupChat>> Function();
@@ -57,6 +62,9 @@ class GroupRoomsScreen extends StatefulWidget {
   final GroupCapabilitiesLoader? testCapabilities;
 
   @visibleForTesting
+  final GroupProfilesLoader? testProfiles;
+
+  @visibleForTesting
   final GroupRoomCreator? testCreate;
 
   @visibleForTesting
@@ -71,6 +79,7 @@ class GroupRoomsScreen extends StatefulWidget {
     this.refreshInterval = const Duration(seconds: 5),
     this.testLoader,
     this.testCapabilities,
+    this.testProfiles,
     this.testCreate,
     this.testLegacy,
   }) : assert(
@@ -188,16 +197,34 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
     }
   }
 
+  /// Who may be seated. A gateway that answers `groups.capabilities` without
+  /// `seatable_profiles` still has bots, so fall back to `profiles.list`
+  /// rather than showing an empty picker that can never create a room.
+  Future<List<String>> _seatableProfiles(GroupCapabilities? caps) async {
+    if (caps != null && caps.seatableProfilesKnown) {
+      return caps.seatableProfiles;
+    }
+    final injected = widget.testProfiles;
+    if (injected != null) {
+      return (await injected()).map((bot) => bot.name).toList();
+    }
+    final client = widget.client;
+    if (client == null) return const [];
+    return (await client.listProfiles()).map((bot) => bot.name).toList();
+  }
+
   Future<void> _openCreate() async {
     if (_creating) return;
     setState(() => _creating = true);
     try {
       final capabilities = await _loadCapabilities();
       if (!mounted) return;
+      final seatable = await _seatableProfiles(capabilities);
+      if (!mounted) return;
       final draft = await showDialog<_NewRoomDraft>(
         context: context,
         builder: (_) => _CreateRoomDialog(
-          seatableProfiles: capabilities?.seatableProfiles ?? const [],
+          seatableProfiles: seatable,
         ),
       );
       if (draft == null || !mounted) return;
@@ -208,9 +235,11 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
         members: [
           for (final profile in draft.profiles)
             GroupRoomMember(
+              memberId: profile,
               profile: profile,
               handle: profile,
               displayName: profile,
+              target: {'kind': 'local', 'profile': profile},
             ),
         ],
       );
@@ -258,6 +287,7 @@ class _GroupRoomsScreenState extends State<GroupRoomsScreen> {
           connection: widget.connection,
           rooms: client,
           room: room,
+          capabilities: _capabilities,
         ),
       ),
     );
@@ -510,6 +540,23 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
   late final TextEditingController _name = TextEditingController();
   final Set<String> _selected = {};
 
+  bool get _canCreate =>
+      widget.seatableProfiles.isNotEmpty &&
+      _name.text.trim().isNotEmpty &&
+      _selected.length >= 2 &&
+      _selected.length <= 6;
+
+  String? _rosterProblem(BuildContext context) {
+    // No roster at all: say why Create stays disabled instead of showing an
+    // empty picker that looks like the user's fault.
+    if (widget.seatableProfiles.isEmpty) {
+      return context.l10n.group_roster_unavailable;
+    }
+    if (_selected.length < 2) return context.l10n.group_roster_need_two;
+    if (_selected.length > 6) return context.l10n.group_roster_too_many;
+    return null;
+  }
+
   @override
   void dispose() {
     _name.dispose();
@@ -518,7 +565,7 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final canCreate = _name.text.trim().isNotEmpty;
+    final rosterProblem = _rosterProblem(context);
     return AlertDialog(
       title: Text(context.l10n.group_new),
       content: SingleChildScrollView(
@@ -557,6 +604,15 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
                   ),
               ],
             ),
+            if (rosterProblem != null) ...[
+              const SizedBox(height: HermesSpacing.sm),
+              Text(
+                rosterProblem,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+              ),
+            ],
           ],
         ),
       ),
@@ -566,7 +622,7 @@ class _CreateRoomDialogState extends State<_CreateRoomDialog> {
           child: Text(context.l10n.cancel),
         ),
         FilledButton(
-          onPressed: canCreate
+          onPressed: _canCreate
               ? () => Navigator.of(context).pop(
                     _NewRoomDraft(_name.text.trim(), _selected.toList()),
                   )

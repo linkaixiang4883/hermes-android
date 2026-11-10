@@ -2435,6 +2435,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get group_members => '成员';
 
   @override
+  String get group_roster_need_two => '至少选择两个 bot';
+
+  @override
+  String get group_roster_too_many => '群聊最多容纳六个 bot';
+
+  @override
+  String get group_roster_unavailable => '该网关没有提供可选成员名单';
+
+  @override
   String get group_empty => '还没有群组';
 
   @override
@@ -2508,6 +2517,63 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get group_legacy_banner =>
       '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
+
+  @override
+  String get group_paused => '达到消息上限，讨论已暂停';
+
+  @override
+  String get group_continue => '继续';
+
+  @override
+  String get group_discard => '丢弃';
+
+  @override
+  String get group_discard_confirm => '丢弃这个待处理回合？已产生的副作用不会撤销。';
+
+  @override
+  String get group_discarded => '回合已丢弃';
+
+  @override
+  String group_working(String member, String tool, int seconds) {
+    return '$member · $tool · $seconds 秒';
+  }
+
+  @override
+  String get group_purpose => '目的';
+
+  @override
+  String get group_notes => '共享说明';
+
+  @override
+  String get group_routing => '由谁回答';
+
+  @override
+  String get group_routing_everyone => '所有人';
+
+  @override
+  String get group_routing_lead => '负责人';
+
+  @override
+  String get group_routing_auto => '自动';
+
+  @override
+  String get group_room_settings => '房间设置';
+
+  @override
+  String group_assigned(String member) {
+    return '已指派给 $member';
+  }
+
+  @override
+  String group_routed(String member) {
+    return '已自动指派给 $member';
+  }
+
+  @override
+  String get group_continued => '讨论已继续';
+
+  @override
+  String get group_context_updated => '房间设置已更新';
 
   @override
   String get yolo_mode => 'YOLO 模式';
@@ -5270,6 +5336,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get group_members => '成员';
 
   @override
+  String get group_roster_need_two => '至少选择两个 bot';
+
+  @override
+  String get group_roster_too_many => '群聊最多容纳六个 bot';
+
+  @override
+  String get group_roster_unavailable => '该网关没有提供可选成员名单';
+
+  @override
   String get group_empty => '还没有群组';
 
   @override
@@ -5343,6 +5418,63 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   @override
   String get group_legacy_banner =>
       '这些是桌面本地群组的只读镜像。在桌面打开该群组并点「Start gateway group」后可在这里继续讨论；旧消息仍留在桌面。';
+
+  @override
+  String get group_paused => '达到消息上限，讨论已暂停';
+
+  @override
+  String get group_continue => '继续';
+
+  @override
+  String get group_discard => '丢弃';
+
+  @override
+  String get group_discard_confirm => '丢弃这个待处理回合？已产生的副作用不会撤销。';
+
+  @override
+  String get group_discarded => '回合已丢弃';
+
+  @override
+  String group_working(String member, String tool, int seconds) {
+    return '$member · $tool · $seconds 秒';
+  }
+
+  @override
+  String get group_purpose => '目的';
+
+  @override
+  String get group_notes => '共享说明';
+
+  @override
+  String get group_routing => '由谁回答';
+
+  @override
+  String get group_routing_everyone => '所有人';
+
+  @override
+  String get group_routing_lead => '负责人';
+
+  @override
+  String get group_routing_auto => '自动';
+
+  @override
+  String get group_room_settings => '房间设置';
+
+  @override
+  String group_assigned(String member) {
+    return '已指派给 $member';
+  }
+
+  @override
+  String group_routed(String member) {
+    return '已自动指派给 $member';
+  }
+
+  @override
+  String get group_continued => '讨论已继续';
+
+  @override
+  String get group_context_updated => '房间设置已更新';
 
   @override
   String get yolo_mode => 'YOLO 模式';

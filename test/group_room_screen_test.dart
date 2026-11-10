@@ -82,6 +82,9 @@ Future<void> _pump(
   GroupMessageSender? sender,
   GroupApprovalAction? approval,
   GroupRetryAction? retry,
+  GroupCapabilities? capabilities,
+  GroupContinueAction? continueDiscussion,
+  GroupDiscardAction? discard,
   GroupRoomAction? stop,
   GroupRoomAction? disband,
   Future<void> Function(String name)? rename,
@@ -103,6 +106,9 @@ Future<void> _pump(
         testSender: sender,
         testApproval: approval,
         testRetry: retry,
+        testCapabilities: capabilities == null ? null : () async => capabilities,
+        testContinue: continueDiscussion,
+        testDiscard: discard,
         testStop: stop,
         testDisband: disband,
         testRename: rename,
@@ -405,5 +411,188 @@ void main() {
       find.widgetWithIcon(IconButton, Icons.arrow_upward),
     );
     expect(sendButton.onPressed, isNull);
+  });
+
+  testWidgets('a bounded room offers Continue with its discussion event', (
+    tester,
+  ) async {
+    String? continued;
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(
+        methods: ['groups.continue'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([
+        const GroupEvent(
+          seq: 1,
+          kind: GroupEvent.roomActivity,
+          status: 'bounded',
+          discussionEventId: 'disc-1',
+        ),
+      ]),
+      continueDiscussion: (discussionEventId) async {
+        continued = discussionEventId;
+      },
+    );
+
+    expect(find.text('Paused after the message limit'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('group-continue')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(continued, 'disc-1');
+  });
+
+  testWidgets('a discard pending action confirms and sends the exact action', (
+    tester,
+  ) async {
+    PendingRoomAction? discarded;
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(
+        methods: ['groups.discard'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(
+          running: true,
+          pendingActions: [
+            PendingRoomAction(
+              kind: PendingRoomAction.kindDiscard,
+              memberId: 'research',
+              taskId: 'task-9',
+              executionGeneration: '4',
+            ),
+          ],
+        ),
+      ),
+      logLoader: (_) async => _page([]),
+      discard: (action) async => discarded = action,
+    );
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('group-discard-confirm')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(discarded?.identity, 'discard|research|task-9|4|');
+  });
+
+  testWidgets('shows context and live member activity', (tester) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(methodsKnown: true),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        context: const RoomContext(
+          purpose: 'Plan the launch',
+          notes: 'Keep replies short',
+          routing: 'lead',
+          leadMemberId: 'research',
+        ),
+        driverStatus: const RoomDriverStatus(
+          running: true,
+          memberActivity: [
+            RoomMemberActivity(
+              memberId: 'research',
+              status: 'running',
+              tool: 'terminal',
+              roundIndex: 0,
+            ),
+          ],
+        ),
+      ),
+      logLoader: (_) async => _page([]),
+    );
+
+    expect(find.textContaining('Plan the launch'), findsOneWidget);
+    expect(find.textContaining('terminal'), findsOneWidget);
+  });
+
+  testWidgets('renders assignment and routed payload member_ids', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(methodsKnown: true),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([
+        GroupEvent.fromJson({
+          'seq': 1,
+          'kind': GroupEvent.roomAssignment,
+          'payload': {
+            'lead_member_id': 'research',
+            'member_ids': ['research', 'writer'],
+            'fallback': false,
+          },
+        }),
+        GroupEvent.fromJson({
+          'seq': 2,
+          'kind': GroupEvent.roomRouted,
+          'payload': {
+            'member_ids': ['writer'],
+            'everyone': false,
+            'fallback': false,
+          },
+        }),
+      ]),
+    );
+
+    expect(find.textContaining('Research'), findsWidgets);
+    expect(find.textContaining('Writer'), findsWidgets);
+  });
+
+  testWidgets('a default context does not add a routing strip', (tester) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(methodsKnown: true),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        context: const RoomContext(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([]),
+    );
+
+    expect(find.textContaining('Who answers'), findsNothing);
+  });
+
+  testWidgets('a continued discussion hides its bounded banner', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      capabilities: const GroupCapabilities(
+        methods: ['groups.continue'],
+        methodsKnown: true,
+      ),
+      stateLoader: () async => GroupRoomState(
+        room: _room(),
+        driverStatus: const RoomDriverStatus(running: true),
+      ),
+      logLoader: (_) async => _page([
+        const GroupEvent(
+          seq: 1,
+          kind: GroupEvent.roomActivity,
+          status: 'bounded',
+          discussionEventId: 'disc-1',
+        ),
+        const GroupEvent(
+          seq: 2,
+          kind: GroupEvent.roomContinued,
+          discussionEventId: 'disc-1',
+        ),
+      ]),
+    );
+
+    expect(find.byKey(const ValueKey('group-continue')), findsNothing);
   });
 }

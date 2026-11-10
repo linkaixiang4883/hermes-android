@@ -35,6 +35,8 @@ typedef GroupMessageSender =
 typedef GroupApprovalAction =
     Future<void> Function(PendingRoomAction action, String choice);
 typedef GroupRetryAction = Future<void> Function(PendingRoomAction action);
+typedef GroupContinueAction = Future<void> Function(String discussionEventId);
+typedef GroupDiscardAction = Future<void> Function(PendingRoomAction action);
 typedef GroupRoomAction = Future<void> Function();
 
 /// A message that was submitted but never confirmed. It keeps its event id so
@@ -137,6 +139,9 @@ class GroupRoomScreen extends StatefulWidget {
   /// The room to open, as the list last saw it.
   final GroupRoom room;
 
+  /// Capabilities the host already read. When null the room reads them once.
+  final GroupCapabilities? capabilities;
+
   /// Discussion thread the message belongs to; defaults to the room id.
   final String? threadId;
 
@@ -162,6 +167,15 @@ class GroupRoomScreen extends StatefulWidget {
   final GroupRetryAction? testRetry;
 
   @visibleForTesting
+  final Future<GroupCapabilities?> Function()? testCapabilities;
+
+  @visibleForTesting
+  final GroupContinueAction? testContinue;
+
+  @visibleForTesting
+  final GroupDiscardAction? testDiscard;
+
+  @visibleForTesting
   final GroupRoomAction? testStop;
 
   @visibleForTesting
@@ -175,6 +189,7 @@ class GroupRoomScreen extends StatefulWidget {
     required this.connection,
     required this.room,
     this.rooms,
+    this.capabilities,
     this.threadId,
     this.pollInterval = const Duration(seconds: 2),
     this.pendingStore,
@@ -183,6 +198,9 @@ class GroupRoomScreen extends StatefulWidget {
     this.testSender,
     this.testApproval,
     this.testRetry,
+    this.testCapabilities,
+    this.testContinue,
+    this.testDiscard,
     this.testStop,
     this.testDisband,
     this.testRename,
@@ -198,6 +216,8 @@ class GroupRoomScreen extends StatefulWidget {
 class _GroupRoomScreenState extends State<GroupRoomScreen> {
   late GroupRoom _room = widget.room;
   RoomDriverStatus? _driver;
+  RoomContext? _context;
+  GroupCapabilities? _capabilities;
   final List<GroupEvent> _events = [];
   final Set<int> _seen = {};
   int _cursor = 0;
@@ -207,11 +227,14 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
   bool _polling = false;
   bool _sending = false;
   bool _menuBusy = false;
+  bool _continuing = false;
   int _ticks = 0;
   String? _error;
 
   String? _pendingEventId;
   String? _pendingText;
+  String? _stopCancelId;
+  String? _disbandCancelId;
   final Set<String> _busyActions = {};
 
   Timer? _poll;
@@ -249,12 +272,31 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
 
   GroupRetryAction get _retry =>
       widget.testRetry ??
-      (action) => widget.rooms!.retry(roomId: _roomId, taskId: action.taskId);
+      (action) => widget.rooms!.retry(
+            roomId: _roomId,
+            taskId: action.taskId,
+            memberId: action.memberId,
+            executionGeneration: action.executionGeneration,
+          );
 
-  GroupRoomAction get _stop => widget.testStop ?? () => widget.rooms!.stop(_roomId);
+  GroupContinueAction get _continue =>
+      widget.testContinue ??
+      (discussionEventId) => widget.rooms!.continueDiscussion(
+            roomId: _roomId,
+            discussionEventId: discussionEventId,
+          );
+
+  GroupDiscardAction get _discard =>
+      widget.testDiscard ??
+      (action) => widget.rooms!.discard(roomId: _roomId, action: action);
+
+  GroupRoomAction get _stop =>
+      widget.testStop ??
+      () => widget.rooms!.stop(_roomId, cancelId: _stopCancelId);
 
   GroupRoomAction get _disband =>
-      widget.testDisband ?? () => widget.rooms!.disband(_roomId);
+      widget.testDisband ??
+      () => widget.rooms!.disband(_roomId, cancelId: _disbandCancelId);
 
   Future<void> Function(String name) get _rename =>
       widget.testRename ??
@@ -284,6 +326,25 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
 
   // ── Reading the room ───────────────────────────────────────────────────
 
+  Future<void> _loadCapabilities() async {
+    final seeded = widget.capabilities;
+    if (seeded != null) {
+      if (mounted) setState(() => _capabilities = seeded);
+      return;
+    }
+    final Future<GroupCapabilities?>? pending = widget.testCapabilities != null
+        ? widget.testCapabilities!()
+        : widget.rooms?.capabilities();
+    if (pending == null) return;
+    try {
+      final loaded = await pending;
+      if (mounted) setState(() => _capabilities = loaded);
+    } catch (_) {
+      // A capability read is advisory; the room itself may still work.
+      if (mounted) setState(() => _capabilities = null);
+    }
+  }
+
   Future<void> _bootstrap() async {
     try {
       final state = await _stateLoader();
@@ -291,7 +352,10 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       setState(() {
         _room = state.room;
         _driver = state.driverStatus;
+        _context = state.context;
       });
+      await _loadCapabilities();
+      if (!mounted) return;
       await _loadHistory();
       if (!mounted) return;
       setState(() {
@@ -376,6 +440,7 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       setState(() {
         _room = state.room;
         _driver = state.driverStatus;
+        _context = state.context;
       });
     } catch (_) {
       // A status read is advisory; the log poll reports real trouble.
@@ -491,6 +556,66 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
     }
   }
 
+  bool _offers(String method) =>
+      _capabilities != null && _capabilities!.supports(method);
+
+  Future<void> _runContinue(GroupEvent event) async {
+    if (_continuing) return;
+    setState(() => _continuing = true);
+    try {
+      await _continue(event.discussionEventId);
+      if (!mounted) return;
+      _showNotice(context.l10n.group_continued);
+      unawaited(_pollLog());
+      unawaited(_pollState());
+    } catch (error) {
+      if (mounted) _showNotice(context.l10n.failed(error.toString()));
+    } finally {
+      if (mounted) setState(() => _continuing = false);
+    }
+  }
+
+  Future<void> _confirmDiscard(PendingRoomAction action) async {
+    if (_busyActions.contains(action.identity)) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(context.l10n.group_discard),
+        content: Text(context.l10n.group_discard_confirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: Text(context.l10n.cancel),
+          ),
+          FilledButton(
+            key: const ValueKey('group-discard-confirm'),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: Text(context.l10n.group_discard),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await _runDiscard(action);
+  }
+
+  Future<void> _runDiscard(PendingRoomAction action) async {
+    if (!_busyActions.add(action.identity)) return;
+    setState(() {});
+    try {
+      await _discard(action);
+      if (!mounted) return;
+      _showNotice(context.l10n.group_discarded);
+      unawaited(_pollState());
+    } catch (error) {
+      if (mounted) _showNotice(context.l10n.failed(error.toString()));
+    } finally {
+      if (mounted) {
+        setState(() => _busyActions.remove(action.identity));
+      }
+    }
+  }
+
   Future<void> _confirmStop() async {
     if (_menuBusy || _room.isDisbanded) return;
     final confirmed = await showDialog<bool>(
@@ -510,10 +635,12 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    _stopCancelId = newGroupIdentifier();
     setState(() => _menuBusy = true);
     try {
       await _stop();
       if (!mounted) return;
+      _stopCancelId = null;
       _showNotice(context.l10n.group_stopped);
       unawaited(_pollState());
     } catch (error) {
@@ -542,10 +669,12 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
+    _disbandCancelId = newGroupIdentifier();
     setState(() => _menuBusy = true);
     try {
       await _disband();
       if (!mounted) return;
+      _disbandCancelId = null;
       setState(() {
         _room = _room.copyWith(
           disbandedAt: DateTime.now().millisecondsSinceEpoch / 1000,
@@ -617,6 +746,7 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
   @override
   Widget build(BuildContext context) {
     final driver = _driver;
+    final bounded = _latestBoundedEvent();
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -677,6 +807,13 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       body: Column(
         children: [
           if (_error != null && _bootstrapped) _buildErrorStrip(context),
+          if (_context != null) _buildContextStrip(context, _context!),
+          if (driver != null) _buildMemberActivity(context, driver),
+          if (bounded != null && _offers('groups.continue'))
+            _BoundedBanner(
+              busy: _continuing,
+              onContinue: () => unawaited(_runContinue(bounded)),
+            ),
           if (driver != null) _buildPendingActions(context, driver),
           Expanded(child: _buildTranscript(context)),
           _buildComposer(context),
@@ -723,10 +860,156 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
     );
   }
 
+  GroupEvent? _latestBoundedEvent() {
+    final latest = <String, GroupEvent>{};
+    for (final event in _events) {
+      final discussionId = event.discussionEventId;
+      if (discussionId.isEmpty) continue;
+      if (event.isBounded) latest[discussionId] = event;
+      if (event.kind == GroupEvent.roomContinued) latest.remove(discussionId);
+      if (event.kind == GroupEvent.roomStopRequested) latest.clear();
+      if (event.isUserMessage) {
+        final threadId = _threadId(event);
+        if (threadId.isNotEmpty) {
+          latest.removeWhere(
+            (_, bounded) => _threadId(bounded) == threadId,
+          );
+        }
+      }
+    }
+    if (latest.isEmpty) return null;
+    return latest.values.reduce((a, b) => a.seq >= b.seq ? a : b);
+  }
+
+  String _threadId(GroupEvent event) {
+    final payload = event.raw['payload'];
+    if (payload is Map) {
+      return (payload['thread_id'] ?? '').toString().trim();
+    }
+    return '';
+  }
+
+  String _memberLabel(String memberId) {
+    for (final member in _room.members) {
+      if (member.routeId == memberId || member.profile == memberId) {
+        return member.label;
+      }
+    }
+    return memberId;
+  }
+
+  String _routingLabel(BuildContext context, String routing) {
+    switch (routing) {
+      case 'lead':
+        return context.l10n.group_routing_lead;
+      case 'auto':
+        return context.l10n.group_routing_auto;
+      default:
+        return context.l10n.group_routing_everyone;
+    }
+  }
+
+  Widget _buildContextStrip(BuildContext context, RoomContext roomContext) {
+    final hasContext =
+        roomContext.purpose.isNotEmpty ||
+        roomContext.notes.isNotEmpty ||
+        roomContext.routing != 'everyone' ||
+        roomContext.leadMemberId.isNotEmpty;
+    if (!hasContext) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final rows = <Widget>[
+      if (roomContext.purpose.isNotEmpty) ...[
+        Text(
+          context.l10n.group_purpose,
+          style: theme.textTheme.labelSmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+        Text(roomContext.purpose, maxLines: 2, overflow: TextOverflow.ellipsis),
+      ],
+      if (roomContext.notes.isNotEmpty)
+        ExpansionTile(
+          tilePadding: EdgeInsets.zero,
+          childrenPadding: EdgeInsets.zero,
+          title: Text(
+            context.l10n.group_notes,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          children: [
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(roomContext.notes),
+            ),
+          ],
+        ),
+      Text(
+        '${context.l10n.group_routing}: '
+        '${_routingLabel(context, roomContext.routing)}',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ];
+    return Material(
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: HermesSpacing.md,
+          vertical: HermesSpacing.sm,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: rows,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMemberActivity(
+    BuildContext context,
+    RoomDriverStatus driver,
+  ) {
+    if (driver.memberActivity.isEmpty) return const SizedBox.shrink();
+    final theme = Theme.of(context);
+    final now = DateTime.now().millisecondsSinceEpoch / 1000;
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: HermesSpacing.md,
+        vertical: HermesSpacing.xs,
+      ),
+      child: Wrap(
+        spacing: HermesSpacing.xs,
+        runSpacing: HermesSpacing.xs,
+        children: [
+          for (final activity in driver.memberActivity)
+            Chip(
+              visualDensity: VisualDensity.compact,
+              avatar: Icon(
+                Icons.bolt_outlined,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              label: Text(
+                context.l10n.group_working(
+                  _memberLabel(activity.memberId),
+                  activity.tool.isEmpty ? activity.status : activity.tool,
+                  activity.startedAt <= 0
+                      ? 0
+                      : (now - activity.startedAt).clamp(0, 86400).round(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildPendingActions(BuildContext context, RoomDriverStatus driver) {
     if (driver.pendingActions.isEmpty) return const SizedBox.shrink();
     final labels = {
-      for (final member in _room.members) member.profile: member.label,
+      for (final member in _room.members) member.routeId: member.label,
     };
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -742,6 +1025,9 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
                 : null,
             onRetry: action.isRetry
                 ? () => unawaited(_runRetry(action))
+                : null,
+            onDiscard: action.isDiscard && _offers('groups.discard')
+                ? () => unawaited(_confirmDiscard(action))
                 : null,
           ),
       ],
@@ -841,9 +1127,44 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
 
   String _systemText(BuildContext context, GroupEvent event) {
     final kind = event.kind;
+    final payload = event.raw['payload'];
+    if (kind == GroupEvent.roomAssignment) {
+      final ids = <String>[];
+      if (payload is Map && payload['member_ids'] is List) {
+        for (final value in payload['member_ids'] as List) {
+          final id = value.toString().trim();
+          if (id.isNotEmpty) ids.add(_memberLabel(id));
+        }
+      }
+      if (ids.isEmpty && payload is Map) {
+        final lead = (payload['lead_member_id'] ?? '').toString().trim();
+        if (lead.isNotEmpty) ids.add(_memberLabel(lead));
+      }
+      if (ids.isNotEmpty) {
+        return context.l10n.group_assigned(ids.join(', '));
+      }
+    }
+    if (kind == GroupEvent.roomRouted) {
+      if (payload is Map && payload['everyone'] == true) {
+        return context.l10n.group_routing_everyone;
+      }
+      final ids = <String>[];
+      if (payload is Map && payload['member_ids'] is List) {
+        for (final value in payload['member_ids'] as List) {
+          final id = value.toString().trim();
+          if (id.isNotEmpty) ids.add(_memberLabel(id));
+        }
+      }
+      if (ids.isNotEmpty) {
+        return context.l10n.group_routed(ids.join(', '));
+      }
+    }
+    if (kind == GroupEvent.roomContinued) return context.l10n.group_continued;
+    if (kind == GroupEvent.roomContextSet) {
+      return context.l10n.group_context_updated;
+    }
     if (kind == GroupEvent.roomDisbanded) return context.l10n.group_disbanded;
     if (kind == GroupEvent.roomStopRequested) return context.l10n.group_stopped;
-    final payload = event.raw['payload'];
     final detail = <String>[
       if (payload is Map && (payload['name'] ?? '').toString().trim().isNotEmpty)
         (payload['name'] ?? '').toString().trim(),
@@ -1126,6 +1447,56 @@ class _SystemLine extends StatelessWidget {
   }
 }
 
+/// A paused discussion: the server hit its message/round bound and will not
+/// continue until the human explicitly asks. Only the newest bounded event is
+/// shown; a later `room.continued` clears it.
+class _BoundedBanner extends StatelessWidget {
+  final bool busy;
+  final VoidCallback onContinue;
+
+  const _BoundedBanner({
+    required this.busy,
+    required this.onContinue,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.tertiaryContainer,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: HermesSpacing.md,
+          vertical: HermesSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.pause_circle_outline,
+              size: 16,
+              color: theme.colorScheme.onTertiaryContainer,
+            ),
+            const SizedBox(width: HermesSpacing.sm),
+            Expanded(
+              child: Text(
+                context.l10n.group_paused,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onTertiaryContainer,
+                ),
+              ),
+            ),
+            TextButton(
+              key: const ValueKey('group-continue'),
+              onPressed: busy ? null : onContinue,
+              child: Text(context.l10n.group_continue),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// One driver decision: approve/deny a blocked member, or retry a failed one.
 class _PendingActionCard extends StatelessWidget {
   final PendingRoomAction action;
@@ -1133,6 +1504,7 @@ class _PendingActionCard extends StatelessWidget {
   final bool busy;
   final ValueChanged<String>? onApprove;
   final VoidCallback? onRetry;
+  final VoidCallback? onDiscard;
 
   const _PendingActionCard({
     super.key,
@@ -1141,6 +1513,7 @@ class _PendingActionCard extends StatelessWidget {
     required this.busy,
     this.onApprove,
     this.onRetry,
+    this.onDiscard,
   });
 
   @override
@@ -1170,7 +1543,9 @@ class _PendingActionCard extends StatelessWidget {
                   Icon(
                     action.isApproval
                         ? Icons.gavel_outlined
-                        : Icons.refresh,
+                        : action.isDiscard
+                            ? Icons.delete_outline
+                            : Icons.refresh,
                     size: 16,
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1179,7 +1554,9 @@ class _PendingActionCard extends StatelessWidget {
                     child: Text(
                       action.isApproval
                           ? context.l10n.group_approval_needed
-                          : context.l10n.retry,
+                          : action.isDiscard
+                              ? context.l10n.group_discard
+                              : context.l10n.retry,
                       style: theme.textTheme.labelLarge,
                     ),
                   ),
@@ -1220,6 +1597,11 @@ class _PendingActionCard extends StatelessWidget {
                     FilledButton(
                       onPressed: busy ? null : onRetry,
                       child: Text(context.l10n.retry),
+                    ),
+                  if (onDiscard != null)
+                    FilledButton(
+                      onPressed: busy ? null : onDiscard,
+                      child: Text(context.l10n.group_discard),
                     ),
                 ],
               ),

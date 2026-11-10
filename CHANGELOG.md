@@ -6,6 +6,20 @@ versions prior to 1.0.7 are in the **What's new** sections of the [README](READM
 
 ## [3.2.7] - 2026-11-10
 
+### Build 3004
+
+- Android versionCode base is `3004` (arm64 effective `30042`).
+- Bot Mode group chats now match the local Hermes v0.23.1 contract:
+  `groups.create` requires 2–6 members with `member_id` and local `target`;
+  capabilities are tri-state with a `seatable_profiles` fallback to
+  `profiles.list`; `groups.state.context` and `member_activity` are read-only;
+  `groups.continue` and `groups.discard` are wired; approve/retry/discard send
+  an integer `execution_generation`; Stop/Disband mint a fresh `cancel_id`;
+  and `room.assignment` / `room.continued` / `room.routed` /
+  `room.context_set` render as room events.
+- Added 20 group l10n keys in en/zh/zh_Hans; other locales fall back to English.
+- Tests: 1856 passing; analyze clean.
+
 ### Build 3003
 
 - Android versionCode base is `3003` (arm64 effective `30032`).

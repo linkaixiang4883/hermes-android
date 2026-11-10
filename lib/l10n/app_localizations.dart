@@ -4251,6 +4251,24 @@ abstract class AppLocalizations {
   /// **'Members'**
   String get group_members;
 
+  /// No description provided for @group_roster_need_two.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose at least two bots'**
+  String get group_roster_need_two;
+
+  /// No description provided for @group_roster_too_many.
+  ///
+  /// In en, this message translates to:
+  /// **'A group chat can hold at most six bots'**
+  String get group_roster_too_many;
+
+  /// No description provided for @group_roster_unavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'This gateway does not advertise a seating roster'**
+  String get group_roster_unavailable;
+
   /// No description provided for @group_empty.
   ///
   /// In en, this message translates to:
@@ -4388,6 +4406,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.'**
   String get group_legacy_banner;
+
+  /// No description provided for @group_paused.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused after the message limit'**
+  String get group_paused;
+
+  /// No description provided for @group_continue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue'**
+  String get group_continue;
+
+  /// No description provided for @group_discard.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get group_discard;
+
+  /// No description provided for @group_discard_confirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Discard this pending turn? Side effects are not undone.'**
+  String get group_discard_confirm;
+
+  /// No description provided for @group_discarded.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn discarded'**
+  String get group_discarded;
+
+  /// No description provided for @group_working.
+  ///
+  /// In en, this message translates to:
+  /// **'{member} · {tool} · {seconds}s'**
+  String group_working(String member, String tool, int seconds);
+
+  /// No description provided for @group_purpose.
+  ///
+  /// In en, this message translates to:
+  /// **'Purpose'**
+  String get group_purpose;
+
+  /// No description provided for @group_notes.
+  ///
+  /// In en, this message translates to:
+  /// **'Shared notes'**
+  String get group_notes;
+
+  /// No description provided for @group_routing.
+  ///
+  /// In en, this message translates to:
+  /// **'Who answers'**
+  String get group_routing;
+
+  /// No description provided for @group_routing_everyone.
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone'**
+  String get group_routing_everyone;
+
+  /// No description provided for @group_routing_lead.
+  ///
+  /// In en, this message translates to:
+  /// **'Lead'**
+  String get group_routing_lead;
+
+  /// No description provided for @group_routing_auto.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get group_routing_auto;
+
+  /// No description provided for @group_room_settings.
+  ///
+  /// In en, this message translates to:
+  /// **'Room settings'**
+  String get group_room_settings;
+
+  /// No description provided for @group_assigned.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned to {member}'**
+  String group_assigned(String member);
+
+  /// No description provided for @group_routed.
+  ///
+  /// In en, this message translates to:
+  /// **'Assigned to {member} automatically'**
+  String group_routed(String member);
+
+  /// No description provided for @group_continued.
+  ///
+  /// In en, this message translates to:
+  /// **'Discussion continued'**
+  String get group_continued;
+
+  /// No description provided for @group_context_updated.
+  ///
+  /// In en, this message translates to:
+  /// **'Room settings updated'**
+  String get group_context_updated;
 
   /// No description provided for @yolo_mode.
   ///

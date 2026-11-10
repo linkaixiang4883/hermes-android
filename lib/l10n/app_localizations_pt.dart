@@ -2519,6 +2519,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get group_members => 'Members';
 
   @override
+  String get group_roster_need_two => 'Choose at least two bots';
+
+  @override
+  String get group_roster_too_many => 'A group chat can hold at most six bots';
+
+  @override
+  String get group_roster_unavailable =>
+      'This gateway does not advertise a seating roster';
+
+  @override
   String get group_empty => 'No groups yet';
 
   @override
@@ -2597,6 +2607,64 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get group_legacy_banner =>
       'Mirrored from Desktop\'s local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.';
+
+  @override
+  String get group_paused => 'Paused after the message limit';
+
+  @override
+  String get group_continue => 'Continue';
+
+  @override
+  String get group_discard => 'Discard';
+
+  @override
+  String get group_discard_confirm =>
+      'Discard this pending turn? Side effects are not undone.';
+
+  @override
+  String get group_discarded => 'Turn discarded';
+
+  @override
+  String group_working(String member, String tool, int seconds) {
+    return '$member · $tool · ${seconds}s';
+  }
+
+  @override
+  String get group_purpose => 'Purpose';
+
+  @override
+  String get group_notes => 'Shared notes';
+
+  @override
+  String get group_routing => 'Who answers';
+
+  @override
+  String get group_routing_everyone => 'Everyone';
+
+  @override
+  String get group_routing_lead => 'Lead';
+
+  @override
+  String get group_routing_auto => 'Automatic';
+
+  @override
+  String get group_room_settings => 'Room settings';
+
+  @override
+  String group_assigned(String member) {
+    return 'Assigned to $member';
+  }
+
+  @override
+  String group_routed(String member) {
+    return 'Assigned to $member automatically';
+  }
+
+  @override
+  String get group_continued => 'Discussion continued';
+
+  @override
+  String get group_context_updated => 'Room settings updated';
 
   @override
   String get yolo_mode => 'YOLO mode';

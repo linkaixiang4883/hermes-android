@@ -63,6 +63,19 @@ int _integer(Object? value) {
   return int.tryParse(_text(value).trim()) ?? 0;
 }
 
+/// v0.23.1 requires `execution_generation` to be an int >= 1, never a string.
+///
+/// A missing or malformed generation is a programming error (the action came
+/// from the driver's own payload), so this throws instead of sending a value
+/// the gateway would reject.
+int _requiredGeneration(String raw) {
+  final value = int.tryParse(raw.trim());
+  if (value == null || value < 1) {
+    throw ArgumentError('execution_generation must be a positive integer');
+  }
+  return value;
+}
+
 double _double(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse(_text(value).trim()) ?? 0;
@@ -116,22 +129,38 @@ Map<String, int> _counts(Object? value) {
 
 /// One bot seated in a room. [profile] is what the gateway routes on;
 /// [handle] is what `@mention` resolves against.
+///
+/// v0.23.1's `groups.create` refuses a roster whose entries lack `member_id`,
+/// so [memberId] is sent explicitly and falls back to [profile] when unset —
+/// a seated local bot's identity is its profile. [target] is the route the
+/// gateway dispatches to; a local profile route is the default.
 class GroupRoomMember {
+  final String memberId;
   final String profile;
   final String handle;
   final String displayName;
+  final Map<String, dynamic>? target;
 
   const GroupRoomMember({
+    this.memberId = '',
     required this.profile,
     this.handle = '',
     this.displayName = '',
+    this.target,
   });
 
+  /// The id the gateway addresses this seat by.
+  String get routeId =>
+      memberId.trim().isEmpty ? profile.trim() : memberId.trim();
+
   factory GroupRoomMember.fromJson(Map<String, dynamic> json) {
+    final rawTarget = json['target'];
     return GroupRoomMember(
+      memberId: _text(json['member_id'] ?? json['memberId']).trim(),
       profile: _text(json['profile']).trim(),
       handle: _text(json['handle']).trim(),
       displayName: _text(json['display_name'] ?? json['displayName']).trim(),
+      target: rawTarget is Map ? _object(rawTarget) : null,
     );
   }
 
@@ -143,13 +172,15 @@ class GroupRoomMember {
   }
 
   Map<String, dynamic> toJson() => {
+    'member_id': routeId,
     'profile': profile,
     'handle': handle.isEmpty ? profile : handle,
     'display_name': label,
+    'target': target ?? {'kind': 'local', 'profile': profile},
   };
 
   @override
-  String toString() => 'GroupRoomMember($profile)';
+  String toString() => 'GroupRoomMember($routeId)';
 }
 
 /// A hosted room as `groups.list` / `groups.create` / `groups.state` show it.
@@ -255,17 +286,31 @@ class GroupRoomPage {
 }
 
 /// What this gateway can seat and how far `groups.log` may page.
+///
+/// [methods] is tri-state on the wire: an older gateway answers successfully
+/// without it, and that must not read as "supports nothing". [methodsKnown]
+/// records whether the key was present, so [supports] can answer "unknown =
+/// assume yes" while an explicit empty list still means no.
 class GroupCapabilities {
   final bool driver;
   final List<String> seatableProfiles;
   final List<String> methods;
   final int maxLogLimit;
 
+  /// False when the gateway did not advertise `methods` at all.
+  final bool methodsKnown;
+
+  /// False when the gateway did not advertise `seatable_profiles`; the create
+  /// sheet then falls back to `profiles.list` instead of seating nobody.
+  final bool seatableProfilesKnown;
+
   const GroupCapabilities({
     this.driver = false,
     this.seatableProfiles = const [],
     this.methods = const [],
     this.maxLogLimit = 0,
+    this.methodsKnown = false,
+    this.seatableProfilesKnown = false,
   });
 
   factory GroupCapabilities.fromJson(Map<String, dynamic> json) {
@@ -274,10 +319,12 @@ class GroupCapabilities {
       seatableProfiles: _strings(json['seatable_profiles']),
       methods: _strings(json['methods']),
       maxLogLimit: _integer(json['max_log_limit']),
+      methodsKnown: json.containsKey('methods'),
+      seatableProfilesKnown: json.containsKey('seatable_profiles'),
     );
   }
 
-  bool supports(String method) => methods.contains(method);
+  bool supports(String method) => !methodsKnown || methods.contains(method);
 
   /// The page size to ask for, honouring a server that advertises a cap.
   int get effectiveLogLimit =>
@@ -288,10 +335,12 @@ class GroupCapabilities {
 ///
 /// Approval cards carry the exact tuple `groups.approve` needs
 /// (`member_id` + `task_id` + `execution_generation` + `request_id`); retries
-/// only need the task. Both are echoed verbatim, never reconstructed.
+/// and discards carry the member/task/generation triple. All of it is echoed
+/// verbatim, never reconstructed.
 class PendingRoomAction {
   static const String kindApproval = 'approval';
   static const String kindRetry = 'retry';
+  static const String kindDiscard = 'discard';
 
   final String kind;
   final String memberId;
@@ -324,6 +373,7 @@ class PendingRoomAction {
 
   bool get isApproval => kind == kindApproval;
   bool get isRetry => kind == kindRetry;
+  bool get isDiscard => kind == kindDiscard;
 
   /// A stable widget/test key: one card per pending decision.
   String get identity => [
@@ -335,6 +385,36 @@ class PendingRoomAction {
   ].join('|');
 }
 
+/// One member's live turn, as reported in `driver_status.member_activity`.
+class RoomMemberActivity {
+  final String memberId;
+  final String status;
+  final String threadId;
+  final int roundIndex;
+  final String tool;
+  final double startedAt;
+
+  const RoomMemberActivity({
+    this.memberId = '',
+    this.status = '',
+    this.threadId = '',
+    this.roundIndex = 0,
+    this.tool = '',
+    this.startedAt = 0,
+  });
+
+  factory RoomMemberActivity.fromJson(Map<String, dynamic> json) {
+    return RoomMemberActivity(
+      memberId: _text(json['member_id']).trim(),
+      status: _text(json['status']).trim(),
+      threadId: _text(json['thread_id']).trim(),
+      roundIndex: _integer(json['round_index']),
+      tool: _text(json['tool']).trim(),
+      startedAt: _double(json['started_at']),
+    );
+  }
+}
+
 /// `driver_status` — whether the room's Discussion driver is alive and what
 /// it is blocked on.
 class RoomDriverStatus {
@@ -344,6 +424,7 @@ class RoomDriverStatus {
   final Map<String, int> counts;
   final List<PendingRoomAction> pendingActions;
   final List<Map<String, dynamic>> peerRoutes;
+  final List<RoomMemberActivity> memberActivity;
 
   const RoomDriverStatus({
     this.running = false,
@@ -352,6 +433,7 @@ class RoomDriverStatus {
     this.counts = const {},
     this.pendingActions = const [],
     this.peerRoutes = const [],
+    this.memberActivity = const [],
   });
 
   factory RoomDriverStatus.fromJson(Map<String, dynamic> json) {
@@ -365,6 +447,10 @@ class RoomDriverStatus {
           PendingRoomAction.fromJson(row),
       ],
       peerRoutes: _objects(json['peer_routes']),
+      memberActivity: [
+        for (final row in _objects(json['member_activity']))
+          RoomMemberActivity.fromJson(row),
+      ],
     );
   }
 
@@ -382,17 +468,52 @@ class RoomDriverStatus {
   bool get busy => running && (working || blocked);
 }
 
+/// The room's shared brief: what the group is for, how turns are routed, and
+/// who leads when routing is `lead`.
+class RoomContext {
+  final String purpose;
+  final String notes;
+  final String routing;
+  final String leadMemberId;
+
+  const RoomContext({
+    this.purpose = '',
+    this.notes = '',
+    this.routing = 'everyone',
+    this.leadMemberId = '',
+  });
+
+  factory RoomContext.fromJson(Map<String, dynamic> json) {
+    final routing = _text(json['routing']).trim();
+    return RoomContext(
+      purpose: _text(json['purpose']),
+      notes: _text(json['notes']),
+      routing: routing.isEmpty ? 'everyone' : routing,
+      leadMemberId: _text(json['lead_member_id']).trim(),
+    );
+  }
+}
+
 /// `groups.state` — room snapshot plus driver status.
 class GroupRoomState {
   final GroupRoom room;
   final RoomDriverStatus driverStatus;
+  final RoomContext? context;
 
-  const GroupRoomState({required this.room, required this.driverStatus});
+  const GroupRoomState({
+    required this.room,
+    required this.driverStatus,
+    this.context,
+  });
 
   factory GroupRoomState.fromJson(Map<String, dynamic> json) {
+    final rawContext = json['context'];
     return GroupRoomState(
       room: GroupRoom.fromJson(_object(json['room'])),
       driverStatus: RoomDriverStatus.fromJson(_object(json['driver_status'])),
+      context: rawContext is Map
+          ? RoomContext.fromJson(_object(rawContext))
+          : null,
     );
   }
 }
@@ -451,6 +572,10 @@ class GroupEvent {
   static const String roomRenamed = 'room.renamed';
   static const String roomMembersChanged = 'room.members_changed';
   static const String roomDisbanded = 'room.disbanded';
+  static const String roomAssignment = 'room.assignment';
+  static const String roomContinued = 'room.continued';
+  static const String roomRouted = 'room.routed';
+  static const String roomContextSet = 'room.context_set';
 
   final int seq;
   final String kind;
@@ -458,6 +583,9 @@ class GroupEvent {
   final String text;
   final List<Map<String, dynamic>> attachments;
   final String discussionEventId;
+
+  /// `payload.status`, e.g. `bounded` on a `room.activity` event.
+  final String status;
   final double ts;
 
   /// The untouched event, so nothing the server sends is lost.
@@ -470,6 +598,7 @@ class GroupEvent {
     this.text = '',
     this.attachments = const [],
     this.discussionEventId = '',
+    this.status = '',
     this.ts = 0,
     this.raw = const {},
   });
@@ -486,6 +615,7 @@ class GroupEvent {
       discussionEventId: _text(
         payload['discussion_event_id'] ?? json['discussion_event_id'],
       ).trim(),
+      status: _text(payload['status']).trim(),
       ts: rawTs == null ? 0 : _double(rawTs),
       raw: json,
     );
@@ -498,6 +628,9 @@ class GroupEvent {
   bool get isMessage => isUserMessage || isMemberMessage;
 
   bool get isTurn => kind.startsWith('turn.');
+
+  /// A `room.activity` the driver stopped because it hit its round bound.
+  bool get isBounded => kind == roomActivity && status == 'bounded';
 
   bool get isRoomLifecycle => kind.startsWith('room.');
 
@@ -737,7 +870,8 @@ class GroupRoomsClient {
   ///
   /// The identifying tuple comes from [PendingRoomAction] untouched: the
   /// member/task/generation triple is what makes the approval unambiguous when
-  /// several bots are blocked at once.
+  /// several bots are blocked at once. `execution_generation` is sent as an
+  /// int because v0.23.1 rejects the string form.
   Future<void> approve({
     required String roomId,
     required PendingRoomAction action,
@@ -747,25 +881,64 @@ class GroupRoomsClient {
       'room_id': roomId,
       if (action.memberId.isNotEmpty) 'member_id': action.memberId,
       if (action.taskId.isNotEmpty) 'task_id': action.taskId,
-      if (action.executionGeneration.isNotEmpty)
-        'execution_generation': action.executionGeneration,
+      'execution_generation': _requiredGeneration(action.executionGeneration),
       if (action.requestId.isNotEmpty) 'request_id': action.requestId,
       'choice': choice,
     };
     await _request('groups.approve', params);
   }
 
+  /// `groups.continue` — extends the bounded discussion at its event.
+  Future<void> continueDiscussion({
+    required String roomId,
+    required String discussionEventId,
+  }) async {
+    await _request('groups.continue', {
+      'room_id': roomId,
+      'discussion_event_id': discussionEventId,
+    });
+  }
+
+  /// `groups.discard` — drops a member's finished task result.
+  Future<void> discard({
+    required String roomId,
+    required PendingRoomAction action,
+  }) async {
+    await _request('groups.discard', {
+      'room_id': roomId,
+      'member_id': action.memberId,
+      'task_id': action.taskId,
+      'execution_generation': _requiredGeneration(action.executionGeneration),
+    });
+  }
+
   /// `groups.retry` — re-runs a failed member task.
-  Future<void> retry({required String roomId, required String taskId}) async {
+  ///
+  /// [memberId] and [executionGeneration] are optional only so older callers
+  /// keep compiling; the canonical gateway wants both, and the screen passes
+  /// them verbatim from the driver's action.
+  Future<void> retry({
+    required String roomId,
+    required String taskId,
+    String memberId = '',
+    String executionGeneration = '',
+  }) async {
     await _request('groups.retry', {
       'room_id': roomId,
       if (taskId.isNotEmpty) 'task_id': taskId,
+      if (memberId.isNotEmpty) 'member_id': memberId,
+      if (executionGeneration.isNotEmpty)
+        'execution_generation': _requiredGeneration(executionGeneration),
     });
   }
 
   /// `groups.stop` — asks the driver to cancel in-flight turns.
-  Future<void> stop(String roomId) async {
-    await _request('groups.stop', {'room_id': roomId});
+  Future<void> stop(String roomId, {String? cancelId}) async {
+    final cancel = cancelId?.trim() ?? '';
+    await _request('groups.stop', {
+      'room_id': roomId,
+      if (cancel.isNotEmpty) 'cancel_id': cancel,
+    });
   }
 
   /// `groups.rename` — atomic, replayed as a `room.renamed` event.
@@ -782,8 +955,12 @@ class GroupRoomsClient {
   }
 
   /// `groups.disband` — tombstones the room; history stays readable.
-  Future<void> disband(String roomId) async {
-    await _request('groups.disband', {'room_id': roomId});
+  Future<void> disband(String roomId, {String? cancelId}) async {
+    final cancel = cancelId?.trim() ?? '';
+    await _request('groups.disband', {
+      'room_id': roomId,
+      if (cancel.isNotEmpty) 'cancel_id': cancel,
+    });
   }
 
   Future<Map<String, dynamic>> _request(

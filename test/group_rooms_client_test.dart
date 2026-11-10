@@ -103,6 +103,38 @@ void main() {
       expect(capabilities.maxLogLimit, 0);
       expect(capabilities.effectiveLogLimit, 200);
     });
+
+    test('distinguishes a missing method list from a listed one', () async {
+      final missing = await GroupRoomsClient(
+        _RecordingRpc([_ok({})]).call,
+      ).capabilities();
+      expect(missing.methodsKnown, isFalse);
+      expect(missing.seatableProfilesKnown, isFalse);
+      // A success without `methods` is an older gateway: everything it had
+      // still works, so do not hide the actions that need it.
+      expect(missing.supports('groups.context'), isTrue);
+
+      final empty = await GroupRoomsClient(
+        _RecordingRpc([
+          _ok({'methods': <String>[]}),
+        ]).call,
+      ).capabilities();
+      expect(empty.methodsKnown, isTrue);
+      expect(empty.supports('groups.context'), isFalse);
+
+      final listed = await GroupRoomsClient(
+        _RecordingRpc([
+          _ok({
+            'methods': ['groups.context'],
+            'seatable_profiles': <String>[],
+          }),
+        ]).call,
+      ).capabilities();
+      expect(listed.methodsKnown, isTrue);
+      expect(listed.supports('groups.context'), isTrue);
+      // An explicit empty roster is a real answer, not a missing one.
+      expect(listed.seatableProfilesKnown, isTrue);
+    });
   });
 
   group('groups.list', () {
@@ -170,7 +202,10 @@ void main() {
       final room = await client.create(
         roomId: 'room-9',
         name: 'Design',
-        members: const [GroupRoomMember(profile: 'research')],
+        members: const [
+          GroupRoomMember(profile: 'research'),
+          GroupRoomMember(profile: 'writer'),
+        ],
       );
 
       expect(rpc.calls.single.method, 'groups.create');
@@ -178,13 +213,63 @@ void main() {
       expect(rpc.calls.single.params['name'], 'Design');
       expect(rpc.calls.single.params['members'], [
         {
+          'member_id': 'research',
           'profile': 'research',
           'handle': 'research',
           'display_name': 'research',
+          'target': {'kind': 'local', 'profile': 'research'},
+        },
+        {
+          'member_id': 'writer',
+          'profile': 'writer',
+          'handle': 'writer',
+          'display_name': 'writer',
+          'target': {'kind': 'local', 'profile': 'writer'},
         },
       ]);
       expect(room.roomId, 'room-9');
       expect(room.name, 'Design');
+    });
+
+    test('sends the v0.23.1 roster contract', () async {
+      final rpc = _RecordingRpc([
+        _ok({'room': _roomJson(roomId: 'room-9', name: 'Design')}),
+      ]);
+      final client = GroupRoomsClient(rpc.call);
+
+      await client.create(
+        roomId: 'room-9',
+        name: 'Design',
+        members: const [
+          GroupRoomMember(
+            profile: 'research',
+            handle: 'research',
+            displayName: 'Research',
+          ),
+          GroupRoomMember(
+            profile: 'writer',
+            handle: 'writer',
+            displayName: 'Writer',
+          ),
+        ],
+      );
+
+      expect(rpc.calls.single.params['members'], [
+        {
+          'member_id': 'research',
+          'profile': 'research',
+          'handle': 'research',
+          'display_name': 'Research',
+          'target': {'kind': 'local', 'profile': 'research'},
+        },
+        {
+          'member_id': 'writer',
+          'profile': 'writer',
+          'handle': 'writer',
+          'display_name': 'Writer',
+          'target': {'kind': 'local', 'profile': 'writer'},
+        },
+      ]);
     });
 
     test('accepts an unwrapped room payload', () async {
@@ -252,9 +337,100 @@ void main() {
       ]);
       final state = await GroupRoomsClient(rpc.call).state('room-1');
 
+      expect(state.context, isNull);
       expect(state.driverStatus.running, isFalse);
       expect(state.driverStatus.pendingActions, isEmpty);
+      expect(state.driverStatus.memberActivity, isEmpty);
       expect(state.driverStatus.busy, isFalse);
+    });
+
+    test('decodes context and live member activity', () async {
+      final rpc = _RecordingRpc([
+        _ok({
+          'room': _roomJson(),
+          'context': {
+            'purpose': 'Plan the launch',
+            'notes': 'Keep replies short',
+            'routing': 'lead',
+            'lead_member_id': 'research',
+          },
+          'driver_status': {
+            'running': true,
+            'working': true,
+            'blocked': false,
+            'counts': {'running': 1},
+            'member_activity': [
+              {
+                'member_id': 'research',
+                'status': 'running',
+                'thread_id': 'thread-1',
+                'round_index': 0,
+                'tool': 'terminal',
+                'started_at': 1761000000.0,
+              },
+            ],
+            'peer_routes': [],
+          },
+        }),
+      ]);
+
+      final state = await GroupRoomsClient(rpc.call).state('room-1');
+
+      expect(state.context?.purpose, 'Plan the launch');
+      expect(state.context?.notes, 'Keep replies short');
+      expect(state.context?.routing, 'lead');
+      expect(state.context?.leadMemberId, 'research');
+
+      final activity = state.driverStatus.memberActivity.single;
+      expect(activity.memberId, 'research');
+      expect(activity.status, 'running');
+      expect(activity.threadId, 'thread-1');
+      expect(activity.roundIndex, 0);
+      expect(activity.tool, 'terminal');
+      expect(activity.startedAt, 1761000000.0);
+    });
+
+    test('routing falls back to everyone when the server omits it', () async {
+      final rpc = _RecordingRpc([
+        _ok({
+          'room': _roomJson(),
+          'context': {'purpose': 'Plan the launch'},
+        }),
+      ]);
+
+      final state = await GroupRoomsClient(rpc.call).state('room-1');
+
+      expect(state.context?.routing, 'everyone');
+      expect(state.context?.notes, isEmpty);
+      expect(state.context?.leadMemberId, isEmpty);
+    });
+
+    test('keeps a discard action and its exact identity', () async {
+      final rpc = _RecordingRpc([
+        _ok({
+          'room': _roomJson(),
+          'driver_status': {
+            'pending_actions': [
+              {
+                'kind': 'discard',
+                'member_id': 'research',
+                'task_id': 'task-9',
+                'execution_generation': 4,
+              },
+            ],
+          },
+        }),
+      ]);
+      final state = await GroupRoomsClient(rpc.call).state('room-1');
+      final action = state.driverStatus.pendingActions.single;
+
+      expect(action.isDiscard, isTrue);
+      expect(action.isApproval, isFalse);
+      expect(action.isRetry, isFalse);
+      expect(action.memberId, 'research');
+      expect(action.taskId, 'task-9');
+      expect(action.executionGeneration, '4');
+      expect(action.identity, 'discard|research|task-9|4|');
     });
   });
 
@@ -370,6 +546,37 @@ void main() {
     });
   });
 
+  group('room event decoding', () {
+    test('parses a bounded room activity event', () {
+      final event = GroupEvent.fromJson({
+        'seq': 3,
+        'kind': GroupEvent.roomActivity,
+        'payload': {'status': 'bounded', 'discussion_event_id': 'disc-1'},
+      });
+
+      expect(event.status, 'bounded');
+      expect(event.isBounded, isTrue);
+      expect(event.discussionEventId, 'disc-1');
+    });
+
+    test('names the new room event kinds and defaults status to empty', () {
+      expect(GroupEvent.roomAssignment, 'room.assignment');
+      expect(GroupEvent.roomContinued, 'room.continued');
+      expect(GroupEvent.roomRouted, 'room.routed');
+      expect(GroupEvent.roomContextSet, 'room.context_set');
+
+      final event = GroupEvent.fromJson({
+        'seq': 4,
+        'kind': GroupEvent.roomContextSet,
+        'payload': {'purpose': 'Plan the launch'},
+      });
+
+      expect(event.status, isEmpty);
+      expect(event.isBounded, isFalse);
+      expect(event.isNotice, isTrue);
+    });
+  });
+
   group('groups.send', () {
     test('frames payload.thread_id + text with the caller event id', () async {
       final rpc = _RecordingRpc([
@@ -440,7 +647,7 @@ void main() {
         'room_id': 'room-1',
         'member_id': 'research',
         'task_id': 'task-7',
-        'execution_generation': '3',
+        'execution_generation': 3,
         'request_id': 'req-2',
         'choice': 'once',
       });
@@ -448,7 +655,11 @@ void main() {
 
     test('approve omits identifiers a gateway did not send', () async {
       final rpc = _RecordingRpc([_ok({})]);
-      const action = PendingRoomAction(kind: 'approval', taskId: 'task-1');
+      const action = PendingRoomAction(
+        kind: 'approval',
+        taskId: 'task-1',
+        executionGeneration: '1',
+      );
 
       await GroupRoomsClient(
         rpc.call,
@@ -457,8 +668,89 @@ void main() {
       expect(rpc.calls.single.params, {
         'room_id': 'room-1',
         'task_id': 'task-1',
+        'execution_generation': 1,
         'choice': 'deny',
       });
+    });
+
+    test('continues the bounded discussion with its event id', () async {
+      final rpc = _RecordingRpc([
+        _ok({'continued': true}),
+      ]);
+
+      await GroupRoomsClient(rpc.call).continueDiscussion(
+        roomId: 'room-1',
+        discussionEventId: 'disc-1',
+      );
+
+      expect(rpc.calls.single.method, 'groups.continue');
+      expect(rpc.calls.single.params, {
+        'room_id': 'room-1',
+        'discussion_event_id': 'disc-1',
+      });
+    });
+
+    test('discard sends an integer generation', () async {
+      final rpc = _RecordingRpc([_ok({})]);
+
+      await GroupRoomsClient(rpc.call).discard(
+        roomId: 'room-1',
+        action: const PendingRoomAction(
+          kind: PendingRoomAction.kindDiscard,
+          memberId: 'research',
+          taskId: 'task-9',
+          executionGeneration: '4',
+        ),
+      );
+
+      expect(rpc.calls.single.method, 'groups.discard');
+      expect(rpc.calls.single.params, {
+        'room_id': 'room-1',
+        'member_id': 'research',
+        'task_id': 'task-9',
+        'execution_generation': 4,
+      });
+    });
+
+    test('retry carries the exact member and generation', () async {
+      final rpc = _RecordingRpc([
+        _ok({'retried': true}),
+      ]);
+
+      await GroupRoomsClient(rpc.call).retry(
+        roomId: 'room-1',
+        taskId: 'task-9',
+        memberId: 'research',
+        executionGeneration: '4',
+      );
+
+      expect(rpc.calls.single.params, {
+        'room_id': 'room-1',
+        'task_id': 'task-9',
+        'member_id': 'research',
+        'execution_generation': 4,
+      });
+    });
+
+    test('stop and disband carry a cancel id only when supplied', () async {
+      final rpc = _RecordingRpc([_ok({}), _ok({}), _ok({}), _ok({})]);
+      final client = GroupRoomsClient(rpc.call);
+
+      await client.stop('room-1', cancelId: 'cancel-9');
+      await client.stop('room-1', cancelId: '');
+      await client.disband('room-1', cancelId: 'cancel-10');
+      await client.disband('room-1');
+
+      expect(rpc.calls[0].params, {
+        'room_id': 'room-1',
+        'cancel_id': 'cancel-9',
+      });
+      expect(rpc.calls[1].params, {'room_id': 'room-1'});
+      expect(rpc.calls[2].params, {
+        'room_id': 'room-1',
+        'cancel_id': 'cancel-10',
+      });
+      expect(rpc.calls[3].params, {'room_id': 'room-1'});
     });
 
     test('retry, stop, rename and disband keep their documented frames', () async {

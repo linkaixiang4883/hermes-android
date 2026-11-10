@@ -703,6 +703,9 @@
   "groups": "Groups",
   "group_new": "New group",
   "group_members": "Members",
+  "group_roster_need_two": "Choose at least two bots",
+  "group_roster_too_many": "A group chat can hold at most six bots",
+  "group_roster_unavailable": "This gateway does not advertise a seating roster",
   "group_empty": "No groups yet",
   "group_send_failed": "Could not send: {error}",
   "@group_send_failed": {
@@ -778,6 +781,50 @@
   "group_legacy_hint": "Groups made in Desktop before gateway-hosted rooms stay on that desktop. Open the group there and choose “Start gateway group” to make it available here.",
   "group_legacy_section": "Desktop-local groups (read-only)",
   "group_legacy_banner": "Mirrored from Desktop's local history — read-only. Open the group on Desktop and choose “Start gateway group” to continue here; old messages stay on that Desktop.",
+  "group_paused": "Paused after the message limit",
+  "group_continue": "Continue",
+  "group_discard": "Discard",
+  "group_discard_confirm": "Discard this pending turn? Side effects are not undone.",
+  "group_discarded": "Turn discarded",
+  "group_working": "{member} · {tool} · {seconds}s",
+  "group_purpose": "Purpose",
+  "group_notes": "Shared notes",
+  "group_routing": "Who answers",
+  "group_routing_everyone": "Everyone",
+  "group_routing_lead": "Lead",
+  "group_routing_auto": "Automatic",
+  "group_room_settings": "Room settings",
+  "group_assigned": "Assigned to {member}",
+  "group_routed": "Assigned to {member} automatically",
+  "group_continued": "Discussion continued",
+  "group_context_updated": "Room settings updated",
+  "@group_working": {
+    "placeholders": {
+      "member": {
+        "type": "String"
+      },
+      "tool": {
+        "type": "String"
+      },
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "@group_assigned": {
+    "placeholders": {
+      "member": {
+        "type": "String"
+      }
+    }
+  },
+  "@group_routed": {
+    "placeholders": {
+      "member": {
+        "type": "String"
+      }
+    }
+  },
   "yolo_mode": "YOLO mode",
   "yolo_confirm_title": "Enable YOLO mode?",
   "yolo_confirm_message": "This chat will skip every tool approval — commands and file writes run without asking. Only enable it in a chat you fully trust.",
