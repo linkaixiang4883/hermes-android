@@ -1,9 +1,7 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  # Fork releases are built locally; do not re-add a tag push trigger.
   workflow_dispatch:
 
 permissions:
