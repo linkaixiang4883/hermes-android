@@ -108,9 +108,9 @@ List<MoreSection> buildMoreSections({
         ),
         MoreEntry(
           id: 'bots',
-          title: l10n.bots,
-          subtitle: l10n.bots_subtitle,
-          icon: Icons.smart_toy_outlined,
+          title: l10n.groups,
+          subtitle: l10n.groups_subtitle,
+          icon: Icons.forum_outlined,
         ),
         MoreEntry(
           id: 'files',

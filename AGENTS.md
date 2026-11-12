@@ -2,11 +2,11 @@
 
 本仓库 fork 自 upstream（rusty4444/hermes-android），维护本地 overlay：中文体验增强 + 若干上游未覆盖的修复。**2026-10-05 起 i18n 采用上游官方体系（10 语种）**，协议侧与 Hermes 服务端（0.21.x）对齐。以下内容供任何会话在本目录工作时自动加载。
 
-**当前发布线**：`3.2.7+3005`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3005`。
+**当前发布线**：`3.2.7+3006`（`V3` 发布线；`V3-dev` 是 3.x 开发分支）。CI base `REQUIRED_BASE_VERSION_CODE=3006`。
 
 **版本号规则（2026-11-10 用户决议）**：
 - `versionName` 对齐上游 `3.2.7`；不要为了区分而占用 V4，也不要改回低于已安装包的 V2.x。
-- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002` → `3003` → `3004` → `3005`；arm64 有效 code = `base*10+2`（当前 `30052`）。
+- **每次 fork 发布只递增 `+` 后的 versionCode base**：`3000` → `3001` → `3002` → `3003` → `3004` → `3005` → `3006`；arm64 有效 code = `base*10+2`（当前 `30062`）。
 - `versionCode` 负责 Android 安装/升级顺序，也是 `install_cleanup_v1` 判断安装成功的信号；`versionName` 负责 App 内更新检查。**同 versionName + 更高 versionCode 可以手动覆盖安装并触发清理，但 App 内不会提示更新**；需要提示时必须提升 versionName。勿为了区分而占用 V4。
 - 上游基线不写进 `versionName`：发布 commit 写 `Upstream-Base: v3.2.7` / `Upstream-Commit: 43eebf7`，本文件和 `CHANGELOG.md` 同步记录；不要用带预发布后缀的版本名。
 - 改 versionCode 必须同步 `.github/workflows/release.yml`、`.github/workflows/pr-quality.yml` 的 `REQUIRED_BASE_VERSION_CODE`、`test/release_identity_test.dart`、README/CHANGELOG；不要只改 `pubspec.yaml`。
@@ -66,10 +66,11 @@
 | Slash 命令（上游 3.2.6 单特性移植，2026-11-10） | `models/slash_command.dart`、`controllers/slash_command_controller.dart`、`widgets/slash_command_dropdown.dart`/`slash_command_notice_card.dart`、`services/ws_client.dart`（`commands.catalog`/`slash.exec`）、`desktop_gateway_client.fetchSlashCommands/runSlashCommand`、`chat_screen`（composer dropdown + notice）、`services/slash_command_policy.dart`（`mobileBlockedSlashCommands`）+ `test/slash_command_blocklist_test.dart` | 对齐 desktop 远程网关的 `commands.catalog`；`mobileBlockedSlashCommands` 默认空，一处过滤 UI 与执行；不碰 live-follow/审批/转写；上游完整 test 依赖 `testSlashGateway`，本 fork 以 controller/模型测试与现有 chat 回归为准 |
 | App 内更新安装（上游 3.2.7 单特性移植，2026-11-10） | `services/app_update_policy.dart`（`inAppInstallerEnabled=false`）、`app_update_service.dart`（ABI assets/digest）、`apk_update_installer.dart`、`widgets/update_available_dialog.dart`、Kotlin `ApkUpdateInstaller`/`ApkUpdateTransfer`、`update_provider`/`update_file_paths.xml`、`network_security_config.xml` + `test/app_update_policy_test.dart`/`app_update_assets_test.dart`/`update_available_dialog_gate_test.dart` | **生产默认门控关闭**：启动/点击不下载、不校验、不安装，只保留 View release；GitHub Release 资产仍发布；fork URL/签名/包名/ABI/versionCode 校验；不碰媒体下载 `.downloads` provider |
 | Live Work：后台任务 / 子智能体（2026-11-10） | `models/live_work.dart`、`services/live_work_store.dart`、`widgets/live_work_status_stack.dart`、`desktop_gateway_client.listLiveSubagents/listLiveProcesses/liveWorkRoster`、`chat_screen`（composer 状态栈 + 生命周期/事件）、`workspace_sessions_screen`/`workspace_screen`（`subagent.roster` 10s 计数点）+ 5 条测试 | 只读展示，不碰 Activity 的 `blockedOnly`；`subagent.list` 5s；`process.list` 首轮 probe 后转为事件武装的 5s 安全网（`processes[].session_id` 是进程 id，映射 `processId`）；`subagent.roster` 走 `callControl` 按 profile 分组；仅前台/resumed 轮询；断线清空，避免幽灵任务 |
-| Bot Mode v0.23.1 群聊对齐（2026-11-11） | `services/group_rooms_client.dart`（create `member_id`/`target`、capabilities 三态、context/member activity、continue/discard、approve/retry/discard int generation、stop/disband `cancel_id`）、`screens/group_rooms_screen.dart`（2–6 建群 + seatable 回退 `profiles.list`）、`screens/group_room_screen.dart`（context/activity/Continue/Discard/新事件/每次 Stop 新 cancel id）、20 个 l10n key（3 roster + 17 lifecycle）+ `test/group_rooms_{client,screen}_test.dart`/`group_room_screen_test.dart` | 对齐本机 Hermes v0.23.1 单连接群聊；建群 2–6 + `member_id`，approve/retry/discard `execution_generation` 必须 int；context 只读，不做 room settings 编辑、附件、跨机器 peer、authority takeover；提交 `7878fb4..9196512`；门禁 **1861** |
+| Bot Mode v0.23.1 群聊对齐（2026-11-11） | `services/group_rooms_client.dart`（create `member_id`/`target`、capabilities 三态、context/member activity、continue/discard、approve/retry/discard int generation、stop/disband `cancel_id`）、`screens/group_rooms_screen.dart`（2–6 建群 + seatable 回退 `profiles.list`）、`screens/group_room_screen.dart`（context/activity/Continue/Discard/新事件/每次 Stop 新 cancel id）、20 个 l10n key（3 roster + 17 lifecycle）+ `test/group_rooms_{client,screen}_test.dart`/`group_room_screen_test.dart` | 对齐本机 Hermes v0.23.1 单连接群聊；建群 2–6 + `member_id`，approve/retry/discard `execution_generation` 必须 int；context 只读，不做 room settings 编辑、附件、跨机器 peer、authority takeover；提交 `7878fb4..05fb8cc`；门禁 **1862** |
+| 群组-only Bots 面 + 聊天滚动保持（2026-11-11） | `screens/bots_screen.dart`（`showBots=false`，默认只列群聊）、`widgets/more_pane.dart`（Bots 入口改为 Groups）、`screens/chat_screen.dart`（刷新保留 offset，近底才跟随）、`screens/group_room_screen.dart`（AppBar info sheet 承载成员/context/activity）、+ `groups_subtitle`/`group_info` l10n | profile 行暂隐藏，代码保留待切换器；connection `gatewayProfile` 与 Bot 多 profile 的语义冲突未定，bot 建聊暂不修；提交 `5d16620..05fb8cc` |
 
 **已知未尽**：overlay 新增 key（原有 8 条 + 更新/密度 18 条 + 图片/Live Work 7 条）仅 en/zh/zh_Hans（其余 8 语种回落英文）；`projects_pane` 的 `_CompatibilityMode._explanation` 为上游硬编码英文（配套 zh key 存在但未接）；服务层 move 拒绝原因串、`relative_time` 紧凑格式、prompt 模板、存库 title、服务端数据/日志照旧不翻。
-**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1861**（2026-11-11 Bot Mode v0.23.1 群聊对齐收尾后；此前 1856）。
+**门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1862**（2026-11-11 群聊 UI/滚动修复后；此前 1861）。
 **真机 QA（2026-11-07，MI 8 / Android 9）**：更新弹窗（临时上游 feed 验证 v3.2.5 弹窗/Later/Skip/View，验完回滚 fork feed 并清 `app_update_*` 缓存）、设置页手动检查 fork 404 → 「无法检查更新」、密度 Compact → 聊天无 `You`/`Hermes` 标签且 prefs `chat_density=compact`；release 覆盖安装后数据保留、无更新弹窗。release APK `app-arm64-v8a-release-signed.apk`（`2.1.33` / versionCode `21762`）SHA-256 `9e80e14e58d5291be8a7da276812e355a5b17162b5ba9b5c45fb2f782479238f`；`V2` 稳定线已合并提交 `76d1347` 并推送 `fork/V2`，`V2-dev` 重置到同一基点。
 
 ## V3 UI 壳迁移（2026-11-07，V3 / V3-dev）
@@ -141,7 +142,7 @@
 - [x] **P4 APK 自删**（`edd0027`，2026-11-10 随 APK 自动安装恢复启用）：安装启动落盘 `install_cleanup_v1`；下次启动版本号变大才删 MediaStore 行 + cache APK（`downloadsPath` 补 API≤28 公共文件）；否则只清 ≥7 天缓存副本。
 - [x] **P4B 通知卡治理**（`482d9a2`，+5 测试）：review.summary 合并一张可关闭复盘卡、background 最多 2 张、去进程级 static 缓存、review 不发系统通知。
 - [x] **P5 收尾**：文档/技能更新；最终门禁 **1471**；APK 已构建补签（arm64）。
-- [x] **v0.23.1 群聊契约对齐**（2026-11-11，`7878fb4..9196512`，1861 测试）：修复 `groups.create` 2–6 + `member_id`/local `target`；capabilities methods 三态 + `seatable_profiles` 缺失回退 `profiles.list`；解析 `groups.state.context` 与 `member_activity`；新增 `groups.continue`/`groups.discard`；approve/retry/discard 的 `execution_generation` 统一 int；Stop/Disband 每次手势新建 `cancel_id`；渲染 `room.assignment/routed/continued/context_set`；context 默认态不显示 routing strip，notes 可折叠；不做附件/room settings 编辑/跨机器 peer/authority takeover。
+- [x] **v0.23.1 群聊契约对齐**（2026-11-11，`7878fb4..05fb8cc`，1862 测试）：修复 `groups.create` 2–6 + `member_id`/local `target`；capabilities methods 三态 + `seatable_profiles` 缺失回退 `profiles.list`；解析 `groups.state.context` 与 `member_activity`；新增 `groups.continue`/`groups.discard`；approve/retry/discard 的 `execution_generation` 统一 int；Stop/Disband 每次手势新建 `cancel_id`；渲染 `room.assignment/routed/continued/context_set`；context 默认态不显示 routing strip，notes 可折叠；不做附件/room settings 编辑/跨机器 peer/authority takeover。
 
 **门禁基线**：`analyze --fatal-infos` 0 + `flutter test` **1471**（2026-10-22 全部工作包后；P2=1421、P1=1414、P0=1410、此前 1404）。
 
@@ -327,7 +328,7 @@ git merge upstream/main
 - merge 前先打锚点：`git tag pre-<ver>-merge HEAD`（后续 diff/计数守卫的参照；**本地检查点、不推送、不是版本 tag**）；merge 后overlay 守卫（2026-10-05 起替代 l10n 计数对照）：`git grep -cE "usage_bar_summary|isAnswerPreview|TtsVoiceConfig|speech_recognition_use_keyboard|heroTag" -- lib` 逐项仍在 + `git diff pre-<ver>-merge -- lib/ ':!lib/l10n' | grep '^+' | grep -E "Text\('|labelText: '"` 扫新增硬编码 + 花括号配平扫描
 - merge 后必须：`flutter gen-l10n` → `flutter analyze --no-pub --fatal-infos` → `flutter test --no-pub` → 全绿再构建（与 CI 三道门禁逐字一致）
 - 上游若修改了 ARB key 或新增文案，需要在 `app_zh.arb` 补对应翻译
-- CI 另有 versionCode 门禁（**当前要求 base=3005**，`pubspec.yaml` 为 `3.2.7+3005`；release.yml 只在打 tag 时跑签名构建，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
+- CI 另有 versionCode 门禁（**当前要求 base=3006**，`pubspec.yaml` 为 `3.2.7+3006`；release.yml 已改为仅 workflow_dispatch，本地构建签名，无 signing block 直接失败）。上文的 2152/2176 属历史窗口，勿照抄
 - release 分包：胖包 ~62MB，`flutter build apk --release --split-per-abi` 后每 ABI ~22MB（小米 8 用 arm64）
 
 ## 本机构建环境（Windows）

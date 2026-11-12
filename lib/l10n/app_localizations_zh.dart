@@ -2429,6 +2429,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get groups => '群组';
 
   @override
+  String get groups_subtitle => '此网关托管的群聊。';
+
+  @override
   String get group_new => '新建群组';
 
   @override
@@ -2561,6 +2564,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get group_room_settings => '房间设置';
+
+  @override
+  String get group_info => '群组信息';
 
   @override
   String group_assigned(String member) {
@@ -5333,6 +5339,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
   String get groups => '群组';
 
   @override
+  String get groups_subtitle => '此网关托管的群聊。';
+
+  @override
   String get group_new => '新建群组';
 
   @override
@@ -5465,6 +5474,9 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get group_room_settings => '房间设置';
+
+  @override
+  String get group_info => '群组信息';
 
   @override
   String group_assigned(String member) {

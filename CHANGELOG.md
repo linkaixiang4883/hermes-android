@@ -6,6 +6,19 @@ versions prior to 1.0.7 are in the **What's new** sections of the [README](READM
 
 ## [3.2.7] - 2026-11-10
 
+### Build 3006
+
+- Android versionCode base is `3006` (arm64 effective `30062`).
+- Chat history refreshes keep the reader's scroll position; near-end refreshes
+  still follow the newest message instead of swapping the transcript for a
+  spinner.
+- Group room details (members, context, member activity) moved from the top of
+  the transcript into an app-bar info sheet.
+- The Bots entry is now Groups by default: profile rows are hidden until a
+  profile-switching design is agreed; the group-chat list stays available.
+- Automatic GitHub tag builds are disabled; releases are built locally.
+- Tests: 1862 passing; analyze clean.
+
 ### Build 3005
 
 - Android versionCode base is `3005` (arm64 effective `30052`).

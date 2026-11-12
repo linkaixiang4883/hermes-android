@@ -54,6 +54,10 @@ class BotsScreen extends StatefulWidget {
   /// Poll cadence while visible — the desktop roster uses the same window.
   final Duration refreshInterval;
 
+  /// Whether to show the per-profile bot roster. The group-only surface hides
+  /// bots until profile switching is designed; the code stays for that future.
+  final bool showBots;
+
   @visibleForTesting
   final BotsGroupsLoader? testGroups;
 
@@ -67,6 +71,7 @@ class BotsScreen extends StatefulWidget {
     this.testOpener,
     this.testGroups,
     this.refreshInterval = const Duration(seconds: 5),
+    this.showBots = false,
   });
 
   @override
@@ -134,6 +139,12 @@ class _BotsScreenState extends State<BotsScreen> {
 
   Future<void> _load() async {
     if (!mounted) return;
+    if (!widget.showBots) {
+      await _loadGroups();
+      if (!mounted) return;
+      setState(() => _loading = false);
+      return;
+    }
     try {
       final loader =
           widget.testLoader ??
@@ -244,17 +255,16 @@ class _BotsScreenState extends State<BotsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.bots),
+        title: Text(widget.showBots ? context.l10n.bots : context.l10n.groups),
         actions: [
-          // Hosted group rooms live beside the roster: both are Bot Mode
-          // surfaces, and the rooms client borrows the same socket.
-          IconButton(
-            tooltip: context.l10n.groups,
-            icon: const Icon(Icons.groups_outlined),
-            onPressed: widget.client == null
-                ? null
-                : () => unawaited(_openGroupRooms()),
-          ),
+          if (widget.showBots)
+            IconButton(
+              tooltip: context.l10n.groups,
+              icon: const Icon(Icons.groups_outlined),
+              onPressed: widget.client == null
+                  ? null
+                  : () => unawaited(_openGroupRooms()),
+            ),
         ],
       ),
       body: RefreshIndicator(
@@ -265,10 +275,11 @@ class _BotsScreenState extends State<BotsScreen> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_loading && _bots.isEmpty && _groups.isEmpty) {
+    final showBots = widget.showBots;
+    if (_loading && _groups.isEmpty && (!showBots || _bots.isEmpty)) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_bots.isEmpty && _error != null) {
+    if (showBots && _bots.isEmpty && _error != null) {
       return ListView(
         padding: const EdgeInsets.all(HermesSpacing.lg),
         children: [
@@ -299,24 +310,26 @@ class _BotsScreenState extends State<BotsScreen> {
         ],
       );
     }
-    if (_bots.isEmpty && _groups.isEmpty) {
+    if (_groups.isEmpty && (!showBots || _bots.isEmpty)) {
       return ListView(
         padding: const EdgeInsets.all(HermesSpacing.lg),
         children: [
           Icon(
-            Icons.smart_toy_outlined,
+            showBots ? Icons.smart_toy_outlined : Icons.forum_outlined,
             size: 44,
             color: Theme.of(context).colorScheme.onSurfaceVariant,
           ),
           const SizedBox(height: HermesSpacing.md),
           Text(
-            context.l10n.bots_empty,
+            showBots ? context.l10n.bots_empty : context.l10n.group_empty,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: HermesSpacing.sm),
           Text(
-            context.l10n.bots_subtitle,
+            showBots
+                ? context.l10n.bots_subtitle
+                : context.l10n.groups_subtitle,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.bodySmall,
           ),
@@ -377,38 +390,39 @@ class _BotsScreenState extends State<BotsScreen> {
               ),
             ),
           ),
-        if (_bots.isNotEmpty)
+        if (showBots && _bots.isNotEmpty)
           _SectionHeader(
             icon: Icons.smart_toy_outlined,
             label: context.l10n.bots,
           ),
-        for (final bot in _bots) ...[
-          ListTile(
-            leading: CircleAvatar(
-              backgroundColor: theme.colorScheme.secondaryContainer,
-              child: Text(bot.initial),
+        if (showBots)
+          for (final bot in _bots) ...[
+            ListTile(
+              leading: CircleAvatar(
+                backgroundColor: theme.colorScheme.secondaryContainer,
+                child: Text(bot.initial),
+              ),
+              title: Text(bot.title),
+              subtitle: Text(
+                [
+                  if (bot.model.trim().isNotEmpty) bot.model.trim(),
+                  if (bot.preview.isNotEmpty) bot.preview,
+                  if (bot.preview.isEmpty && bot.description.isNotEmpty)
+                    bot.description,
+                ].join(' · '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              trailing: _opening == bot.name
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.chevron_right),
+              onTap: _opening == bot.name ? null : () => unawaited(_open(bot)),
             ),
-            title: Text(bot.title),
-            subtitle: Text(
-              [
-                if (bot.model.trim().isNotEmpty) bot.model.trim(),
-                if (bot.preview.isNotEmpty) bot.preview,
-                if (bot.preview.isEmpty && bot.description.isNotEmpty)
-                  bot.description,
-              ].join(' · '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            trailing: _opening == bot.name
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.chevron_right),
-            onTap: _opening == bot.name ? null : () => unawaited(_open(bot)),
-          ),
-          const Divider(height: 1),
-        ],
+            const Divider(height: 1),
+          ],
       ],
     );
   }

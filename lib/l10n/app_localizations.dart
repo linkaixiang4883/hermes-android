@@ -4239,6 +4239,12 @@ abstract class AppLocalizations {
   /// **'Groups'**
   String get groups;
 
+  /// No description provided for @groups_subtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Group chats hosted by this gateway.'**
+  String get groups_subtitle;
+
   /// No description provided for @group_new.
   ///
   /// In en, this message translates to:
@@ -4490,6 +4496,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Room settings'**
   String get group_room_settings;
+
+  /// No description provided for @group_info.
+  ///
+  /// In en, this message translates to:
+  /// **'Group info'**
+  String get group_info;
 
   /// No description provided for @group_assigned.
   ///

@@ -749,18 +749,7 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
     final bounded = _latestBoundedEvent(driver);
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(_room.title, overflow: TextOverflow.ellipsis),
-            Text(
-              _subtitle(context),
-              style: Theme.of(context).textTheme.labelSmall,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+        title: Text(_room.title, overflow: TextOverflow.ellipsis),
         actions: [
           if (driver != null && driver.busy)
             const Padding(
@@ -772,6 +761,12 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
                 ),
               ),
             ),
+          IconButton(
+            key: const ValueKey('group-info'),
+            tooltip: context.l10n.group_info,
+            icon: const Icon(Icons.info_outline),
+            onPressed: () => unawaited(_openRoomInfo()),
+          ),
           PopupMenuButton<_RoomMenuAction>(
             enabled: !_menuBusy,
             onSelected: (action) {
@@ -807,8 +802,6 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
       body: Column(
         children: [
           if (_error != null && _bootstrapped) _buildErrorStrip(context),
-          if (_context != null) _buildContextStrip(context, _context!),
-          if (driver != null) _buildMemberActivity(context, driver),
           if (bounded != null && _offers('groups.continue'))
             _BoundedBanner(
               reasonCode: bounded.reasonCode,
@@ -823,13 +816,61 @@ class _GroupRoomScreenState extends State<GroupRoomScreen> {
     );
   }
 
-  String _subtitle(BuildContext context) {
-    final members = _room.members.map((member) => member.label).toList();
-    final parts = <String>[
-      if (members.isEmpty) context.l10n.group_members else members.join(' · '),
-      if (_room.isDisbanded) context.l10n.group_disbanded,
-    ];
-    return parts.join(' · ');
+  Future<void> _openRoomInfo() async {
+    final infoContext = _context;
+    final infoDriver = _driver;
+    final infoRoom = _room;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: SingleChildScrollView(
+          key: const ValueKey('group-info-sheet'),
+          padding: const EdgeInsets.fromLTRB(
+            HermesSpacing.lg,
+            0,
+            HermesSpacing.lg,
+            HermesSpacing.lg,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                sheetContext.l10n.group_info,
+                style: Theme.of(sheetContext).textTheme.titleLarge,
+              ),
+              const SizedBox(height: HermesSpacing.xs),
+              Text(
+                infoRoom.title,
+                style: Theme.of(sheetContext).textTheme.titleMedium,
+              ),
+              const SizedBox(height: HermesSpacing.md),
+              Text(
+                sheetContext.l10n.group_members,
+                style: Theme.of(sheetContext).textTheme.labelLarge,
+              ),
+              const SizedBox(height: HermesSpacing.xs),
+              Wrap(
+                spacing: HermesSpacing.xs,
+                runSpacing: HermesSpacing.xs,
+                children: [
+                  for (final member in infoRoom.members)
+                    Chip(
+                      visualDensity: VisualDensity.compact,
+                      label: Text(member.label),
+                    ),
+                ],
+              ),
+              if (infoContext != null)
+                _buildContextStrip(sheetContext, infoContext),
+              if (infoDriver != null)
+                _buildMemberActivity(sheetContext, infoDriver),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildErrorStrip(BuildContext context) {

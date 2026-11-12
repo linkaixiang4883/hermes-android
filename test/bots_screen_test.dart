@@ -26,6 +26,7 @@ Future<void> _pump(
   BotChatOpener? opener,
   ValueChanged<Session>? onOpen,
   BotsGroupsLoader? groups,
+  bool showBots = true,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -43,6 +44,7 @@ Future<void> _pump(
         testLoader: loader,
         testOpener: opener,
         testGroups: groups,
+        showBots: showBots,
         onOpenSession: onOpen,
         refreshInterval: const Duration(hours: 1),
       ),
@@ -89,6 +91,36 @@ void main() {
 
     expect(find.text('Launch room'), findsOneWidget);
     expect(find.textContaining('Research · Writer'), findsOneWidget);
+  });
+
+  testWidgets('group-only mode hides the bot roster', (tester) async {
+    await _pump(
+      tester,
+      loader: () async => [_bot('profile-only')],
+      showBots: false,
+      groups: () async => GroupRoomPage(
+        rooms: [
+          GroupRoom(
+            roomId: 'room-1',
+            name: 'Launch room',
+            members: const [
+              GroupRoomMember(profile: 'research', displayName: 'Research'),
+            ],
+            latestSeq: 1,
+          ),
+        ],
+      ),
+    );
+
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.text('Groups'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Launch room'), findsOneWidget);
+    expect(find.text('profile-only'), findsNothing);
   });
 
   testWidgets('tapping a bot resolves its chat and hands the Session up',

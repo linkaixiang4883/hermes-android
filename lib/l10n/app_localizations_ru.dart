@@ -2518,6 +2518,9 @@ class AppLocalizationsRu extends AppLocalizations {
   String get groups => 'Groups';
 
   @override
+  String get groups_subtitle => 'Group chats hosted by this gateway.';
+
+  @override
   String get group_new => 'New group';
 
   @override
@@ -2657,6 +2660,9 @@ class AppLocalizationsRu extends AppLocalizations {
 
   @override
   String get group_room_settings => 'Room settings';
+
+  @override
+  String get group_info => 'Group info';
 
   @override
   String group_assigned(String member) {

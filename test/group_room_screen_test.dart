@@ -325,6 +325,10 @@ void main() {
 
     expect(find.byIcon(Icons.forum_outlined), findsOneWidget);
     expect(find.text('Research · Writer'), findsWidgets);
+    await tester.tap(find.byKey(const ValueKey('group-info')));
+    await tester.pumpAndSettle();
+    expect(find.text('Research'), findsWidgets);
+    expect(find.text('Writer'), findsWidgets);
     expect(find.byType(TextField), findsOneWidget);
   });
 
@@ -514,6 +518,8 @@ void main() {
       logLoader: (_) async => _page([]),
     );
 
+    await tester.tap(find.byKey(const ValueKey('group-info')));
+    await tester.pumpAndSettle();
     expect(find.textContaining('Plan the launch'), findsOneWidget);
     expect(find.textContaining('terminal'), findsOneWidget);
   });

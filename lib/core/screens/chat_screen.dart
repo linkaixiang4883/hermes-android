@@ -2404,6 +2404,21 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
+  void _scheduleHistoryPositionRestore({
+    required double? offset,
+    required bool wasNearEnd,
+  }) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) return;
+      final maxExtent = _scrollController.position.maxScrollExtent;
+      final target = wasNearEnd
+          ? maxExtent
+          : (offset ?? 0).clamp(0.0, maxExtent).toDouble();
+      _scrollController.jumpTo(target);
+      _syncEndAffordance(_scrollController.position);
+    });
+  }
+
   void _scheduleInitialEndAlignment() {
     if (_scrollCoordinator.consumeInitialEndAlignment() == null) {
       _scheduleScrollTarget(null);
@@ -2450,8 +2465,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _fetchMessages({String? sessionId}) async {
     if (_pendingReattachResync && sessionId == null) return;
     final responseGeneration = _responseGeneration;
+    final hadTranscript = _messages.isNotEmpty;
+    final oldOffset = _scrollController.hasClients
+        ? _scrollController.position.pixels
+        : null;
+    final wasNearEnd = oldOffset == null || _isNearEnd();
     setState(() {
-      _loading = true;
+      // Keep an existing transcript mounted while refreshing. Replacing it with
+      // a spinner detaches the ScrollController and drops the reader back to
+      // offset 0 when the list comes back.
+      if (!hadTranscript) _loading = true;
       _error = null;
     });
 
@@ -2480,7 +2503,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       // The response replaced the transcript; the turn being followed is not
       // part of it and goes back on top of the fresh rows.
       _reconcileFollowAfterTranscriptReplace();
-      _scheduleInitialEndAlignment();
+      if (hadTranscript) {
+        _scheduleHistoryPositionRestore(
+          offset: oldOffset,
+          wasNearEnd: wasNearEnd,
+        );
+      } else {
+        _scheduleInitialEndAlignment();
+      }
       if (completedPendingReattach) _clearPendingReattachResync();
     } catch (e) {
       if (!mounted) return;
@@ -2557,13 +2587,25 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         return;
       }
       _extractToolMessages(messages);
+      final hadTranscript = _messages.isNotEmpty;
+      final oldOffset = _scrollController.hasClients
+          ? _scrollController.position.pixels
+          : null;
+      final wasNearEnd = oldOffset == null || _isNearEnd();
       setState(() {
         _messages = messages;
         _historyGeneration += 1;
         _error = null;
       });
       _reconcileFollowAfterTranscriptReplace();
-      _scheduleInitialEndAlignment();
+      if (hadTranscript) {
+        _scheduleHistoryPositionRestore(
+          offset: oldOffset,
+          wasNearEnd: wasNearEnd,
+        );
+      } else {
+        _scheduleInitialEndAlignment();
+      }
     } catch (_) {
       // Keep the refresh pending. A later terminal/rollback transition can
       // retry without turning background hydration into a composer blocker.
